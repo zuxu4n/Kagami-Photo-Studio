@@ -99,7 +99,8 @@ enum FaceAnalyzer {
         func centroid(_ ps: [CGPoint]) -> SIMD2<Float> {
             ps.reduce(SIMD2<Float>(0, 0)) { $0 + v($1) } / Float(max(ps.count, 1))
         }
-        for f in faces {
+        // Biggest faces first, so the 64-handle cap drops background faces rather than the subject.
+        for f in faces.sorted(by: { $0.box.width > $1.box.width }) {
             let faceW = Float(f.box.width) * W
             let mid = f.nose.isEmpty ? v(CGPoint(x: f.box.midX, y: f.box.midY)) : centroid(f.nose)
             if slim > 0.001, f.contour.count > 6 {
@@ -107,7 +108,7 @@ enum FaceAnalyzer {
                 for p in f.contour.dropFirst(2).dropLast(2) {
                     let c = v(p)
                     let dir: Float = c.x < mid.x ? 1 : -1
-                    ops.append(WarpOp(c: c, r: 0.22 * faceW, kind: 0, m: SIMD2(dir * slim * 0.06 * faceW, 0), s: 0))
+                    ops.append(WarpOp(c: c, r: 0.25 * faceW, kind: 0, m: SIMD2(dir * slim * 0.07 * faceW, 0), s: 0))
                 }
             }
             if eyes > 0.001 {

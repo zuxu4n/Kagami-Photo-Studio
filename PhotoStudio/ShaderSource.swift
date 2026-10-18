@@ -62,6 +62,8 @@ struct WarpOp {
 };
 
 // Inverse-mapped local warps: each output pixel looks up where its content comes from.
+// Translate handles are blended (weighted average, not summed), so overlapping jaw handles can't pile up and
+// tear the image. Bulges (eyes) are applied afterwards.
 kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
                      texture2d<float, access::write> dst [[texture(1)]],
                      constant WarpOp *ops [[buffer(0)]],
@@ -71,24 +73,33 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
     uint w = dst.get_width(), h = dst.get_height();
     if (gid.x >= w || gid.y >= h) return;
     constexpr sampler sp(coord::pixel, address::clamp_to_edge, filter::linear);
-    float2 q = float2(gid) + 0.5;
+    float2 p = float2(gid) + 0.5;
+    float2 dsum = 0.0;
+    float wsum = 0.0;
     for (uint k = 0; k < count; k++) {
         WarpOp op = ops[k];
+        if (op.kind > 0.5) continue;
+        float2 d = p - op.c;
+        float dd = dot(d, d);
+        float rr = op.r * op.r;
+        if (dd >= rr) continue;
+        float x2 = dd / rr;
+        float wgt = (1.0 - x2) * (1.0 - x2);   // smooth bump: 1 at the centre, 0 with zero slope at the edge
+        dsum += wgt * op.m;
+        wsum += wgt;
+    }
+    float2 q = p - dsum / max(1.0, wsum);
+    for (uint k = 0; k < count; k++) {
+        WarpOp op = ops[k];
+        if (op.kind < 0.5) continue;
         float2 d = q - op.c;
         float dd = dot(d, d);
         float rr = op.r * op.r;
         if (dd >= rr) continue;
-        if (op.kind < 0.5) {
-            float mm = dot(op.m, op.m);
-            float t = (rr - dd) / (rr - dd + mm);
-            q -= t * t * op.m;
-        } else {
-            float x2 = dd / rr;
-            q = op.c + d * (1.0 - op.s * (1.0 - x2) * (1.0 - x2));
-        }
+        float x2 = dd / rr;
+        q = op.c + d * (1.0 - op.s * (1.0 - x2) * (1.0 - x2));
     }
     dst.write(float4(src.sample(sp, q).rgb, 1.0), gid);
 }
-
 """
 }

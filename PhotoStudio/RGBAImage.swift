@@ -1,5 +1,8 @@
+import Foundation
 import CoreGraphics
+#if canImport(UIKit)
 import UIKit
+#endif
 
 /// Opaque 8-bit RGBA pixels, top row first. The working format for every tool.
 struct RGBAImage {
@@ -48,7 +51,9 @@ struct RGBAImage {
                        provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)!
     }
 
+    #if canImport(UIKit)
     func uiImage() -> UIImage { UIImage(cgImage: cgImage()) }
+    #endif
 
     /// A region (top-left origin, pixels) resampled to `w` x `h`.
     func resampled(region: CGRect, width w: Int, height h: Int) -> RGBAImage {
@@ -76,6 +81,7 @@ struct RGBAImage {
     }
 }
 
+#if canImport(UIKit)
 extension UIImage {
     /// Upright, 8-bit sRGB CGImage with the long side capped at `maxSide`.
     func normalizedCGImage(maxSide: Int) -> CGImage? {
@@ -92,3 +98,4 @@ extension UIImage {
         return img.cgImage
     }
 }
+#endif
