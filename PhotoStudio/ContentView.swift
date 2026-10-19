@@ -330,6 +330,8 @@ struct ContentView: View {
         .onChange(of: model.define) { _, _ in model.renderPreview() }
         .onChange(of: model.jawLength) { _, _ in model.renderPreview() }
         .onChange(of: model.lips) { _, _ in model.renderPreview() }
+        .onChange(of: model.lipSize) { _, _ in model.renderPreview() }
+        .onChange(of: model.lipWidth) { _, _ in model.renderPreview() }
         .onChange(of: model.smile) { _, _ in model.renderPreview() }
         .onChange(of: model.forehead) { _, _ in model.renderPreview() }
     }
@@ -486,7 +488,9 @@ private enum FaceArea: String, CaseIterable, Identifiable {
         case (.eyes, "Height"): return .eyeHeight
         case (.eyes, "Tilt"): return .eyeTilt
         case (.eyes, "Distance"): return .eyeDistance
-        case (.lips, "Size"): return .lips
+        case (.lips, "Size"): return .lipSize
+        case (.lips, "Height"): return .lips
+        case (.lips, "Width"): return .lipWidth
         default: return nil
         }
     }
@@ -497,7 +501,8 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
     case slim = "Slim", size = "Size", width = "Width", position = "Position", perspective = "Perspective", eyes = "Eyes", eyeWidth = "Eye width", eyeHeight = "Eye height",
          eyeTilt = "Eye tilt", eyeDistance = "Eye distance", nose = "Nose",
          noseSize = "Nose size", noseWidth = "Nose width", noseLift = "Nose lift", noseTip = "Nose tip", jaw = "Jaw",
-         chin = "Chin", jawSize = "Jaw size", define = "Define", jawLength = "Jaw length", lips = "Lips", smile = "Smile", smirk = "Smirk",
+         chin = "Chin", jawSize = "Jaw size", define = "Define", jawLength = "Jaw length", lips = "Lips", lipSize = "Lip size",
+         lipWidth = "Lip width", smile = "Smile", smirk = "Smirk",
          forehead = "Forehead"
     var id: String { rawValue }
 
@@ -524,6 +529,8 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .define: return \.define
         case .jawLength: return \.jawLength
         case .lips: return \.lips
+        case .lipSize: return \.lipSize
+        case .lipWidth: return \.lipWidth
         case .smile: return \.smile
         case .smirk: return \.smirk
         case .forehead: return \.forehead
@@ -535,6 +542,9 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .slim: return "Jawline"
         case .jawSize: return "Size"
         case .jawLength: return "Length"
+        case .lips: return "Height"
+        case .lipSize: return "Size"
+        case .lipWidth: return "Width"
         case .eyes: return "Size"
         case .eyeWidth: return "Width"
         case .eyeHeight: return "Height"
@@ -552,7 +562,7 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
 
     /// Two-way sliders start in the middle: left makes it smaller, right bigger.
     var range: ClosedRange<Float> {
-        [.slim, .size, .width, .perspective, .eyes, .eyeWidth, .eyeHeight, .eyeTilt, .eyeDistance, .noseSize, .noseWidth, .noseLift, .noseTip, .jaw, .chin, .jawSize, .jawLength, .lips, .smirk,
+        [.slim, .size, .width, .perspective, .eyes, .eyeWidth, .eyeHeight, .eyeTilt, .eyeDistance, .noseSize, .noseWidth, .noseLift, .noseTip, .jaw, .chin, .jawSize, .jawLength, .lips, .lipSize, .lipWidth, .smirk,
          .forehead].contains(self) ? -1...1 : 0...1
     }
 
@@ -580,6 +590,8 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .define: return "Tightens under the jaw and sharpens its corners"
         case .jawLength: return "Left shorter, right longer"
         case .lips: return "Left thinner, right fuller"
+        case .lipSize: return "Left smaller, right bigger"
+        case .lipWidth: return "Left narrower, right wider"
         case .forehead: return "Left lower hairline, right higher"
         default: return ""
         }

@@ -38,6 +38,8 @@ final class EditorModel: ObservableObject {
     @Published var define: Float = 0
     @Published var jawLength: Float = 0
     @Published var lips: Float = 0
+    @Published var lipSize: Float = 0
+    @Published var lipWidth: Float = 0
     @Published var smile: Float = 0
     @Published var smirk: Float = 0
     @Published var forehead: Float = 0
@@ -125,7 +127,7 @@ final class EditorModel: ObservableObject {
         v.eyeWidth = eyeWidth; v.eyeHeight = eyeHeight; v.eyeTilt = eyeTilt; v.eyeDistance = eyeDistance
         v.noseSize = noseSize; v.noseWidth = noseWidth; v.noseLift = noseLift; v.noseTip = noseTip
         v.size = size; v.width = width; v.perspective = perspective; v.positionX = positionX; v.positionY = positionY
-        v.jaw = jaw; v.chin = chin; v.jawSize = jawSize; v.define = define; v.jawLength = jawLength; v.lips = lips; v.smile = smile; v.smirk = smirk; v.forehead = forehead
+        v.jaw = jaw; v.chin = chin; v.jawSize = jawSize; v.define = define; v.jawLength = jawLength; v.lips = lips; v.lipSize = lipSize; v.lipWidth = lipWidth; v.smile = smile; v.smirk = smirk; v.forehead = forehead
         return v
     }
 
@@ -135,7 +137,7 @@ final class EditorModel: ObservableObject {
         eyeWidth = v.eyeWidth; eyeHeight = v.eyeHeight; eyeTilt = v.eyeTilt; eyeDistance = v.eyeDistance
         noseSize = v.noseSize; noseWidth = v.noseWidth; noseLift = v.noseLift; noseTip = v.noseTip
         size = v.size; width = v.width; perspective = v.perspective; positionX = v.positionX; positionY = v.positionY
-        jaw = v.jaw; chin = v.chin; jawSize = v.jawSize; define = v.define; jawLength = v.jawLength; lips = v.lips; smile = v.smile; smirk = v.smirk; forehead = v.forehead
+        jaw = v.jaw; chin = v.chin; jawSize = v.jawSize; define = v.define; jawLength = v.jawLength; lips = v.lips; lipSize = v.lipSize; lipWidth = v.lipWidth; smile = v.smile; smirk = v.smirk; forehead = v.forehead
     }
 
     /// Starts the Face tab on the biggest face, with every face's sliders at zero.

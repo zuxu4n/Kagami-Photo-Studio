@@ -47,7 +47,9 @@ struct FaceShape: Equatable {
     var jawSize: Float = 0    // -1...1, smaller or bigger jaw
     var define: Float = 0     // 0...1, tighter under the jaw, sharper corners
     var jawLength: Float = 0  // -1...1, shorter or longer lower face
-    var lips: Float = 0       // -1...1, thinner or fuller lips
+    var lips: Float = 0       // -1...1, Lips › Height: thinner or fuller lips
+    var lipSize: Float = 0    // -1...1, smaller or bigger mouth
+    var lipWidth: Float = 0   // -1...1, narrower or wider mouth
     var smile: Float = 0      // 0...1, lifts the mouth corners
     var smirk: Float = 0      // -1...1, lifts the mouth corner on the photo's left or right
     var forehead: Float = 0   // -1...1, lower or higher hairline
@@ -57,7 +59,7 @@ struct FaceShape: Equatable {
             && abs(eyeWidth) <= 0.001 && abs(eyeHeight) <= 0.001 && abs(eyeTilt) <= 0.001 && abs(eyeDistance) <= 0.001
             && nose <= 0.001 && abs(noseSize) <= 0.001 && abs(noseWidth) <= 0.001 && abs(noseLift) <= 0.001 && abs(noseTip) <= 0.001
             && abs(jaw) <= 0.001 && abs(chin) <= 0.001 && abs(jawSize) <= 0.001 && define <= 0.001 && abs(jawLength) <= 0.001
-            && abs(lips) <= 0.001 && smile <= 0.001 && abs(smirk) <= 0.001 && abs(forehead) <= 0.001
+            && abs(lips) <= 0.001 && abs(lipSize) <= 0.001 && abs(lipWidth) <= 0.001 && smile <= 0.001 && abs(smirk) <= 0.001 && abs(forehead) <= 0.001
     }
     var isOff: Bool { abs(slim) <= 0.001 && abs(eyes) <= 0.001 && meshOff && pushes.isEmpty }
 }
@@ -78,7 +80,7 @@ enum TranslateGroup {
     static let jawline: Float = 1, nose: Float = 2, jaw: Float = 3, chin: Float = 4, lips: Float = 5, mouth: Float = 6,
                forehead: Float = 7, jawSize: Float = 8, define: Float = 9, jawLength: Float = 10, noseSize: Float = 11,
                noseWidth: Float = 12, noseLift: Float = 13, eyeWidth: Float = 14, eyeHeight: Float = 15, eyeTilt: Float = 16,
-               eyeDistance: Float = 17
+               eyeDistance: Float = 17, lipSize: Float = 18, lipWidth: Float = 19
 }
 
 enum FaceAnalyzer {
@@ -224,6 +226,10 @@ enum FaceAnalyzer {
         MeshEye(outer: 33, inner: 133, upper: [246, 161, 160, 159, 158, 157, 173], lower: [7, 163, 144, 145, 153, 154, 155], iris: 468),
         MeshEye(outer: 263, inner: 362, upper: [466, 388, 387, 386, 385, 384, 398], lower: [249, 390, 373, 374, 380, 381, 382], iris: 473),
     ]
+
+    /// The lips' outer edge (from one corner round the upper lip and back round the lower lip) and inner edge.
+    static let outerLips = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146]
+    static let innerLips = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95]
 
     /// The lower part of the outline, from beside one ear round the chin (index 10) to beside the other.
     static let lowerOutline = [234, 93, 132, 58, 172, 136, 150, 149, 176, 148, 152, 377, 400, 378, 379, 365, 397, 288, 361, 323, 454]
@@ -473,6 +479,24 @@ enum FaceAnalyzer {
             move([40, 39, 37, 0, 267, 269, 270], r: r) { _ in -down * amt }
             move([91, 181, 84, 17, 314, 405, 321], r: r) { _ in down * amt }
             hold([78, 81, 13, 311, 308, 178, 14, 402], r: r)
+        }
+        if abs(s.lipSize) > 0.001 {
+            // The whole mouth bigger (positive) or smaller about its middle: every point on both lip edges moves away
+            // from or towards it. The base of the nose and the chin stay.
+            group = TranslateGroup.lipSize
+            let c = outerLips.map { m[$0] }.reduce(SIMD2<Float>(0, 0), +) / Float(outerLips.count)
+            move(outerLips + innerLips, r: 0.3 * mouthW) { p in (p - c) * s.lipSize * 0.15 }
+            hold([2, 164, 167, 393, 152, 199, 175], r: 0.25 * mouthW)
+        }
+        if abs(s.lipWidth) > 0.001 {
+            // The corners along the mouth's own line, out (wider, positive) or in, the lip next to them a bit less.
+            // The middle of the lips stays.
+            group = TranslateGroup.lipWidth
+            let along = simd_normalize(m[291] - m[61])
+            func side(_ p: SIMD2<Float>) -> SIMD2<Float> { simd_dot(p - (m[61] + m[291]) / 2, along) < 0 ? -along : along }
+            move([61, 291, 78, 308], r: 0.35 * mouthW) { p in side(p) * s.lipWidth * 0.1 * mouthW }
+            move([185, 146, 409, 375, 191, 95, 415, 324], r: 0.3 * mouthW) { p in side(p) * s.lipWidth * 0.06 * mouthW }
+            hold([0, 17, 13, 14], r: 0.2 * mouthW)
         }
         if s.smile > 0.001 || abs(s.smirk) > 0.001 {
             // Mouth corners up and a little outward; the middle of the lips stays. Smirk lifts one corner on top of
