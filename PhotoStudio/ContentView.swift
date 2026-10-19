@@ -115,14 +115,15 @@ struct ContentView: View {
                     Button {
                         Task { await model.runEnhance() }
                     } label: {
-                        Label("Enhance", systemImage: "sparkles")
+                        Label(model.enhanceOn ? "Enhance on · tap to undo" : "Enhance",
+                              systemImage: model.enhanceOn ? "checkmark.circle.fill" : "sparkles")
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.busy != nil)
                     Spacer()
                     compareButton
                 }
-                Text("Real-ESRGAN on device, from the photo's own pixels. Never smaller than the original (up to 4x for small photos); faces stay as they are.").font(.caption).foregroundStyle(.secondary)
+                Text("Real-ESRGAN on device, from the photo's own pixels. Never smaller than the original (up to 4x for small photos); faces stay as they are. Tap again to undo.").font(.caption).foregroundStyle(.secondary)
             case .smooth:
                 sliderRow("Smooth skin", value: $model.smooth)
                 HStack { Text(model.faceCount == 0 ? "No face found" : "Edges, eyes and lips stay sharp").font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }

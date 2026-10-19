@@ -28,6 +28,9 @@ final class EditorModel: ObservableObject {
     private var preview: RGBAImage?     // long side <= previewSide, for live sliders
     private var faces: [FaceGeometry] = []
     private var renderTask: Task<Void, Never>?
+    @Published var enhanceOn = false
+    private var unenhanced: RGBAImage?  // the photo as it was before Enhance, kept while Enhance is on
+    private var healsSinceEnhance: [(center: CGPoint, brush: Double)] = []  // replayed on `unenhanced` when Enhance goes off
     private var warmedUp = false
 
     let maxWorkingSide = 4032
@@ -111,6 +114,9 @@ final class EditorModel: ObservableObject {
         display = original
         smooth = 0; slim = 0; eyes = 0; nose = 0
         smoothOpened = false
+        enhanceOn = false
+        unenhanced = nil
+        healsSinceEnhance = []
         toolShown(tool)
         info = "\(full.width)×\(full.height) · \(found.count) face(s)"
         record("Open + face landmarks", ms, peakMB: meter.stop(), extra: ["decode_ms": decodeMs])
@@ -131,7 +137,13 @@ final class EditorModel: ObservableObject {
 
     // MARK: Enhance (Real-ESRGAN from the photo's own pixels, faces kept as they are; destructive)
 
+    /// Enhance is a switch. The first tap enhances the photo; the next tap puts back the photo as it was before Enhance,
+    /// with any spots healed since then healed again on it. So Enhance never runs on its own result.
     func runEnhance() async {
+        if enhanceOn {
+            await enhanceOff()
+            return
+        }
         guard let src = working else { return }
         busy = "Enhancing…"
         defer { busy = nil }
@@ -145,6 +157,34 @@ final class EditorModel: ObservableObject {
                 return (out, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
             record("Enhance (\(out.width)×\(out.height))", ms, peakMB: peak)
+            unenhanced = src
+            healsSinceEnhance = []
+            enhanceOn = true
+            await setWorking(out)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func enhanceOff() async {
+        guard var base = unenhanced else {
+            enhanceOn = false
+            return
+        }
+        busy = "Turning Enhance off…"
+        defer { busy = nil }
+        let heals = healsSinceEnhance
+        do {
+            let (out, ms, peak) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double, Double) in
+                let meter = MemoryMeter()
+                let t0 = CFAbsoluteTimeGetCurrent()
+                for h in heals { _ = try EditorModel.healSpot(&base, center: h.center, brush: h.brush) }
+                return (base, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
+            }.value
+            record("Enhance off (\(heals.count) heal(s) redone)", ms, peakMB: peak)
+            unenhanced = nil
+            healsSinceEnhance = []
+            enhanceOn = false
             await setWorking(out)
         } catch {
             self.error = error.localizedDescription
@@ -158,29 +198,39 @@ final class EditorModel: ObservableObject {
         guard var img = working, let prev = preview else { return }
         busy = "Healing…"
         defer { busy = nil }
-        let sx = Double(img.width) / Double(prev.width)
-        let cx = Int(point.x * sx), cy = Int(point.y * sx)
-        let radius = max(4, Int(Double(brush) * Double(img.width)))
+        let center = CGPoint(x: point.x / CGFloat(prev.width), y: point.y / CGFloat(prev.height))
+        let brushFraction = Double(brush)
         do {
-            let (out, ms, peak) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double, Double) in
+            let (out, radius, ms, peak) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Int, Double, Double) in
                 let meter = MemoryMeter()
                 let t0 = CFAbsoluteTimeGetCurrent()
-                var mask = [UInt8](repeating: 0, count: img.width * img.height)
-                let r2 = radius * radius
-                for y in max(0, cy - radius)...min(img.height - 1, cy + radius) {
-                    for x in max(0, cx - radius)...min(img.width - 1, cx + radius) {
-                        let dx = x - cx, dy = y - cy
-                        if dx * dx + dy * dy <= r2 { mask[y * img.width + x] = 255 }
-                    }
-                }
-                try HealEngine.shared.heal(&img, mask: mask)
-                return (img, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
+                let radius = try EditorModel.healSpot(&img, center: center, brush: brushFraction)
+                return (img, radius, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
             record("Heal spot r=\(radius)px", ms, peakMB: peak)
+            if enhanceOn { healsSinceEnhance.append((center, brushFraction)) }
             await setWorking(out, redetectFaces: false)
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// Heals one round spot. `center` is normalised (0...1) and `brush` is the radius as a fraction of the image width,
+    /// so the same tap can be redone on another version of the photo. Returns the radius in pixels.
+    nonisolated static func healSpot(_ img: inout RGBAImage, center: CGPoint, brush: Double) throws -> Int {
+        let cx = min(img.width - 1, max(0, Int(center.x * CGFloat(img.width))))
+        let cy = min(img.height - 1, max(0, Int(center.y * CGFloat(img.height))))
+        let radius = max(4, Int(brush * Double(img.width)))
+        var mask = [UInt8](repeating: 0, count: img.width * img.height)
+        let r2 = radius * radius
+        for y in max(0, cy - radius)...min(img.height - 1, cy + radius) {
+            for x in max(0, cx - radius)...min(img.width - 1, cx + radius) {
+                let dx = x - cx, dy = y - cy
+                if dx * dx + dy * dy <= r2 { mask[y * img.width + x] = 255 }
+            }
+        }
+        try HealEngine.shared.heal(&img, mask: mask)
+        return radius
     }
 
     private func setWorking(_ img: RGBAImage, redetectFaces: Bool = true) async {
