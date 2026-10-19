@@ -154,20 +154,27 @@ enum FaceAnalyzer {
             let k = max(1, ws)
             return CGPoint(x: p.x + d.dx / k, y: p.y + d.dy / k)
         }
-        // Bracket the face rather than cover its edge: push each side outward, more at the top (cheekbones)
-        // than at the jaw, so the pair opens out like a wide "V" instead of hugging the contour.
-        let cx = pts.map(\.x).reduce(0, +) / CGFloat(n)
-        let faceW = f.box.width * W
-        let m = n / 2   // each side runs down to the point beside the chin; the chin itself stays open
+        // Both the shape and the ends come from the detected outline: each side is the outline itself, moved
+        // outward by a fixed gap along its own normal, from its top point down to where the jaw turns towards
+        // the chin (the outline gets flatter than 45 degrees). The chin stays open.
+        let cx = pts.map(\.x).reduce(0, +) / CGFloat(n), cy = pts.map(\.y).reduce(0, +) / CGFloat(n)
+        let gap = f.box.width * W * 0.06
         func side(_ s: [CGPoint]) -> [CGPoint] {
-            let k = CGFloat(max(s.count - 1, 1))
-            let pushed = s.enumerated().map { i, p in
-                let t = 1 - CGFloat(i) / k   // 1 at the top, 0 at the jaw end
-                let dir: CGFloat = p.x < cx ? -1 : 1
-                return CGPoint(x: p.x + dir * faceW * (0.05 + 0.13 * t), y: p.y)
+            func tangent(_ i: Int) -> CGVector {
+                let a = s[max(i - 1, 0)], b = s[min(i + 1, s.count - 1)]
+                let len = max(hypot(b.x - a.x, b.y - a.y), 1e-6)
+                return CGVector(dx: (b.x - a.x) / len, dy: (b.y - a.y) / len)
             }
-            return trimEnd(pushed, keep: 0.75).map { CGPoint(x: $0.x / W, y: $0.y / H) }
+            var last = s.count - 1
+            for i in 1..<s.count where abs(tangent(i).dy) < abs(tangent(i).dx) { last = i; break }
+            return (0...last).map { i in
+                let t = tangent(i)
+                var nx = -t.dy, ny = t.dx
+                if nx * (s[i].x - cx) + ny * (s[i].y - cy) < 0 { nx = -nx; ny = -ny }   // point away from the face
+                return CGPoint(x: (s[i].x + nx * gap) / W, y: (s[i].y + ny * gap) / H)
+            }
         }
+        let m = n / 2 + 1   // top point on each side through to the one beside the chin
         return [side(Array(pts.prefix(m))), side(Array(pts.suffix(m).reversed()))]
     }
 
