@@ -19,6 +19,11 @@ final class EditorModel: ObservableObject {
     @Published var slim: Float = 0          // slim, eyes and nose show the selected face's values
     @Published var eyes: Float = 0
     @Published var nose: Float = 0
+    @Published var jaw: Float = 0           // jaw, chin, lips, smile and forehead use the MediaPipe face mesh
+    @Published var chin: Float = 0
+    @Published var lips: Float = 0
+    @Published var smile: Float = 0
+    @Published var forehead: Float = 0
     @Published var brush: Float = 0.025      // heal brush radius as a fraction of the image width
     @Published var faceCount = 0
     @Published var reshaping = false          // Face tab: a one-finger drag on a face pushes it (Reshape)
@@ -47,16 +52,19 @@ final class EditorModel: ObservableObject {
     var hasImage: Bool { working != nil }
     var previewSize: CGSize { preview.map { CGSize(width: $0.width, height: $0.height) } ?? .zero }
 
-    /// Outline guides for the Face tab, on every face, each following its own Slim value. `selected` marks the
-    /// face the sliders change. `minGap` is the smallest gap between a face and its guide, in preview pixels.
+    /// Outline guides for the Face tab, on every face, each following its own Slim, Jaw and Chin values and pushes.
+    /// `selected` marks the face the sliders change. `minGap` is the smallest gap between a face and its guide, in preview pixels.
     func faceGuides(minGap: CGFloat) -> [(curves: [[CGPoint]], selected: Bool)] {
         guard let prev = preview else { return [] }
         return faces.indices.map { i in
-            let s = i == selectedFace ? slim : (i < shapes.count ? shapes[i].slim : 0)
-            let pushes = i < shapes.count ? shapes[i].pushes : []
-            return (FaceAnalyzer.guideCurves(for: faces[i], width: prev.width, height: prev.height, slim: s, pushes: pushes, minGap: minGap), i == selectedFace)
+            var s = i < shapes.count ? shapes[i] : FaceShape()
+            if i == selectedFace { s = sliderShape(keeping: s) }
+            return (FaceAnalyzer.guideCurves(for: faces[i], width: prev.width, height: prev.height, shape: s, minGap: minGap), i == selectedFace)
         }
     }
+
+    /// Whether the selected face has the MediaPipe mesh that the Jaw, Chin, Lips, Smile and Forehead sliders need.
+    var selectedHasMesh: Bool { selectedFace.map { $0 < faces.count && !faces[$0].mesh.isEmpty } ?? false }
 
     // MARK: Which face the Face tab edits
 
@@ -66,8 +74,7 @@ final class EditorModel: ObservableObject {
         guard let i = faceIndex(at: point), i != selectedFace else { return }
         storeShape()
         selectedFace = i
-        let v = shapes[i]
-        slim = v.slim; eyes = v.eyes; nose = v.nose
+        showSliders(shapes[i])
         renderPreview()
     }
 
@@ -84,14 +91,28 @@ final class EditorModel: ObservableObject {
     /// Keeps the sliders' values as the selected face's own.
     private func storeShape() {
         guard let i = selectedFace, i < shapes.count else { return }
-        shapes[i].slim = slim; shapes[i].eyes = eyes; shapes[i].nose = nose
+        shapes[i] = sliderShape(keeping: shapes[i])
+    }
+
+    /// `base` (for its pushes) with the sliders' current values.
+    private func sliderShape(keeping base: FaceShape) -> FaceShape {
+        var v = base
+        v.slim = slim; v.eyes = eyes; v.nose = nose
+        v.jaw = jaw; v.chin = chin; v.lips = lips; v.smile = smile; v.forehead = forehead
+        return v
+    }
+
+    /// Shows a face's own values on the sliders.
+    private func showSliders(_ v: FaceShape) {
+        slim = v.slim; eyes = v.eyes; nose = v.nose
+        jaw = v.jaw; chin = v.chin; lips = v.lips; smile = v.smile; forehead = v.forehead
     }
 
     /// Starts the Face tab on the biggest face, with every face's sliders at zero.
     private func resetFaces() {
         shapes = Array(repeating: FaceShape(), count: faces.count)
         selectedFace = faces.indices.max(by: { faces[$0].box.width < faces[$1].box.width })
-        slim = 0; eyes = 0; nose = 0
+        showSliders(FaceShape())
     }
 
     /// After faces are found again (Enhance on or off), gives each new face the values of the old face nearest it,
@@ -109,8 +130,7 @@ final class EditorModel: ObservableObject {
         shapes = match.map { $0.map { oldShapes[$0] } ?? FaceShape() }
         selectedFace = match.firstIndex(where: { $0 != nil && $0 == oldSel })
             ?? found.indices.max(by: { found[$0].box.width < found[$1].box.width })
-        let v = selectedFace.map { shapes[$0] } ?? FaceShape()
-        slim = v.slim; eyes = v.eyes; nose = v.nose
+        showSliders(selectedFace.map { shapes[$0] } ?? FaceShape())
     }
 
     // MARK: Reshape (drag a face to push it)
@@ -122,8 +142,7 @@ final class EditorModel: ObservableObject {
         if i != selectedFace {
             storeShape()
             selectedFace = i
-            let v = shapes[i]
-            slim = v.slim; eyes = v.eyes; nose = v.nose
+            showSliders(shapes[i])
         }
         // The push area is a fifth of the face's width across (radius), so a drag moves a cheek or the jaw, not the whole head.
         let r = faces[i].box.width * 0.22 * CGFloat(prev.width)
@@ -196,6 +215,7 @@ final class EditorModel: ObservableObject {
             return ((CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
         }.value
         record("Warm-up: slider GPU code", gpuMs, peakMB: gpuPeak)
+        await warmModel("Face mesh") { try FaceMeshEngine.shared.warmUp() }  // small, and needed as each photo opens
         await warmModel("Heal") { try HealEngine.shared.warmUp() }  // biggest first-use cost (about 3.5 s), so first
         await warmModel("Enhance") { try EnhanceEngine.shared.warmUp() }
         await warmModel("Enhance Neural Engine + GPU") { try EnhanceEngine.shared.warmUpSplit() }  // for 12 MP photos
@@ -468,8 +488,7 @@ final class EditorModel: ObservableObject {
         faceCount = step.faces.count
         shapes = step.shapes
         selectedFace = step.selectedFace
-        let v = step.selectedFace.map { shapes[$0] } ?? FaceShape()
-        slim = v.slim; eyes = v.eyes; nose = v.nose
+        showSliders(step.selectedFace.map { shapes[$0] } ?? FaceShape())
         smooth = step.smooth
         switch step.pixels {
         case .unchanged:
@@ -563,7 +582,8 @@ final class EditorModel: ObservableObject {
     }
 
     func resetSliders() {
-        smooth = 0; slim = 0; eyes = 0; nose = 0
+        smooth = 0
+        showSliders(FaceShape())
         shapes = Array(repeating: FaceShape(), count: faces.count)
         renderPreview()
     }

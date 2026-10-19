@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var pinchStart: (zoom: CGFloat, pan: CGSize)?
     @State private var dragStart: CGSize?      // pan when a one-finger drag began
     @State private var brushRing = false       // show the Heal brush size while its slider moves
+    @State private var feature: FaceFeature = .slim   // the Face slider shown
     @State private var reshapeDrag: Bool?      // Reshape on: nil until the finger moves, then true (pushing a face) or false (panning)
     private let maxZoom: CGFloat = 8
 
@@ -260,11 +261,12 @@ struct ContentView: View {
                             .font(.caption.bold()).disabled(!model.selectedHasPushes || model.busy != nil)
                     }
                 } else {
-                    sliderRow("Slim face", value: $model.slim)
-                    sliderRow("Bigger eyes", value: $model.eyes)
-                    sliderRow("Slim nose", value: $model.nose)
+                    featureChips
+                    sliderRow(feature.title, value: Binding(get: { model[keyPath: feature.value] }, set: { model[keyPath: feature.value] = $0 }),
+                              range: feature.range)
+                        .disabled(feature.needsMesh && !model.selectedHasMesh)
                 }
-                HStack { Text(model.faceCount == 0 ? "No face found" : model.faceCount == 1 ? "Apple Vision landmarks" : "Editing face \((model.selectedFace ?? 0) + 1) of \(model.faceCount) · tap another face to switch").font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
+                HStack { Text(faceCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             }
             Text(model.info).font(.caption2).foregroundStyle(.secondary)
         }
@@ -272,6 +274,41 @@ struct ContentView: View {
         .onChange(of: model.slim) { _, _ in model.renderPreview() }
         .onChange(of: model.eyes) { _, _ in model.renderPreview() }
         .onChange(of: model.nose) { _, _ in model.renderPreview() }
+        .onChange(of: model.jaw) { _, _ in model.renderPreview() }
+        .onChange(of: model.chin) { _, _ in model.renderPreview() }
+        .onChange(of: model.lips) { _, _ in model.renderPreview() }
+        .onChange(of: model.smile) { _, _ in model.renderPreview() }
+        .onChange(of: model.forehead) { _, _ in model.renderPreview() }
+    }
+
+    /// One chip per Face slider; a dot marks the ones changed on the selected face.
+    private var featureChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(FaceFeature.allCases) { f in
+                    Button { feature = f } label: {
+                        HStack(spacing: 4) {
+                            Text(f.rawValue)
+                            if abs(model[keyPath: f.value]) > 0.001 { Circle().frame(width: 5, height: 5) }
+                        }
+                        .font(.caption.bold())
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .foregroundStyle(f == feature ? Color.black : Color.primary)
+                        .background(f == feature ? Color(red: 0.2, green: 0.85, blue: 0.95) : Color.secondary.opacity(0.18), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var faceCaption: String {
+        if model.faceCount == 0 { return "No face found" }
+        if !model.reshaping, feature.needsMesh, !model.selectedHasMesh { return "Couldn't map this face closely enough for \(feature.rawValue)" }
+        let hint = model.reshaping ? "" : feature.hint
+        if model.faceCount == 1 { return hint }
+        let which = "Face \((model.selectedFace ?? 0) + 1) of \(model.faceCount) · tap another face to switch"
+        return hint.isEmpty ? which : "\(hint) · \(which)"
     }
 
     private var compareButton: some View {
@@ -305,6 +342,49 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
+
+/// The Face tab's sliders. Slim, Eyes and Nose use Apple Vision's landmarks; the rest use MediaPipe's face mesh.
+private enum FaceFeature: String, CaseIterable, Identifiable {
+    case slim = "Slim", eyes = "Eyes", nose = "Nose", jaw = "Jaw", chin = "Chin", lips = "Lips", smile = "Smile", forehead = "Forehead"
+    var id: String { rawValue }
+
+    var value: ReferenceWritableKeyPath<EditorModel, Float> {
+        switch self {
+        case .slim: return \.slim
+        case .eyes: return \.eyes
+        case .nose: return \.nose
+        case .jaw: return \.jaw
+        case .chin: return \.chin
+        case .lips: return \.lips
+        case .smile: return \.smile
+        case .forehead: return \.forehead
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .slim: return "Slim face"
+        case .eyes: return "Bigger eyes"
+        case .nose: return "Slim nose"
+        case .jaw: return "Slim jaw"
+        default: return rawValue
+        }
+    }
+
+    /// Two-way sliders start in the middle: left makes it smaller, right bigger.
+    var range: ClosedRange<Float> { [.chin, .lips, .forehead].contains(self) ? -1...1 : 0...1 }
+
+    var hint: String {
+        switch self {
+        case .chin: return "Left shorter, right longer"
+        case .lips: return "Left thinner, right fuller"
+        case .forehead: return "Left lower hairline, right higher"
+        default: return ""
+        }
+    }
+
+    var needsMesh: Bool { ![.slim, .eyes, .nose].contains(self) }
 }
 
 /// Two thin curves bracketing each face, drawn over the aspect-fit photo: cyan on the selected face, white on the others.
