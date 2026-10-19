@@ -26,7 +26,7 @@ final class EditorModel: ObservableObject {
 
     private var working: RGBAImage?     // full resolution, after Enhance/Heal
     private var preview: RGBAImage?     // long side <= previewSide, for live sliders
-    private var faces: [FaceGeometry] = []
+    @Published private(set) var faces: [FaceGeometry] = []
     private var renderTask: Task<Void, Never>?
     @Published var enhanceOn = false
     private var unenhanced: RGBAImage?  // the photo as it was before Enhance, kept while Enhance is on
@@ -38,6 +38,12 @@ final class EditorModel: ObservableObject {
 
     var hasImage: Bool { working != nil }
     var previewSize: CGSize { preview.map { CGSize(width: $0.width, height: $0.height) } ?? .zero }
+
+    /// Outline guides for the Face tab, on the biggest face (the one the sliders change most visibly).
+    var faceGuides: [[CGPoint]] {
+        guard let prev = preview, let f = faces.max(by: { $0.box.width < $1.box.width }) else { return [] }
+        return FaceAnalyzer.guideCurves(for: f, width: prev.width, height: prev.height, slim: slim)
+    }
 
     // MARK: Warm-up at launch, so the first tap on each tool isn't slow
 

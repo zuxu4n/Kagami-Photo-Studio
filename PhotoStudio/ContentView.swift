@@ -5,6 +5,8 @@ struct ContentView: View {
     @StateObject private var model = EditorModel()
     @State private var pickerItem: PhotosPickerItem?
     @State private var comparing = false
+    @State private var sliding = false     // a slider is being dragged
+    @State private var touching = false    // a finger is on the photo
 
     var body: some View {
         NavigationStack {
@@ -70,6 +72,12 @@ struct ContentView: View {
                     }
                     .foregroundStyle(.secondary)
                 }
+                if model.tool == .face, model.display != nil {
+                    FaceGuides(curves: model.faceGuides, imageSize: model.previewSize)
+                        .opacity(sliding || touching || comparing || model.busy != nil ? 0 : 1)
+                        .animation(.easeInOut(duration: sliding || touching ? 0.15 : 0.35), value: sliding || touching || comparing)
+                        .allowsHitTesting(false)
+                }
                 if let b = model.busy {
                     ProgressView(b).padding(14).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                 }
@@ -83,6 +91,9 @@ struct ContentView: View {
             .onLongPressGesture(minimumDuration: 0.15, maximumDistance: 30, pressing: { pressing in
                 if model.tool != .heal { comparing = pressing }
             }, perform: {})
+            .simultaneousGesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in if !touching { touching = true } }
+                .onEnded { _ in touching = false })
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
@@ -155,7 +166,7 @@ struct ContentView: View {
     private func sliderRow(_ title: String, value: Binding<Float>, range: ClosedRange<Float> = 0...1) -> some View {
         HStack {
             Text(title).font(.subheadline).frame(width: 96, alignment: .leading)
-            Slider(value: value, in: range)
+            Slider(value: value, in: range) { sliding = $0 }
         }
     }
 
@@ -171,5 +182,35 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Two thin curves bracketing the face being shaped, drawn over the aspect-fit photo.
+private struct FaceGuides: View {
+    let curves: [[CGPoint]]     // normalised, top-left origin
+    let imageSize: CGSize
+
+    var body: some View {
+        GeometryReader { geo in
+            let s = min(geo.size.width / max(imageSize.width, 1), geo.size.height / max(imageSize.height, 1))
+            let fw = imageSize.width * s, fh = imageSize.height * s
+            let ox = (geo.size.width - fw) / 2, oy = (geo.size.height - fh) / 2
+            let path = Path { p in
+                for c in curves where c.count > 1 {
+                    let v = c.map { CGPoint(x: ox + $0.x * fw, y: oy + $0.y * fh) }
+                    // Smooth curve through the landmarks: quadratic segments between midpoints.
+                    p.move(to: v[0])
+                    for i in 1..<v.count - 1 {
+                        let mid = CGPoint(x: (v[i].x + v[i + 1].x) / 2, y: (v[i].y + v[i + 1].y) / 2)
+                        p.addQuadCurve(to: mid, control: v[i])
+                    }
+                    p.addLine(to: v[v.count - 1])
+                }
+            }
+            ZStack {
+                path.stroke(Color.black.opacity(0.35), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
+                path.stroke(Color(red: 1.0, green: 0.85, blue: 0.55), style: StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round))
+            }
+        }
     }
 }

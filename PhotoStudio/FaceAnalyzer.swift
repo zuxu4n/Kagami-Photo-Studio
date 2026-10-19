@@ -131,6 +131,47 @@ enum FaceAnalyzer {
         return Array(ops.prefix(64))
     }
 
+    // MARK: Outline guides for the Face tab
+
+    /// Two curves bracketing the face's left and right sides, temple to jaw (chin left open), in normalised
+    /// top-left coordinates. They sit just outside the jaw line and follow the slim warp, so they track the face as it changes.
+    static func guideCurves(for f: FaceGeometry, width w: Int, height h: Int, slim: Float) -> [[CGPoint]] {
+        let n = f.contour.count
+        guard n > 6 else { return [] }
+        let W = CGFloat(w), H = CGFloat(h)
+        var pts = f.contour.map { CGPoint(x: $0.x * W, y: $0.y * H) }
+        // Move each point the way the slim warp moves the pixels under it (forward version of the shader's blend).
+        let ops = warpOps(faces: [f], width: w, height: h, slim: slim, eyes: 0, nose: 0)
+        pts = pts.map { p in
+            var d = CGVector.zero, ws: CGFloat = 0
+            for op in ops where op.kind < 0.5 {
+                let dx = p.x - CGFloat(op.c.x), dy = p.y - CGFloat(op.c.y)
+                let x2 = (dx * dx + dy * dy) / CGFloat(op.r * op.r)
+                guard x2 < 1 else { continue }
+                let wgt = (1 - x2) * (1 - x2)
+                d.dx += wgt * CGFloat(op.m.x); d.dy += wgt * CGFloat(op.m.y); ws += wgt
+            }
+            let k = max(1, ws)
+            return CGPoint(x: p.x + d.dx / k, y: p.y + d.dy / k)
+        }
+        // Push outward from the face centre so the line brackets the face instead of covering its edge.
+        let brows = (f.leftBrow + f.rightBrow).map { CGPoint(x: $0.x * W, y: $0.y * H) }
+        let cx = pts.map(\.x).reduce(0, +) / CGFloat(n)
+        let cy = brows.isEmpty ? pts.map(\.y).min() ?? 0 : brows.map(\.y).reduce(0, +) / CGFloat(brows.count)
+        pts = pts.map { CGPoint(x: cx + ($0.x - cx) * 1.07, y: cy + ($0.y - cy) * 1.03) }
+        // Keep the outer ~40% at each end; extend each end up towards the temple.
+        let m = Int((Double(n) * 0.4).rounded())
+        func side(_ s: [CGPoint]) -> [CGPoint] {
+            guard s.count > 2, let a = s.first else { return s }
+            let b = s[2]
+            let len = hypot(a.x - b.x, a.y - b.y)
+            let lift = f.box.height * H * 0.12
+            let top = CGPoint(x: a.x + (a.x - b.x) / len * lift * 0.5, y: a.y + (a.y - b.y) / len * lift)
+            return ([top] + s).map { CGPoint(x: $0.x / W, y: $0.y / H) }
+        }
+        return [side(Array(pts.prefix(m))), side(Array(pts.suffix(m).reversed()))]
+    }
+
     // MARK: Geometry helpers
 
     static func hull(_ points: [CGPoint]) -> [CGPoint] {
