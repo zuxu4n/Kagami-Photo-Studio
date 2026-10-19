@@ -2,7 +2,7 @@ import SwiftUI
 import Photos
 
 enum Tool: String, CaseIterable, Identifiable {
-    case enhance = "Enhance", smooth = "Smooth", heal = "Heal", face = "Face"
+    case enhance = "Enhance", smooth = "Smooth", heal = "Heal", face = "Face", reshape = "Reshape"
     var id: String { rawValue }
 }
 
@@ -32,7 +32,7 @@ final class EditorModel: ObservableObject {
     @Published var forehead: Float = 0
     @Published var brush: Float = 0.025      // heal brush radius as a fraction of the image width
     @Published var faceCount = 0
-    @Published var reshaping = false          // Face tab: a one-finger drag on a face pushes it (Reshape)
+    var reshaping: Bool { tool == .reshape }  // the Reshape tab: a one-finger drag on a face pushes it
     @Published var reshapeSize: Float = 0.22  // Reshape brush radius as a fraction of the face's width
     @Published var reshapeStrength: Float = 1 // how far the content moves for each point the finger moves
     @Published var timings: [(String, Double)] = []
@@ -42,7 +42,7 @@ final class EditorModel: ObservableObject {
     private var preview: RGBAImage? { didSet { sourceVersion &+= 1 } }   // long side <= previewSide, for live sliders
     @Published private(set) var faces: [FaceGeometry] = [] { didSet { sourceVersion &+= 1 } }
     private var sourceVersion = 0       // changes with the preview photo or the faces, so cached renders aren't reused
-    @Published private(set) var selectedFace: Int?   // the face the Face tab guides and sliders are on
+    @Published private(set) var selectedFace: Int?   // the face the Face and Reshape tabs edit
     private var shapes: [FaceShape] = []             // Face tab values for each face, same order as `faces`
     private var smoothed: (version: Int, smooth: Float, image: RGBAImage)?  // the preview after Smooth, reused while only Face values move
     private var rendering = false       // a preview frame is being drawn
@@ -65,7 +65,7 @@ final class EditorModel: ObservableObject {
     var hasImage: Bool { working != nil }
     var previewSize: CGSize { preview.map { CGSize(width: $0.width, height: $0.height) } ?? .zero }
 
-    /// Outline guides for the Face tab, on every face, each following its own Slim, Jaw and Chin values and pushes.
+    /// Outline guides for the Face and Reshape tabs, on every face, each following its own Slim, Jaw and Chin values and pushes.
     /// `selected` marks the face the sliders change. `minGap` is the smallest gap between a face and its guide, in preview pixels.
     func faceGuides(minGap: CGFloat) -> [(curves: [[CGPoint]], selected: Bool)] {
         guard let prev = preview else { return [] }
@@ -79,7 +79,7 @@ final class EditorModel: ObservableObject {
     /// Whether the selected face has the MediaPipe mesh that every Face slider but Slim jawline, Eyes and Nose needs.
     var selectedHasMesh: Bool { selectedFace.map { $0 < faces.count && !faces[$0].mesh.isEmpty } ?? false }
 
-    // MARK: Which face the Face tab edits
+    // MARK: Which face the Face and Reshape tabs edit
 
     /// Selects the face whose area holds `point` (preview pixels) and shows its own slider values.
     /// Where face areas overlap, the face whose centre is nearest wins. A tap outside every face changes nothing.

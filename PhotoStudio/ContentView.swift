@@ -80,7 +80,7 @@ struct ContentView: View {
                 if let img = comparing ? model.original : model.display {
                     ZStack {
                         Image(uiImage: img).resizable().scaledToFit()
-                        if model.tool == .face, model.display != nil {
+                        if model.tool == .face || model.tool == .reshape, model.display != nil {
                             FaceGuides(model: model, zoom: zoom)
                                 .opacity(sliding || touching || comparing || model.busy != nil ? 0.3 : 1)  // dim, don't hide, while adjusting
                                 .animation(.easeInOut(duration: sliding || touching ? 0.15 : 0.35), value: sliding || touching || comparing)
@@ -127,7 +127,7 @@ struct ContentView: View {
                 guard model.busy == nil, let p = imagePoint(location, in: geo.size) else { return }
                 switch model.tool {
                 case .heal: Task { await model.heal(at: p) }
-                case .face: model.selectFace(at: p)
+                case .face, .reshape: model.selectFace(at: p)
                 default: break
                 }
             }
@@ -220,9 +220,9 @@ struct ContentView: View {
         return CGSize(width: min(mx, max(-mx, p.width)), height: min(my, max(-my, p.height)))
     }
 
-    private var reshapeOn: Bool { model.tool == .face && model.reshaping }
+    private var reshapeOn: Bool { model.tool == .reshape }
     /// The Face › Position oval is on the photo: a one-finger drag anywhere on the canvas moves it (instead of panning).
-    private var positionOn: Bool { model.tool == .face && !model.reshaping && feature == .position && model.selectedHasMesh }
+    private var positionOn: Bool { model.tool == .face && feature == .position && model.selectedHasMesh }
 
     /// Maps a tap in the view to preview pixel coordinates, undoing the zoom and pan first (the image is aspect-fit).
     /// Points off the photo are nil unless `clamp` is false (a drag that runs past the edge).
@@ -272,41 +272,35 @@ struct ContentView: View {
                 sliderRow("Brush", value: $model.brush, range: 0.004...0.08, reset: 0.025, undoable: false)
                 Text("Tap a spot to remove it (LaMa, on device). Pinch to zoom in on small spots.").font(.caption).foregroundStyle(.secondary)
             case .face:
-                Picker("Face mode", selection: $model.reshaping) {
-                    Text("Sliders").tag(false)
-                    Text("Reshape").tag(true)
-                }
-                .pickerStyle(.segmented)
-                if model.reshaping {
-                    sliderRow("Size", value: $model.reshapeSize, range: 0.08...0.5, reset: 0.22, undoable: false)
-                    sliderRow("Strength", value: $model.reshapeStrength, range: 0.1...1, reset: 1, undoable: false)
+                areaTabs
+                subtabChips
+                if feature == .position {
                     HStack {
-                        Text("Drag on a face to push it. Pinch to zoom; drag off the face to move around.")
-                            .font(.caption).foregroundStyle(.secondary)
+                        Text("Drag the oval around the head").font(.subheadline)
                         Spacer()
-                        Button("Reset face") { model.resetReshape() }
-                            .font(.caption.bold()).disabled(!model.selectedHasPushes || model.busy != nil)
-                    }
-                } else {
-                    areaTabs
-                    subtabChips
-                    if feature == .position {
-                        HStack {
-                            Text("Drag the oval around the head").font(.subheadline)
-                            Spacer()
-                            Button { model.resetPosition() } label: {
-                                Image(systemName: "arrow.counterclockwise").font(.footnote.bold())
-                            }
-                            .buttonStyle(.borderless)
-                            .disabled(!model.positionMoved || model.busy != nil)
-                            .accessibilityLabel("Reset Position")
+                        Button { model.resetPosition() } label: {
+                            Image(systemName: "arrow.counterclockwise").font(.footnote.bold())
                         }
-                        .disabled(!model.selectedHasMesh)
-                    } else if let f = feature {
-                        sliderRow(f.title, value: Binding(get: { model[keyPath: f.value] }, set: { model[keyPath: f.value] = $0 }),
-                                  range: f.range)
-                            .disabled(f.needsMesh && !model.selectedHasMesh)
+                        .buttonStyle(.borderless)
+                        .disabled(!model.positionMoved || model.busy != nil)
+                        .accessibilityLabel("Reset Position")
                     }
+                    .disabled(!model.selectedHasMesh)
+                } else if let f = feature {
+                    sliderRow(f.title, value: Binding(get: { model[keyPath: f.value] }, set: { model[keyPath: f.value] = $0 }),
+                              range: f.range)
+                        .disabled(f.needsMesh && !model.selectedHasMesh)
+                }
+                HStack { Text(faceCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
+            case .reshape:
+                sliderRow("Size", value: $model.reshapeSize, range: 0.08...0.5, reset: 0.22, undoable: false)
+                sliderRow("Strength", value: $model.reshapeStrength, range: 0.1...1, reset: 1, undoable: false)
+                HStack {
+                    Text("Drag on a face to push it. Pinch to zoom; drag off the face to move around.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Reset face") { model.resetReshape() }
+                        .font(.caption.bold()).disabled(!model.selectedHasPushes || model.busy != nil)
                 }
                 HStack { Text(faceCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             }
