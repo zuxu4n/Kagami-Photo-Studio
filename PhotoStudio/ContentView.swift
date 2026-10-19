@@ -12,7 +12,8 @@ struct ContentView: View {
     @State private var pinchStart: (zoom: CGFloat, pan: CGSize)?
     @State private var dragStart: CGSize?      // pan when a one-finger drag began
     @State private var brushRing = false       // show the Heal brush size while its slider moves
-    @State private var feature: FaceFeature = .slim   // the Face slider shown
+    @State private var area: FaceArea = .face          // the Face main tab shown
+    @State private var subtabs: [FaceArea: String] = [:]  // the subtab picked in each main tab
     @State private var reshapeDrag: Bool?      // Reshape on: nil until the finger moves, then true (pushing a face) or false (panning)
     private let maxZoom: CGFloat = 8
 
@@ -264,12 +265,12 @@ struct ContentView: View {
                             .font(.caption.bold()).disabled(!model.selectedHasPushes || model.busy != nil)
                     }
                 } else {
-                    featureChips
-                    sliderRow(feature.title, value: Binding(get: { model[keyPath: feature.value] }, set: { model[keyPath: feature.value] = $0 }),
-                              range: feature.range)
-                        .disabled(feature.needsMesh && !model.selectedHasMesh)
-                    if feature == .slim {
-                        sliderRow("Slim head", value: $model.head).disabled(!model.selectedHasMesh)
+                    areaTabs
+                    subtabChips
+                    if let f = feature {
+                        sliderRow(f.title, value: Binding(get: { model[keyPath: f.value] }, set: { model[keyPath: f.value] = $0 }),
+                                  range: f.range)
+                            .disabled(f.needsMesh && !model.selectedHasMesh)
                     }
                 }
                 HStack { Text(faceCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
@@ -288,20 +289,52 @@ struct ContentView: View {
         .onChange(of: model.forehead) { _, _ in model.renderPreview() }
     }
 
-    /// One chip per Face slider; a dot marks the ones changed on the selected face.
-    private var featureChips: some View {
+    private var subtab: String { subtabs[area] ?? area.subtabs[0] }
+    /// The working slider behind the picked subtab, if one is built yet.
+    private var feature: FaceFeature? { area.feature(subtab) }
+
+    /// Whether any slider in this main tab (or behind this subtab) is moved on the selected face.
+    private func changed(_ a: FaceArea, _ sub: String? = nil) -> Bool {
+        (sub.map { [a.feature($0)] } ?? a.subtabs.map(a.feature)).contains { f in f.map { abs(model[keyPath: $0.value]) > 0.001 } ?? false }
+    }
+
+    /// The six main Face tabs; a dot marks the ones with a slider moved on the selected face.
+    private var areaTabs: some View {
+        HStack(spacing: 0) {
+            ForEach(FaceArea.allCases) { a in
+                Button { area = a } label: {
+                    VStack(spacing: 4) {
+                        HStack(spacing: 3) {
+                            Text(a.rawValue).lineLimit(1).minimumScaleFactor(0.7)
+                            if changed(a) { Circle().frame(width: 4, height: 4) }
+                        }
+                        .font(.subheadline.weight(a == area ? .bold : .regular))
+                        .foregroundStyle(a == area ? Color.primary : Color.secondary)
+                        Capsule().frame(height: 2)
+                            .foregroundStyle(a == area ? Color(red: 0.2, green: 0.85, blue: 0.95) : .clear)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// The picked main tab's subtabs; a dot marks a moved slider.
+    private var subtabChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach(FaceFeature.allCases) { f in
-                    Button { feature = f } label: {
+                ForEach(area.subtabs, id: \.self) { sub in
+                    Button { subtabs[area] = sub } label: {
                         HStack(spacing: 4) {
-                            Text(f.rawValue)
-                            if abs(model[keyPath: f.value]) > 0.001 || (f == .slim && model.head > 0.001) { Circle().frame(width: 5, height: 5) }
+                            Text(sub)
+                            if changed(area, sub) { Circle().frame(width: 5, height: 5) }
                         }
                         .font(.caption.bold())
                         .padding(.horizontal, 10).padding(.vertical, 6)
-                        .foregroundStyle(f == feature ? Color.black : Color.primary)
-                        .background(f == feature ? Color(red: 0.2, green: 0.85, blue: 0.95) : Color.secondary.opacity(0.18), in: Capsule())
+                        .foregroundStyle(sub == subtab ? Color.black : Color.primary)
+                        .background(sub == subtab ? Color(red: 0.2, green: 0.85, blue: 0.95) : Color.secondary.opacity(0.18), in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -311,8 +344,9 @@ struct ContentView: View {
 
     private var faceCaption: String {
         if model.faceCount == 0 { return "No face found" }
-        if !model.reshaping, feature.needsMesh, !model.selectedHasMesh { return "Couldn't map this face closely enough for \(feature.rawValue)" }
-        let hint = model.reshaping ? "" : feature.hint
+        if !model.reshaping, feature == nil { return "\(area.rawValue) \(subtab): coming soon" }
+        if !model.reshaping, let f = feature, f.needsMesh, !model.selectedHasMesh { return "Couldn't map this face closely enough for \(subtab)" }
+        let hint = model.reshaping ? "" : feature?.hint ?? ""
         if model.faceCount == 1 { return hint }
         let which = "Face \((model.selectedFace ?? 0) + 1) of \(model.faceCount) · tap another face to switch"
         return hint.isEmpty ? which : "\(hint) · \(which)"
@@ -363,14 +397,47 @@ struct ContentView: View {
     }
 }
 
+/// The Face tab's main tabs and their subtabs. Subtabs without a FaceFeature are buttons only for now.
+private enum FaceArea: String, CaseIterable, Identifiable {
+    case face = "Face", jaw = "Jaw", nose = "Nose", eyes = "Eyes", lips = "Lips", eyebrows = "Eyebrows"
+    var id: String { rawValue }
+
+    var subtabs: [String] {
+        switch self {
+        case .face: return ["Size", "Width", "Smile", "Position", "Perspective", "Smirk"]
+        case .jaw: return ["Jaw", "Jawline", "Chin", "Size", "Define", "Length"]
+        case .nose: return ["Size", "Width", "Narrow", "Lift", "Tip"]
+        case .eyes: return ["Size", "Width", "Height", "Tilt", "Distance"]
+        case .lips: return ["Size", "Height", "Width"]
+        case .eyebrows: return ["Thick", "Lift", "Shape", "Tilt", "Raise"]
+        }
+    }
+
+    /// The existing slider each subtab drives. Forehead has no subtab yet, so it's hidden (it stays at its value).
+    func feature(_ sub: String) -> FaceFeature? {
+        switch (self, sub) {
+        case (.face, "Size"): return .head
+        case (.face, "Width"): return .slim
+        case (.face, "Smile"): return .smile
+        case (.jaw, "Jaw"): return .jaw
+        case (.jaw, "Chin"): return .chin
+        case (.nose, "Narrow"): return .nose
+        case (.eyes, "Size"): return .eyes
+        case (.lips, "Size"): return .lips
+        default: return nil
+        }
+    }
+}
+
 /// The Face tab's sliders. Slim, Eyes and Nose use Apple Vision's landmarks; the rest use MediaPipe's face mesh.
 private enum FaceFeature: String, CaseIterable, Identifiable {
-    case slim = "Slim", eyes = "Eyes", nose = "Nose", jaw = "Jaw", chin = "Chin", lips = "Lips", smile = "Smile", forehead = "Forehead"
+    case slim = "Slim", head = "Head", eyes = "Eyes", nose = "Nose", jaw = "Jaw", chin = "Chin", lips = "Lips", smile = "Smile", forehead = "Forehead"
     var id: String { rawValue }
 
     var value: ReferenceWritableKeyPath<EditorModel, Float> {
         switch self {
         case .slim: return \.slim
+        case .head: return \.head
         case .eyes: return \.eyes
         case .nose: return \.nose
         case .jaw: return \.jaw
@@ -384,6 +451,7 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .slim: return "Slim face"
+        case .head: return "Slim head"
         case .eyes: return "Bigger eyes"
         case .nose: return "Slim nose"
         case .jaw: return "Slim jaw"
