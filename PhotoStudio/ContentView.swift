@@ -281,7 +281,10 @@ struct ContentView: View {
         .onChange(of: model.slim) { _, _ in model.renderPreview() }
         .onChange(of: model.eyes) { _, _ in model.renderPreview() }
         .onChange(of: model.nose) { _, _ in model.renderPreview() }
-        .onChange(of: model.head) { _, _ in model.renderPreview() }
+        .onChange(of: model.size) { _, _ in model.renderPreview() }
+        .onChange(of: model.width) { _, _ in model.renderPreview() }
+        .onChange(of: model.perspective) { _, _ in model.renderPreview() }
+        .onChange(of: model.smirk) { _, _ in model.renderPreview() }
         .onChange(of: model.jaw) { _, _ in model.renderPreview() }
         .onChange(of: model.chin) { _, _ in model.renderPreview() }
         .onChange(of: model.lips) { _, _ in model.renderPreview() }
@@ -413,13 +416,16 @@ private enum FaceArea: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The existing slider each subtab drives. Forehead has no subtab yet, so it's hidden (it stays at its value).
+    /// The slider each subtab drives. Forehead has no subtab yet, so it's hidden (it stays at its value).
     func feature(_ sub: String) -> FaceFeature? {
         switch (self, sub) {
-        case (.face, "Size"): return .head
-        case (.face, "Width"): return .slim
+        case (.face, "Size"): return .size
+        case (.face, "Width"): return .width
         case (.face, "Smile"): return .smile
+        case (.face, "Perspective"): return .perspective
+        case (.face, "Smirk"): return .smirk
         case (.jaw, "Jaw"): return .jaw
+        case (.jaw, "Jawline"): return .slim
         case (.jaw, "Chin"): return .chin
         case (.nose, "Narrow"): return .nose
         case (.eyes, "Size"): return .eyes
@@ -431,27 +437,30 @@ private enum FaceArea: String, CaseIterable, Identifiable {
 
 /// The Face tab's sliders. Slim, Eyes and Nose use Apple Vision's landmarks; the rest use MediaPipe's face mesh.
 private enum FaceFeature: String, CaseIterable, Identifiable {
-    case slim = "Slim", head = "Head", eyes = "Eyes", nose = "Nose", jaw = "Jaw", chin = "Chin", lips = "Lips", smile = "Smile", forehead = "Forehead"
+    case slim = "Slim", size = "Size", width = "Width", perspective = "Perspective", eyes = "Eyes", nose = "Nose", jaw = "Jaw",
+         chin = "Chin", lips = "Lips", smile = "Smile", smirk = "Smirk", forehead = "Forehead"
     var id: String { rawValue }
 
     var value: ReferenceWritableKeyPath<EditorModel, Float> {
         switch self {
         case .slim: return \.slim
-        case .head: return \.head
+        case .size: return \.size
+        case .width: return \.width
+        case .perspective: return \.perspective
         case .eyes: return \.eyes
         case .nose: return \.nose
         case .jaw: return \.jaw
         case .chin: return \.chin
         case .lips: return \.lips
         case .smile: return \.smile
+        case .smirk: return \.smirk
         case .forehead: return \.forehead
         }
     }
 
     var title: String {
         switch self {
-        case .slim: return "Slim face"
-        case .head: return "Slim head"
+        case .slim: return "Slim jawline"
         case .eyes: return "Bigger eyes"
         case .nose: return "Slim nose"
         case .jaw: return "Slim jaw"
@@ -460,10 +469,14 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
     }
 
     /// Two-way sliders start in the middle: left makes it smaller, right bigger.
-    var range: ClosedRange<Float> { [.chin, .lips, .forehead].contains(self) ? -1...1 : 0...1 }
+    var range: ClosedRange<Float> { [.size, .width, .perspective, .chin, .lips, .smirk, .forehead].contains(self) ? -1...1 : 0...1 }
 
     var hint: String {
         switch self {
+        case .size: return "Left smaller, right bigger"
+        case .width: return "Left narrower, right wider"
+        case .perspective: return "Left as if further away, right closer"
+        case .smirk: return "Left lifts the left corner, right the right one"
         case .chin: return "Left shorter, right longer"
         case .lips: return "Left thinner, right fuller"
         case .forehead: return "Left lower hairline, right higher"

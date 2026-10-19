@@ -19,11 +19,14 @@ final class EditorModel: ObservableObject {
     @Published var slim: Float = 0          // slim, eyes and nose show the selected face's values
     @Published var eyes: Float = 0
     @Published var nose: Float = 0
-    @Published var head: Float = 0          // Slim head
-    @Published var jaw: Float = 0           // head, jaw, chin, lips, smile and forehead use the MediaPipe face mesh
+    @Published var size: Float = 0          // size, width, perspective, jaw, chin, lips, smile, smirk and forehead use the MediaPipe face mesh
+    @Published var width: Float = 0
+    @Published var perspective: Float = 0
+    @Published var jaw: Float = 0
     @Published var chin: Float = 0
     @Published var lips: Float = 0
     @Published var smile: Float = 0
+    @Published var smirk: Float = 0
     @Published var forehead: Float = 0
     @Published var brush: Float = 0.025      // heal brush radius as a fraction of the image width
     @Published var faceCount = 0
@@ -71,7 +74,7 @@ final class EditorModel: ObservableObject {
         }
     }
 
-    /// Whether the selected face has the MediaPipe mesh that the Jaw, Chin, Lips, Smile and Forehead sliders need.
+    /// Whether the selected face has the MediaPipe mesh that every Face slider but Slim jawline, Eyes and Nose needs.
     var selectedHasMesh: Bool { selectedFace.map { $0 < faces.count && !faces[$0].mesh.isEmpty } ?? false }
 
     // MARK: Which face the Face tab edits
@@ -106,14 +109,16 @@ final class EditorModel: ObservableObject {
     private func sliderShape(keeping base: FaceShape) -> FaceShape {
         var v = base
         v.slim = slim; v.eyes = eyes; v.nose = nose
-        v.head = head; v.jaw = jaw; v.chin = chin; v.lips = lips; v.smile = smile; v.forehead = forehead
+        v.size = size; v.width = width; v.perspective = perspective
+        v.jaw = jaw; v.chin = chin; v.lips = lips; v.smile = smile; v.smirk = smirk; v.forehead = forehead
         return v
     }
 
     /// Shows a face's own values on the sliders.
     private func showSliders(_ v: FaceShape) {
         slim = v.slim; eyes = v.eyes; nose = v.nose
-        head = v.head; jaw = v.jaw; chin = v.chin; lips = v.lips; smile = v.smile; forehead = v.forehead
+        size = v.size; width = v.width; perspective = v.perspective
+        jaw = v.jaw; chin = v.chin; lips = v.lips; smile = v.smile; smirk = v.smirk; forehead = v.forehead
     }
 
     /// Starts the Face tab on the biggest face, with every face's sliders at zero.

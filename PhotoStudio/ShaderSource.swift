@@ -55,16 +55,18 @@ kernel void smoothSkin(texture2d<float, access::sample> src [[texture(0)]],
 struct WarpOp {
     float2 c;      // centre, pixels
     float r;       // radius, pixels
-    float kind;    // 0 = translate, 1 = bulge, 2 = Reshape push, 3 = squeeze (Slim head)
-    float2 m;      // translate displacement, pixels; squeeze: unit axis it narrows along
-    float s;       // bulge or squeeze strength
-    float pad;     // squeeze: reach along the other axis, pixels (r is the reach along m)
+    float kind;    // 0 = translate, 1 = bulge, 2 = Reshape push, 3 = squeeze (Width), 4 = scale (Size), 5 = Perspective translate
+    float2 m;      // translate displacement, pixels; squeeze and scale: the unit axis r is measured along
+    float s;       // bulge, squeeze or scale strength
+    float pad;     // squeeze and scale: reach along the other axis, pixels (r is the reach along m)
 };
 
 // Inverse-mapped local warps: each output pixel looks up where its content comes from.
 // Translate handles are blended (weighted average, not summed), so overlapping jaw handles can't pile up and
-// tear the image. Bulges (eyes) are applied afterwards. Reshape pushes were made on top of the slider warp, one
-// after another, so they are undone first, newest first. Each push is under 0.65 of its radius, so none folds.
+// tear the image. Perspective handles are blended the same way but on their own, and added to the translates.
+// Bulges (eyes) are applied afterwards. Reshape pushes were made on top of the slider warp, one after another,
+// so they are undone first, newest first. Each push is under 0.65 of its radius, so none folds. Size comes next:
+// it scales the whole head, so the handles after it line up with the photo's own landmarks.
 kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
                      texture2d<float, access::write> dst [[texture(1)]],
                      constant WarpOp *ops [[buffer(0)]],
@@ -85,26 +87,39 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
         float x2 = dd / rr;
         p -= op.m * (1.0 - x2) * (1.0 - x2);
     }
-    float2 dsum = 0.0;
-    float wsum = 0.0;
+    // Scales are even over the inner 60% of an oval and fade to nothing at its edge (smoothstep), so the face keeps
+    // its shape and the hair and background around it bend smoothly. At up to 10% they can't fold.
     for (uint k = 0; k < count; k++) {
         WarpOp op = ops[k];
-        if (op.kind > 0.5) continue;  // translate only
+        if (op.kind < 3.5 || op.kind > 4.5) continue;
+        float2 d = p - op.c;
+        float a = dot(d, op.m);
+        float b = dot(d, float2(-op.m.y, op.m.x));
+        float x2 = (a * a) / (op.r * op.r) + (b * b) / (op.pad * op.pad);
+        if (x2 >= 1.0) continue;
+        p = op.c + d * (1.0 - op.s * (1.0 - smoothstep(0.6, 1.0, sqrt(x2))));   // look nearer the middle to enlarge
+    }
+    float2 dsum = 0.0, psum = 0.0;
+    float wsum = 0.0, pwsum = 0.0;
+    for (uint k = 0; k < count; k++) {
+        WarpOp op = ops[k];
+        bool persp = op.kind > 4.5;
+        if (op.kind > 0.5 && !persp) continue;  // translate and Perspective only
         float2 d = p - op.c;
         float dd = dot(d, d);
         float rr = op.r * op.r;
         if (dd >= rr) continue;
         float x2 = dd / rr;
         float wgt = (1.0 - x2) * (1.0 - x2);   // smooth bump: 1 at the centre, 0 with zero slope at the edge
-        dsum += wgt * op.m;
-        wsum += wgt;
+        if (persp) { psum += wgt * op.m; pwsum += wgt; }
+        else { dsum += wgt * op.m; wsum += wgt; }
     }
-    float2 q = p - dsum / max(1.0, wsum);
-    // Squeezes narrow an oval area along one axis, most in the middle and fading to nothing at its edge. They
-    // come after the translates, so Slim head adds to Slim face instead of being averaged with it.
+    float2 q = p - dsum / max(1.0, wsum) - psum / max(1.0, pwsum);
+    // Squeezes narrow (or widen) an oval area along one axis, most in the middle and fading to nothing at its edge.
+    // They come after the translates, so Width adds to Slim jawline instead of being averaged with it.
     for (uint k = 0; k < count; k++) {
         WarpOp op = ops[k];
-        if (op.kind < 2.5) continue;
+        if (op.kind < 2.5 || op.kind > 3.5) continue;
         float2 d = q - op.c;
         float a = dot(d, op.m);
         float b = dot(d, float2(-op.m.y, op.m.x));

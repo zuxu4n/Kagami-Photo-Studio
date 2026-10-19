@@ -13,6 +13,7 @@ struct FaceGeometry {
     var outerLips: [CGPoint]
     var nose: [CGPoint]
     var mesh: [CGPoint] = []   // MediaPipe Face Mesh V2, 478 points; empty if the mesh couldn't be placed
+    var meshDepth: [CGFloat] = []   // each mesh point's distance towards the camera, as a fraction of the image width
 }
 
 /// One step of a Reshape drag: the pixels around (x, y) pushed by (dx, dy). x and y are normalised (0...1);
@@ -28,14 +29,20 @@ struct FaceShape: Equatable {
     var slim: Float = 0
     var eyes: Float = 0
     var nose: Float = 0
-    var head: Float = 0       // 0...1, narrower head (face, temples and hair)
+    var size: Float = 0       // -1...1, smaller or bigger head
+    var width: Float = 0      // -1...1, narrower or wider head (face, temples and hair)
+    var perspective: Float = 0   // -1...1, as if the photo were taken from further away or closer
     var jaw: Float = 0        // 0...1, narrower jaw
     var chin: Float = 0       // -1...1, shorter or longer chin
     var lips: Float = 0       // -1...1, thinner or fuller lips
     var smile: Float = 0      // 0...1, lifts the mouth corners
+    var smirk: Float = 0      // -1...1, lifts the mouth corner on the photo's left or right
     var forehead: Float = 0   // -1...1, lower or higher hairline
     var pushes: [FacePush] = []   // in the order they were made; applied after the sliders
-    var meshOff: Bool { head <= 0.001 && jaw <= 0.001 && abs(chin) <= 0.001 && abs(lips) <= 0.001 && smile <= 0.001 && abs(forehead) <= 0.001 }
+    var meshOff: Bool {
+        abs(size) <= 0.001 && abs(width) <= 0.001 && abs(perspective) <= 0.001 && jaw <= 0.001 && abs(chin) <= 0.001
+            && abs(lips) <= 0.001 && smile <= 0.001 && abs(smirk) <= 0.001 && abs(forehead) <= 0.001
+    }
     var isOff: Bool { slim <= 0.001 && eyes <= 0.001 && nose <= 0.001 && meshOff && pushes.isEmpty }
 }
 
@@ -43,10 +50,10 @@ struct FaceShape: Equatable {
 struct WarpOp {
     var c: SIMD2<Float>      // centre (pixels)
     var r: Float             // radius (pixels)
-    var kind: Float          // 0 = translate, 1 = bulge, 2 = Reshape push, 3 = squeeze
-    var m: SIMD2<Float>      // translate: displacement (pixels); squeeze: unit axis it narrows along
-    var s: Float             // bulge or squeeze: strength
-    var pad: Float = 0       // squeeze: reach along the other axis (pixels; r is the reach along m)
+    var kind: Float          // 0 = translate, 1 = bulge, 2 = Reshape push, 3 = squeeze, 4 = scale, 5 = Perspective translate
+    var m: SIMD2<Float>      // translate: displacement (pixels); squeeze and scale: the unit axis r is measured along
+    var s: Float             // bulge, squeeze or scale: strength
+    var pad: Float = 0       // squeeze and scale: reach along the other axis (pixels; r is the reach along m)
 }
 
 enum FaceAnalyzer {
@@ -81,7 +88,8 @@ enum FaceAnalyzer {
             guard let le = mean(f.leftEye.map(px)), let re = mean(f.rightEye.map(px)) else { continue }
             let box = CGRect(x: f.box.minX * size.width, y: f.box.minY * size.height, width: f.box.width * size.width, height: f.box.height * size.height)
             if let mesh = try? FaceMeshEngine.shared.mesh(in: rgba, box: box, leftEye: le, rightEye: re) {
-                faces[i].mesh = mesh.map { CGPoint(x: $0.x / size.width, y: $0.y / size.height) }
+                faces[i].mesh = mesh.points.map { CGPoint(x: $0.x / size.width, y: $0.y / size.height) }
+                faces[i].meshDepth = mesh.depth.map { $0 / size.width }
             }
         }
         return faces
@@ -174,7 +182,7 @@ enum FaceAnalyzer {
                 ops.append(WarpOp(c: SIMD2(nmax, c.y), r: 0.8 * nw, kind: 0, m: SIMD2(-amt, 0), s: 0))
             }
             if !shapes[i].meshOff, f.mesh.count == 478 {
-                ops += meshOps(f.mesh.map(v), shapes[i])
+                ops += meshOps(f.mesh.map(v), f.meshDepth.map { Float($0) * W }, shapes[i])
             }
         }
         ops = Array(ops.prefix(maxSliderOps))
@@ -192,10 +200,19 @@ enum FaceAnalyzer {
     /// Most slider handles kept across all faces. Biggest faces come first, so background faces are dropped first.
     static let maxSliderOps = 160
 
-    /// Jaw, Chin, Lips, Smile and Forehead handles from the MediaPipe mesh (`m`, in pixels). Directions follow the
-    /// face's own axes (across = eye corner to eye corner, down = at right angles to it), so a tilted head
-    /// changes the same way as an upright one.
-    static func meshOps(_ m: [SIMD2<Float>], _ s: FaceShape) -> [WarpOp] {
+    /// MediaPipe's face outline, in order around the face from the top of the forehead.
+    static let faceOval = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377,
+                           152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109]
+
+    /// Points inside the outline that carry the Perspective change: nose, eyes, brows, cheeks, mouth, chin, forehead.
+    static let perspectivePoints = [1, 6, 197, 98, 327, 33, 133, 362, 263, 105, 334, 50, 280, 117, 346, 205, 425, 123, 352,
+                                    61, 291, 0, 17, 199, 151, 108, 337]
+
+    /// Size, Width, Perspective, Jaw, Chin, Lips, Smile, Smirk and Forehead handles from the MediaPipe mesh (`m`, in
+    /// pixels, and `z`, each point's distance towards the camera in pixels). Directions follow the face's own axes
+    /// (across = eye corner to eye corner, down = at right angles to it), so a tilted head changes the same way as an
+    /// upright one.
+    static func meshOps(_ m: [SIMD2<Float>], _ z: [Float], _ s: FaceShape) -> [WarpOp] {
         var ops: [WarpOp] = []
         let across = simd_normalize(m[263] - m[33])          // outer eye corners, image left to right
         let down = SIMD2(-across.y, across.x)
@@ -208,10 +225,35 @@ enum FaceAnalyzer {
         // Handles that don't move: they hold features next to a moving area in place, so the move fades out
         // smoothly before it reaches them instead of dragging them along (or folding where two moves meet).
         func hold(_ idx: [Int], r: Float) { move(idx, r: r) { _ in .zero } }
-        if s.head > 0.001 {
-            // The whole head narrower, hair included: one squeeze across the face, centred between the cheeks,
-            // reaching a face width out to each side and a bit more up and down. It fades to nothing at its edge.
-            ops.append(WarpOp(c: centre - down * 0.1 * faceW, r: 1.0 * faceW, kind: 3, m: across, s: s.head * 0.12, pad: 1.15 * faceW))
+        let oval = faceOval.map { m[$0] }
+        let mid = oval.reduce(SIMD2<Float>(0, 0), +) / Float(oval.count)   // the middle of the face, about the nose
+        if abs(s.size) > 0.001 {
+            // The whole head bigger or smaller about the middle of the face: evenly across the face (the inner 60%
+            // of an oval reaching a bit past the outline), fading out over the hair, ears and neck.
+            let ra = oval.map { abs(simd_dot($0 - mid, across)) }.max() ?? faceW / 2
+            let rb = oval.map { abs(simd_dot($0 - mid, down)) }.max() ?? faceW / 2
+            ops.append(WarpOp(c: mid, r: ra * 1.05 / 0.6, kind: 4, m: across, s: s.size * 0.1, pad: rb * 1.05 / 0.6))
+        }
+        if abs(s.width) > 0.001 {
+            // The whole head narrower or wider, hair included: one squeeze (or stretch) across the face, centred between
+            // the cheeks, reaching a face width out to each side and a bit more up and down. It fades to nothing at its edge.
+            ops.append(WarpOp(c: centre - down * 0.1 * faceW, r: 1.0 * faceW, kind: 3, m: across, s: -s.width * 0.12, pad: 1.15 * faceW))
+        }
+        if abs(s.perspective) > 0.001, z.count == m.count {
+            // A camera closer to the face enlarges what's nearer to it more than what's further away. So each point
+            // moves away from the middle of the face (closer) or towards it (further) in proportion to how far it sits
+            // in front of the face's average depth: the nose grows a little and the sides of the face, which sit
+            // furthest back, come in. A ring a third of the way further out moves the hair and ears beside each
+            // outline point with it, and the change fades out beyond that. These handles are blended among
+            // themselves, so they add to the other sliders.
+            let zRef = z.prefix(468).reduce(0, +) / 468
+            let k = s.perspective * 0.2 / faceW
+            func shift(_ p: SIMD2<Float>, _ depth: Float) -> SIMD2<Float> { (p - mid) * k * (depth - zRef) }
+            for i in perspectivePoints { ops.append(WarpOp(c: m[i], r: 0.2 * faceW, kind: 5, m: shift(m[i], z[i]), s: 0)) }
+            for i in faceOval {
+                ops.append(WarpOp(c: m[i], r: 0.25 * faceW, kind: 5, m: shift(m[i], z[i]), s: 0))
+                ops.append(WarpOp(c: mid + (m[i] - mid) * 1.35, r: 0.4 * faceW, kind: 5, m: shift(m[i], z[i]), s: 0))
+            }
         }
         if s.jaw > 0.001 {
             // The lower jaw on both sides, from the jaw's corner to beside the chin, towards the middle and slightly up.
@@ -232,9 +274,14 @@ enum FaceAnalyzer {
             move([91, 181, 84, 17, 314, 405, 321], r: r) { _ in down * amt }
             hold([78, 81, 13, 311, 308, 178, 14, 402], r: r)
         }
-        if s.smile > 0.001 {
-            // Mouth corners up and a little outward; the middle of the lips stays.
-            move([61, 291], r: 0.45 * mouthW) { p in (-down - 0.3 * inward(p)) * s.smile * 0.1 * mouthW }
+        if s.smile > 0.001 || abs(s.smirk) > 0.001 {
+            // Mouth corners up and a little outward; the middle of the lips stays. Smirk lifts one corner on top of
+            // Smile: the one on the photo's left (negative) or right (positive). The other corner stays where Smile puts it.
+            for i in [61, 291] {
+                let onLeft = simd_dot(m[i] - centre, across) < 0
+                let lift = s.smile * 0.1 + (onLeft ? max(0, -s.smirk) : max(0, s.smirk)) * 0.13
+                move([i], r: 0.45 * mouthW) { p in (-down - 0.3 * inward(p)) * lift * mouthW }
+            }
             hold([0, 17], r: 0.3 * mouthW)
         }
         if abs(s.forehead) > 0.001 {
@@ -262,27 +309,32 @@ enum FaceAnalyzer {
     // MARK: Outline guides for the Face tab
 
     /// Two curves bracketing the face's left and right sides, temple to jaw (chin left open), in normalised
-    /// top-left coordinates. They sit just outside the jaw line and follow the slim, jaw and chin warps and the
-    /// Reshape pushes, so they track the face as it changes.
+    /// top-left coordinates. They sit just outside the jaw line and follow the Slim, Size, Width, Perspective, Jaw
+    /// and Chin warps and the Reshape pushes, so they track the face as it changes.
     static func guideCurves(for f: FaceGeometry, width w: Int, height h: Int, shape: FaceShape, minGap: CGFloat = 0) -> [[CGPoint]] {
         let n = f.contour.count
         guard n > 6 else { return [] }
         let W = CGFloat(w), H = CGFloat(h)
         var pts = f.contour.map { CGPoint(x: $0.x * W, y: $0.y * H) }
         // Move each point the way the slim warp moves the pixels under it (forward version of the shader's blend).
-        let ops = warpOps(faces: [f], shapes: [FaceShape(slim: shape.slim, head: shape.head, jaw: shape.jaw, chin: shape.chin)], width: w, height: h)
+        let outline = FaceShape(slim: shape.slim, size: shape.size, width: shape.width, perspective: shape.perspective, jaw: shape.jaw, chin: shape.chin)
+        let ops = warpOps(faces: [f], shapes: [outline], width: w, height: h)
         pts = pts.map { p in
-            var d = CGVector.zero, ws: CGFloat = 0
-            for op in ops where op.kind < 0.5 {
-                let dx = p.x - CGFloat(op.c.x), dy = p.y - CGFloat(op.c.y)
-                let x2 = (dx * dx + dy * dy) / CGFloat(op.r * op.r)
-                guard x2 < 1 else { continue }
-                let wgt = (1 - x2) * (1 - x2)
-                d.dx += wgt * CGFloat(op.m.x); d.dy += wgt * CGFloat(op.m.y); ws += wgt
+            // Translates and Perspective handles, each group blended among themselves as the shader does.
+            func blended(_ kind: Float) -> CGVector {
+                var d = CGVector.zero, ws: CGFloat = 0
+                for op in ops where abs(op.kind - kind) < 0.5 {
+                    let dx = p.x - CGFloat(op.c.x), dy = p.y - CGFloat(op.c.y)
+                    let x2 = (dx * dx + dy * dy) / CGFloat(op.r * op.r)
+                    guard x2 < 1 else { continue }
+                    let wgt = (1 - x2) * (1 - x2)
+                    d.dx += wgt * CGFloat(op.m.x); d.dy += wgt * CGFloat(op.m.y); ws += wgt
+                }
+                return CGVector(dx: d.dx / max(1, ws), dy: d.dy / max(1, ws))
             }
-            let k = max(1, ws)
-            var q = CGPoint(x: p.x + d.dx / k, y: p.y + d.dy / k)
-            for op in ops where op.kind > 2.5 {
+            let t = blended(0), pv = blended(5)
+            var q = CGPoint(x: p.x + t.dx + pv.dx, y: p.y + t.dy + pv.dy)
+            for op in ops where abs(op.kind - 3) < 0.5 {
                 // The shader samples q + axis * a * s * fall, so content at q shows about a * s * fall nearer the middle.
                 let ax = CGFloat(op.m.x), ay = CGFloat(op.m.y)
                 let dx = q.x - CGFloat(op.c.x), dy = q.y - CGFloat(op.c.y)
@@ -291,6 +343,17 @@ enum FaceAnalyzer {
                 guard x2 < 1 else { continue }
                 let shift = a * CGFloat(op.s) * (1 - x2) * (1 - x2) / (1 + CGFloat(op.s))
                 q.x -= ax * shift; q.y -= ay * shift
+            }
+            for op in ops where abs(op.kind - 4) < 0.5 {
+                // The shader samples c + d * (1 - s * w), so content at q shows at about c + d / (1 - s * w).
+                let ax = CGFloat(op.m.x), ay = CGFloat(op.m.y)
+                let dx = q.x - CGFloat(op.c.x), dy = q.y - CGFloat(op.c.y)
+                let a = dx * ax + dy * ay, b = -dx * ay + dy * ax
+                let rho = sqrt(a * a / CGFloat(op.r * op.r) + b * b / CGFloat(op.pad * op.pad))
+                guard rho < 1 else { continue }
+                let t = min(1, max(0, (rho - 0.6) / 0.4)), wgt = 1 - t * t * (3 - 2 * t)
+                let k = 1 / (1 - CGFloat(op.s) * wgt)
+                q = CGPoint(x: CGFloat(op.c.x) + dx * k, y: CGFloat(op.c.y) + dy * k)
             }
             return pushed(q, by: shape.pushes, width: w, height: h)
         }

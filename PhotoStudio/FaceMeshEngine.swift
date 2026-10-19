@@ -36,21 +36,22 @@ final class FaceMeshEngine {
     /// The mesh for one face found by Vision, in pixels of `img`. Two passes, as MediaPipe's own tracking does:
     /// the first crop comes from Vision's box and eye line, the second from the first pass's landmarks, which
     /// centres and levels the face better. Nil when the model doesn't see a face there.
-    func mesh(in img: RGBAImage, box: CGRect, leftEye: CGPoint, rightEye: CGPoint) throws -> [CGPoint]? {
+    /// `depth` is each point's distance towards the camera from the middle of the head, in image pixels.
+    func mesh(in img: RGBAImage, box: CGRect, leftEye: CGPoint, rightEye: CGPoint) throws -> (points: [CGPoint], depth: [CGFloat])? {
         let (a, b) = leftEye.x < rightEye.x ? (leftEye, rightEye) : (rightEye, leftEye)
         let angle = atan2(b.y - a.y, b.x - a.x)
         guard let first = try landmarks(in: img, center: CGPoint(x: box.midX, y: box.midY), side: max(box.width, box.height) * 1.5, angle: angle)
         else { return nil }
-        let xs = first.map(\.x), ys = first.map(\.y)
+        let xs = first.points.map(\.x), ys = first.points.map(\.y)
         let (minX, maxX, minY, maxY) = (xs.min()!, xs.max()!, ys.min()!, ys.max()!)
-        let level = atan2(first[263].y - first[33].y, first[263].x - first[33].x)   // outer eye corners
+        let level = atan2(first.points[263].y - first.points[33].y, first.points[263].x - first.points[33].x)   // outer eye corners
         return try landmarks(in: img, center: CGPoint(x: (minX + maxX) / 2, y: (minY + maxY) / 2),
                              side: max(maxX - minX, maxY - minY) * 1.5, angle: level) ?? first
     }
 
     /// Runs the model on the square of `side` pixels centred on `center` and turned by `angle` (radians, y down),
-    /// and maps its landmarks back to image pixels.
-    private func landmarks(in img: RGBAImage, center: CGPoint, side: CGFloat, angle: CGFloat) throws -> [CGPoint]? {
+    /// and maps its landmarks back to image pixels. The model's z is negative towards the camera, in crop pixels.
+    private func landmarks(in img: RGBAImage, center: CGPoint, side: CGFloat, angle: CGFloat) throws -> (points: [CGPoint], depth: [CGFloat])? {
         lock.lock()
         defer { lock.unlock() }
         let model = try load()
@@ -88,9 +89,10 @@ final class FaceMeshEngine {
         guard let lm = res.featureValue(for: "landmarks")?.multiArrayValue, lm.count >= 478 * 3,
               let presence = res.featureValue(for: "presence")?.multiArrayValue else { throw EngineError.badOutput }
         guard presence[0].floatValue > 0 else { return nil }   // a logit: below 0 means under 50% sure it's a face
-        return (0..<478).map { i in
+        let points = (0..<478).map { i in
             let u = CGFloat(lm[i * 3].floatValue), v = CGFloat(lm[i * 3 + 1].floatValue)
             return CGPoint(x: x0 + a * u + b * v, y: y0 + d * u + e * v)
         }
+        return (points, (0..<478).map { -CGFloat(lm[$0 * 3 + 2].floatValue) * k })
     }
 }
