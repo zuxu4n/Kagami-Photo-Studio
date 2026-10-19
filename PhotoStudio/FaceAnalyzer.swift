@@ -166,7 +166,7 @@ enum FaceAnalyzer {
                 let dir: CGFloat = p.x < cx ? -1 : 1
                 return CGPoint(x: p.x + dir * faceW * (0.05 + 0.13 * t), y: p.y)
             }
-            return trimEnd(pushed, keep: 0.9).map { CGPoint(x: $0.x / W, y: $0.y / H) }
+            return trimEnd(pushed, keep: 0.8).map { CGPoint(x: $0.x / W, y: $0.y / H) }
         }
         return [side(Array(pts.prefix(m))), side(Array(pts.suffix(m).reversed()))]
     }
