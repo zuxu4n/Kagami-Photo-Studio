@@ -27,6 +27,8 @@ final class EditorModel: ObservableObject {
     @Published var brush: Float = 0.025      // heal brush radius as a fraction of the image width
     @Published var faceCount = 0
     @Published var reshaping = false          // Face tab: a one-finger drag on a face pushes it (Reshape)
+    @Published var reshapeSize: Float = 0.22  // Reshape brush radius as a fraction of the face's width
+    @Published var reshapeStrength: Float = 1 // how far the content moves for each point the finger moves
     @Published var timings: [(String, Double)] = []
     @Published var info: String = ""
 
@@ -44,7 +46,7 @@ final class EditorModel: ObservableObject {
     @Published private(set) var canUndo = false
     @Published private(set) var canRedo = false
     private var sliderStart: UndoStep?  // the state when a slider drag began
-    private var reshape: (start: UndoStep, face: Int, base: [FacePush], anchor: CGPoint, r: CGFloat, added: [FacePush])?  // the Reshape drag under way
+    private var reshape: (start: UndoStep, face: Int, base: [FacePush], anchor: CGPoint, r: CGFloat, strength: CGFloat, added: [FacePush])?  // the Reshape drag under way
 
     let maxWorkingSide = 4032
     let previewSide = 1600
@@ -144,9 +146,9 @@ final class EditorModel: ObservableObject {
             selectedFace = i
             showSliders(shapes[i])
         }
-        // The push area is a fifth of the face's width across (radius), so a drag moves a cheek or the jaw, not the whole head.
-        let r = faces[i].box.width * 0.22 * CGFloat(prev.width)
-        reshape = (undoStep(.unchanged), i, shapes[i].pushes, point, r, [])
+        // Size and strength are read once, so moving them mid-drag can't change a push already under way.
+        let r = faces[i].box.width * CGFloat(reshapeSize) * CGFloat(prev.width)
+        reshape = (undoStep(.unchanged), i, shapes[i].pushes, point, r, CGFloat(reshapeStrength), [])
         return true
     }
 
@@ -159,7 +161,8 @@ final class EditorModel: ObservableObject {
         // Pushes this drag may add: the overall limit less every other push (on all faces, and this face's earlier drags).
         let room = FaceAnalyzer.maxPushes - shapes.reduce(0) { $0 + $1.pushes.count } + (shapes[d.face].pushes.count - d.base.count)
         func push(_ a: CGPoint, _ b: CGPoint) -> FacePush {
-            FacePush(x: Float(a.x / W), y: Float(a.y / H), r: Float(d.r / W), dx: Float((b.x - a.x) / W), dy: Float((b.y - a.y) / W))
+            FacePush(x: Float(a.x / W), y: Float(a.y / H), r: Float(d.r / W),
+                     dx: Float((b.x - a.x) * d.strength / W), dy: Float((b.y - a.y) * d.strength / W))
         }
         while hypot(point.x - d.anchor.x, point.y - d.anchor.y) > step, d.added.count < room - 1 {
             let len = hypot(point.x - d.anchor.x, point.y - d.anchor.y)
@@ -198,6 +201,9 @@ final class EditorModel: ObservableObject {
         shapes[i].pushes = []
         renderPreview()
     }
+
+    /// The Reshape brush radius on the selected face, as a fraction of the photo's width (for the size ring).
+    var reshapeRadiusFraction: CGFloat { selectedFace.map { faces[$0].box.width * CGFloat(reshapeSize) } ?? 0 }
 
     var selectedHasPushes: Bool { selectedFace.map { $0 < shapes.count && !shapes[$0].pushes.isEmpty } ?? false }
 

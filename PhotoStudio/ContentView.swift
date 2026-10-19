@@ -95,9 +95,10 @@ struct ContentView: View {
                     }
                     .foregroundStyle(.secondary)
                 }
-                if brushRing, model.tool == .heal {
-                    // The brush as it will land on the photo at this zoom.
-                    let d = CGFloat(model.brush) * 2 * fittedSize(geo.size).width * zoom
+                if brushRing, model.tool == .heal || reshapeOn {
+                    // The brush as it will land on the photo at this zoom (Reshape's is sized to the selected face).
+                    let r = model.tool == .heal ? CGFloat(model.brush) : model.reshapeRadiusFraction
+                    let d = r * 2 * fittedSize(geo.size).width * zoom
                     Circle().stroke(Color.white, lineWidth: 1.5).frame(width: d, height: d)
                         .shadow(color: .black.opacity(0.6), radius: 1).allowsHitTesting(false)
                 }
@@ -253,6 +254,8 @@ struct ContentView: View {
                 }
                 .pickerStyle(.segmented)
                 if model.reshaping {
+                    sliderRow("Size", value: $model.reshapeSize, range: 0.08...0.5, undoable: false)
+                    sliderRow("Strength", value: $model.reshapeStrength, range: 0.1...1, undoable: false)
                     HStack {
                         Text("Drag on a face to push it. Pinch to zoom; drag off the face to move around.")
                             .font(.caption).foregroundStyle(.secondary)
