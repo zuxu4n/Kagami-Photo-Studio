@@ -310,6 +310,10 @@ struct ContentView: View {
         .onChange(of: model.slim) { _, _ in model.renderPreview() }
         .onChange(of: model.eyes) { _, _ in model.renderPreview() }
         .onChange(of: model.nose) { _, _ in model.renderPreview() }
+        .onChange(of: model.noseSize) { _, _ in model.renderPreview() }
+        .onChange(of: model.noseWidth) { _, _ in model.renderPreview() }
+        .onChange(of: model.noseLift) { _, _ in model.renderPreview() }
+        .onChange(of: model.noseTip) { _, _ in model.renderPreview() }
         .onChange(of: model.size) { _, _ in model.renderPreview() }
         .onChange(of: model.width) { _, _ in model.renderPreview() }
         .onChange(of: model.perspective) { _, _ in model.renderPreview() }
@@ -468,7 +472,11 @@ private enum FaceArea: String, CaseIterable, Identifiable {
         case (.jaw, "Size"): return .jawSize
         case (.jaw, "Define"): return .define
         case (.jaw, "Length"): return .jawLength
+        case (.nose, "Size"): return .noseSize
+        case (.nose, "Width"): return .noseWidth
         case (.nose, "Narrow"): return .nose
+        case (.nose, "Lift"): return .noseLift
+        case (.nose, "Tip"): return .noseTip
         case (.eyes, "Size"): return .eyes
         case (.lips, "Size"): return .lips
         default: return nil
@@ -476,9 +484,10 @@ private enum FaceArea: String, CaseIterable, Identifiable {
     }
 }
 
-/// The Face tab's sliders. Slim, Eyes and Nose use Apple Vision's landmarks; the rest use MediaPipe's face mesh.
+/// The Face tab's sliders. Jawline and Eyes use Apple Vision's landmarks; the rest use MediaPipe's face mesh.
 private enum FaceFeature: String, CaseIterable, Identifiable {
-    case slim = "Slim", size = "Size", width = "Width", position = "Position", perspective = "Perspective", eyes = "Eyes", nose = "Nose", jaw = "Jaw",
+    case slim = "Slim", size = "Size", width = "Width", position = "Position", perspective = "Perspective", eyes = "Eyes", nose = "Nose",
+         noseSize = "Nose size", noseWidth = "Nose width", noseLift = "Nose lift", noseTip = "Nose tip", jaw = "Jaw",
          chin = "Chin", jawSize = "Jaw size", define = "Define", jawLength = "Jaw length", lips = "Lips", smile = "Smile", smirk = "Smirk",
          forehead = "Forehead"
     var id: String { rawValue }
@@ -492,6 +501,10 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .position: return \.positionX   // Position has an oval on the photo instead of a slider
         case .eyes: return \.eyes
         case .nose: return \.nose
+        case .noseSize: return \.noseSize
+        case .noseWidth: return \.noseWidth
+        case .noseLift: return \.noseLift
+        case .noseTip: return \.noseTip
         case .jaw: return \.jaw
         case .chin: return \.chin
         case .jawSize: return \.jawSize
@@ -510,7 +523,11 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .jawSize: return "Size"
         case .jawLength: return "Length"
         case .eyes: return "Bigger eyes"
-        case .nose: return "Slim nose"
+        case .nose: return "Narrow"
+        case .noseSize: return "Size"
+        case .noseWidth: return "Width"
+        case .noseLift: return "Lift"
+        case .noseTip: return "Tip"
         case .jaw: return "Jaw"
         default: return rawValue
         }
@@ -518,7 +535,8 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
 
     /// Two-way sliders start in the middle: left makes it smaller, right bigger.
     var range: ClosedRange<Float> {
-        [.slim, .size, .width, .perspective, .jaw, .chin, .jawSize, .jawLength, .lips, .smirk, .forehead].contains(self) ? -1...1 : 0...1
+        [.slim, .size, .width, .perspective, .noseSize, .noseWidth, .noseLift, .noseTip, .jaw, .chin, .jawSize, .jawLength, .lips, .smirk,
+         .forehead].contains(self) ? -1...1 : 0...1
     }
 
     var hint: String {
@@ -529,6 +547,11 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .position: return "The head turns towards the oval"
         case .smirk: return "Left lifts the left corner, right the right one"
         case .slim: return "Left slimmer, right fuller"
+        case .nose: return "Slims the bridge of the nose"
+        case .noseSize: return "Left smaller, right bigger"
+        case .noseWidth: return "Left narrower, right wider"
+        case .noseLift: return "Left tip down, right tip up"
+        case .noseTip: return "Left smaller tip, right bigger"
         case .jaw: return "Left narrower, right wider"
         case .chin: return "Left shorter, right longer"
         case .jawSize: return "Left smaller, right bigger"
@@ -540,7 +563,7 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         }
     }
 
-    var needsMesh: Bool { ![.slim, .eyes, .nose].contains(self) }
+    var needsMesh: Bool { ![.slim, .eyes].contains(self) }
 }
 
 /// Face › Position: the oval to drag, on the selected face, drawn over the aspect-fit photo. Its long radius is at least

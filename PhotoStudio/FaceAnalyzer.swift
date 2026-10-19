@@ -28,7 +28,11 @@ struct FacePush: Equatable {
 struct FaceShape: Equatable {
     var slim: Float = 0       // -1...1, Jawline: slimmer or fuller (Apple Vision's outline)
     var eyes: Float = 0
-    var nose: Float = 0
+    var nose: Float = 0       // 0...1, Nose › Narrow: a slimmer bridge
+    var noseSize: Float = 0   // -1...1, smaller or bigger nose
+    var noseWidth: Float = 0  // -1...1, narrower or wider nostrils and wings
+    var noseLift: Float = 0   // -1...1, tip down or up
+    var noseTip: Float = 0    // -1...1, smaller or bigger tip
     var size: Float = 0       // -1...1, smaller or bigger head
     var width: Float = 0      // -1...1, narrower or wider head (face, temples and hair)
     var perspective: Float = 0   // -1...1, as if the photo were taken from further away or closer
@@ -46,10 +50,11 @@ struct FaceShape: Equatable {
     var pushes: [FacePush] = []   // in the order they were made; applied after the sliders
     var meshOff: Bool {
         abs(size) <= 0.001 && abs(width) <= 0.001 && abs(perspective) <= 0.001 && abs(positionX) <= 0.001 && abs(positionY) <= 0.001
+            && nose <= 0.001 && abs(noseSize) <= 0.001 && abs(noseWidth) <= 0.001 && abs(noseLift) <= 0.001 && abs(noseTip) <= 0.001
             && abs(jaw) <= 0.001 && abs(chin) <= 0.001 && abs(jawSize) <= 0.001 && define <= 0.001 && abs(jawLength) <= 0.001
             && abs(lips) <= 0.001 && smile <= 0.001 && abs(smirk) <= 0.001 && abs(forehead) <= 0.001
     }
-    var isOff: Bool { abs(slim) <= 0.001 && eyes <= 0.001 && nose <= 0.001 && meshOff && pushes.isEmpty }
+    var isOff: Bool { abs(slim) <= 0.001 && eyes <= 0.001 && meshOff && pushes.isEmpty }
 }
 
 /// Matches the Metal `WarpOp` struct (32 bytes).
@@ -66,7 +71,8 @@ struct WarpOp {
 /// up), and the sliders' results are added. So one slider never weakens another where their handles overlap.
 enum TranslateGroup {
     static let jawline: Float = 1, nose: Float = 2, jaw: Float = 3, chin: Float = 4, lips: Float = 5, mouth: Float = 6,
-               forehead: Float = 7, jawSize: Float = 8, define: Float = 9, jawLength: Float = 10
+               forehead: Float = 7, jawSize: Float = 8, define: Float = 9, jawLength: Float = 10, noseSize: Float = 11,
+               noseWidth: Float = 12, noseLift: Float = 13
 }
 
 enum FaceAnalyzer {
@@ -156,7 +162,7 @@ enum FaceAnalyzer {
     /// Most Reshape pushes kept across all faces (each one is checked by every pixel, so this bounds render time).
     static let maxPushes = 256
 
-    /// Local warps (Gustafsson-style translate and bulge) for the slim, eyes and nose sliders, in pixels of a w x h image,
+    /// Local warps (Gustafsson-style translate and bulge) for the Jawline and Eyes sliders, in pixels of a w x h image,
     /// followed by every face's Reshape pushes. `shapes[i]` holds the values for `faces[i]`.
     static func warpOps(faces: [FaceGeometry], shapes: [FaceShape], width w: Int, height h: Int) -> [WarpOp] {
         var ops: [WarpOp] = []
@@ -167,7 +173,7 @@ enum FaceAnalyzer {
         }
         // Biggest faces first, so the handle cap drops background faces rather than the subject.
         for i in faces.indices.sorted(by: { faces[$0].box.width > faces[$1].box.width }) where i < shapes.count {
-            let f = faces[i], (slim, eyes, nose) = (shapes[i].slim, shapes[i].eyes, shapes[i].nose)
+            let f = faces[i], (slim, eyes) = (shapes[i].slim, shapes[i].eyes)
             let faceW = Float(f.box.width) * W
             let mid = f.nose.isEmpty ? v(CGPoint(x: f.box.midX, y: f.box.midY)) : centroid(f.nose)
             if abs(slim) > 0.001, f.contour.count > 6 {
@@ -186,15 +192,6 @@ enum FaceAnalyzer {
                     let eyeW = (xs.max() ?? 0) - (xs.min() ?? 0)
                     ops.append(WarpOp(c: centroid(eye), r: 1.5 * eyeW, kind: 1, m: .zero, s: eyes * 0.3))
                 }
-            }
-            if nose > 0.001, f.nose.count > 2 {
-                let xs = f.nose.map { Float($0.x) * W }
-                let nmin = xs.min() ?? 0, nmax = xs.max() ?? 0
-                let nw = nmax - nmin
-                let c = centroid(f.nose)
-                let amt = nose * 0.12 * nw
-                ops.append(WarpOp(c: SIMD2(nmin, c.y), r: 0.8 * nw, kind: 0, m: SIMD2(amt, 0), s: TranslateGroup.nose))
-                ops.append(WarpOp(c: SIMD2(nmax, c.y), r: 0.8 * nw, kind: 0, m: SIMD2(-amt, 0), s: TranslateGroup.nose))
             }
             if !shapes[i].meshOff, f.mesh.count == 478 {
                 ops += meshOps(f.mesh.map(v), f.meshDepth.map { Float($0) * W }, shapes[i])
@@ -309,6 +306,52 @@ enum FaceAnalyzer {
             group = TranslateGroup.chin
             move([152, 148, 377], r: 0.3 * faceW) { _ in down * s.chin * 0.05 * faceW }
             hold([17, 84, 314], r: 0.12 * faceW)
+        }
+        // Nose tab. The nose's own axis runs from between the eyes (168) to the tip (1); its width is wing to wing.
+        let noseAxis = simd_normalize(m[1] - m[168])
+        let noseW = simd_length(m[327] - m[98])
+        func towardsNoseLine(_ p: SIMD2<Float>) -> SIMD2<Float> {
+            let rel = p - m[168]
+            let off = rel - noseAxis * simd_dot(rel, noseAxis)
+            return simd_length(off) > 0.001 ? -simd_normalize(off) : .zero
+        }
+        if abs(s.noseSize) > 0.001 {
+            // The whole nose bigger (positive) or smaller about the middle of its lower half: tip, wings and sides
+            // move away from or towards it. The top of the bridge, the inner eye corners, the cheeks beside the nose
+            // and the upper lip stay.
+            group = TranslateGroup.noseSize
+            let c = (m[4] + m[5]) / 2
+            move([1, 4, 2, 19, 94, 44, 274, 45, 275, 98, 327, 48, 278, 64, 294, 219, 439, 240, 460, 131, 360, 115, 344, 220, 440],
+                 r: 0.35 * noseW) { p in (p - c) * s.noseSize * 0.12 }
+            hold([168, 6, 133, 362, 0, 37, 267, 205, 425, 36, 266], r: 0.25 * noseW)
+        }
+        if abs(s.noseWidth) > 0.001 {
+            // The wings and nostrils towards the nose's centre line (narrower is negative) or away from it. The tip,
+            // the cheeks beside the nose and the upper lip stay.
+            group = TranslateGroup.noseWidth
+            move([98, 327, 48, 278, 64, 294, 219, 439, 240, 460, 102, 331], r: 0.35 * noseW) { p in towardsNoseLine(p) * -s.noseWidth * 0.12 * noseW }
+            hold([1, 4, 205, 425, 36, 266, 0, 164], r: 0.25 * noseW)
+        }
+        if s.nose > 0.001 {
+            // Narrow: the sides of the bridge, from between the eyes down to above the wings, towards the nose's
+            // centre line. The line itself, the wings and the inner eye corners stay.
+            group = TranslateGroup.nose
+            move([198, 420, 209, 429, 236, 456, 217, 437, 131, 360, 134, 363, 51, 281, 3, 248, 174, 399], r: 0.35 * noseW) { p in
+                towardsNoseLine(p) * s.nose * 0.1 * noseW
+            }
+            hold([6, 197, 195, 5, 4, 98, 327, 48, 278, 133, 362], r: 0.15 * noseW)
+        }
+        if abs(s.noseLift) > 0.001 {
+            // The tip and the bottom of the nose up (positive) or down along the face's down direction, the wings
+            // about half as far. The bridge above and the upper lip below stay, so the nose looks shorter and turned up.
+            group = TranslateGroup.noseLift
+            move([1, 4, 2, 19, 94, 44, 274, 45, 275], r: 0.35 * noseW) { _ in -down * s.noseLift * 0.1 * noseW }
+            move([98, 327, 48, 278, 64, 294, 240, 460], r: 0.3 * noseW) { _ in -down * s.noseLift * 0.05 * noseW }
+            hold([5, 195, 197, 6, 0, 37, 267, 164], r: 0.2 * noseW)
+        }
+        if abs(s.noseTip) > 0.001 {
+            // The tip bigger (positive) or smaller: a bulge (or pinch) just above the tip point, about the tip's own size.
+            ops.append(WarpOp(c: m[1] * 0.6 + m[4] * 0.4, r: 0.55 * noseW, kind: 1, m: .zero, s: s.noseTip * 0.25))
         }
         // How far along the lower outline a point is: 0 beside the ears, 1 at the chin.
         func level(_ i: Int) -> Float { 1 - Float(abs(i - 10)) / 10 }

@@ -19,6 +19,10 @@ final class EditorModel: ObservableObject {
     @Published var slim: Float = 0          // Jawline; every Face slider shows the selected face's values
     @Published var eyes: Float = 0
     @Published var nose: Float = 0
+    @Published var noseSize: Float = 0
+    @Published var noseWidth: Float = 0
+    @Published var noseLift: Float = 0
+    @Published var noseTip: Float = 0
     @Published var size: Float = 0          // size, width, perspective, jaw, chin, lips, smile, smirk and forehead use the MediaPipe face mesh
     @Published var width: Float = 0
     @Published var perspective: Float = 0
@@ -114,6 +118,7 @@ final class EditorModel: ObservableObject {
     private func sliderShape(keeping base: FaceShape) -> FaceShape {
         var v = base
         v.slim = slim; v.eyes = eyes; v.nose = nose
+        v.noseSize = noseSize; v.noseWidth = noseWidth; v.noseLift = noseLift; v.noseTip = noseTip
         v.size = size; v.width = width; v.perspective = perspective; v.positionX = positionX; v.positionY = positionY
         v.jaw = jaw; v.chin = chin; v.jawSize = jawSize; v.define = define; v.jawLength = jawLength; v.lips = lips; v.smile = smile; v.smirk = smirk; v.forehead = forehead
         return v
@@ -122,6 +127,7 @@ final class EditorModel: ObservableObject {
     /// Shows a face's own values on the sliders.
     private func showSliders(_ v: FaceShape) {
         slim = v.slim; eyes = v.eyes; nose = v.nose
+        noseSize = v.noseSize; noseWidth = v.noseWidth; noseLift = v.noseLift; noseTip = v.noseTip
         size = v.size; width = v.width; perspective = v.perspective; positionX = v.positionX; positionY = v.positionY
         jaw = v.jaw; chin = v.chin; jawSize = v.jawSize; define = v.define; jawLength = v.jawLength; lips = v.lips; smile = v.smile; smirk = v.smirk; forehead = v.forehead
     }
