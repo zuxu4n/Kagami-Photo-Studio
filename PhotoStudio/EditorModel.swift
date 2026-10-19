@@ -52,6 +52,7 @@ final class EditorModel: ObservableObject {
         record("Warm-up: slider GPU code", gpuMs, peakMB: gpuPeak)
         await warmModel("Heal") { try HealEngine.shared.warmUp() }  // biggest first-use cost (about 3.5 s), so first
         await warmModel("Enhance") { try EnhanceEngine.shared.warmUp() }
+        await warmModel("Enhance Neural Engine + GPU") { try EnhanceEngine.shared.warmUpSplit() }  // for 12 MP photos
     }
 
     private func warmModel(_ name: String, _ body: @escaping @Sendable () throws -> (load: Double, run: Double)?) async {

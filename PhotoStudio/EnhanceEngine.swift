@@ -12,6 +12,7 @@ final class EnhanceEngine {
     private var model: MLModel?
     private var neuralEngineModel: MLModel?, gpuModel: MLModel?  // for sharing tiles; loaded on first use
     private let lock = NSLock()  // the launch warm-up and a tap can both ask for the model
+    private let splitLock = NSLock()  // same for the Neural Engine + GPU copies, separately so small photos don't wait
 
     func loadIfNeeded() throws -> MLModel {
         lock.lock()
@@ -35,8 +36,26 @@ final class EnhanceEngine {
 
     /// One copy of the model on the Neural Engine and one on the GPU, so runTiles can share the tiles between them.
     func splitModels() throws -> [MLModel] {
-        lock.lock()
-        defer { lock.unlock() }
+        splitLock.lock()
+        defer { splitLock.unlock() }
+        return try loadSplit()
+    }
+
+    /// Loads the Neural Engine and GPU copies and runs a blank tile on each, so the first big Enhance doesn't pay for
+    /// setup. Returns (load ms, first-run ms), or nil if they were already loaded.
+    func warmUpSplit() throws -> (load: Double, run: Double)? {
+        splitLock.lock()
+        defer { splitLock.unlock() }
+        guard neuralEngineModel == nil || gpuModel == nil else { return nil }
+        let t0 = CFAbsoluteTimeGetCurrent()
+        let models = try loadSplit()
+        let t1 = CFAbsoluteTimeGetCurrent()
+        let blank = try MLTensors.rgbTensor(from: RGBAImage(width: tile, height: tile), x0: 0, y0: 0, size: tile)
+        for m in models { _ = try m.prediction(from: MLDictionaryFeatureProvider(dictionary: ["input": blank])) }
+        return ((t1 - t0) * 1000, (CFAbsoluteTimeGetCurrent() - t1) * 1000)
+    }
+
+    private func loadSplit() throws -> [MLModel] {
         func make(_ units: MLComputeUnits) throws -> MLModel {
             let cfg = MLModelConfiguration()
             cfg.computeUnits = units
@@ -110,11 +129,13 @@ final class EnhanceEngine {
     /// when the model ran below its native 4x.
     func enhance(_ photo: RGBAImage, plan: Plan, faces: [FaceGeometry] = [], faceTreatment: FaceTreatment = .smallChanges(limit: 0),
                  sharpen: Float = 0.6, progress: ((Double) -> Void)? = nil) throws -> RGBAImage {
-        let model = try loadIfNeeded()
         let d = plan.inputDivisor
+        // Photos big enough to need the half-size copy share their tiles between the Neural Engine and GPU copies
+        // (3.7 s instead of 4.3 s for 12 MP on an iPhone 14 Pro); smaller photos use the single model.
+        let models = d > 1 ? try splitModels() : [try loadIfNeeded()]
         let src = d == 1 ? photo : RGBAImage(cgImage: photo.cgImage(), exactWidth: (photo.width + d - 1) / d,
                                              exactHeight: (photo.height + d - 1) / d)
-        var out = try runTiles(src, perPixel: plan.outputScale * d, models: [model], progress: progress)
+        var out = try runTiles(src, perPixel: plan.outputScale * d, models: models, progress: progress)
         EnhanceEngine.treatFaces(&out, original: photo, faces: faces, treatment: faceTreatment)
         if plan.outputScale * d < scale { EnhanceEngine.sharpen(&out, amount: sharpen) }
         return out
@@ -148,6 +169,7 @@ final class EnhanceEngine {
         out.pixels.withUnsafeMutableBufferPointer { dst in
             DispatchQueue.concurrentPerform(iterations: models.count) { worker in
                 var full = RGBAImage(width: tile * scale, height: tile * scale)
+                var planes: [UInt8] = []  // scratch for copyRGBFast
                 while true {
                     queueLock.lock()
                     let j = next
@@ -165,8 +187,7 @@ final class EnhanceEngine {
                             let res = try models[worker].prediction(from: MLDictionaryFeatureProvider(dictionary: ["input": inArr]))
                             guard let outArr = res.featureValue(for: "output")?.multiArrayValue else { throw EngineError.badOutput }
                             let c2 = CFAbsoluteTimeGetCurrent()
-                            MLTensors.copyRGB(from: outArr, tx0: 0, ty0: 0, width: tile * scale, height: tile * scale,
-                                              into: &full, dx0: 0, dy0: 0)
+                            MLTensors.copyRGBFast(from: outArr, into: &full, planes: &planes)
                             let c3 = CFAbsoluteTimeGetCurrent()
                             let part = g == scale ? full : full.scaled(toWidth: side, height: side)
                             let c4 = CFAbsoluteTimeGetCurrent()
