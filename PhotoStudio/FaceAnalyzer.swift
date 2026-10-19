@@ -158,13 +158,14 @@ enum FaceAnalyzer {
         // than at the jaw, so the pair opens out like a wide "V" instead of hugging the contour.
         let cx = pts.map(\.x).reduce(0, +) / CGFloat(n)
         let faceW = f.box.width * W
+        let drop = f.box.height * H * 0.1   // sit a little below the contour: start under the eyes, end nearer the chin
         let m = Int((Double(n) * 0.4).rounded())   // outer ~40% at each end; the chin stays open
         func side(_ s: [CGPoint]) -> [CGPoint] {
             let k = CGFloat(max(s.count - 1, 1))
             return s.enumerated().map { i, p in
                 let t = 1 - CGFloat(i) / k   // 1 at the top, 0 at the jaw end
                 let dir: CGFloat = p.x < cx ? -1 : 1
-                return CGPoint(x: (p.x + dir * faceW * (0.05 + 0.13 * t)) / W, y: p.y / H)
+                return CGPoint(x: (p.x + dir * faceW * (0.05 + 0.13 * t)) / W, y: (p.y + drop) / H)
             }
         }
         return [side(Array(pts.prefix(m))), side(Array(pts.suffix(m).reversed()))]
