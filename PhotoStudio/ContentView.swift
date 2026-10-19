@@ -85,8 +85,12 @@ struct ContentView: View {
             }
             .contentShape(Rectangle())
             .onTapGesture { location in
-                guard model.tool == .heal, model.busy == nil, let p = imagePoint(location, in: geo.size) else { return }
-                Task { await model.heal(at: p) }
+                guard model.busy == nil, let p = imagePoint(location, in: geo.size) else { return }
+                switch model.tool {
+                case .heal: Task { await model.heal(at: p) }
+                case .face: model.selectFace(at: p)
+                default: break
+                }
             }
             .onLongPressGesture(minimumDuration: 0.15, maximumDistance: 30, pressing: { pressing in
                 if model.tool != .heal { comparing = pressing }
@@ -145,7 +149,7 @@ struct ContentView: View {
                 sliderRow("Slim face", value: $model.slim)
                 sliderRow("Bigger eyes", value: $model.eyes)
                 sliderRow("Slim nose", value: $model.nose)
-                HStack { Text(model.faceCount == 0 ? "No face found" : "Apple Vision landmarks").font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
+                HStack { Text(model.faceCount == 0 ? "No face found" : model.faceCount == 1 ? "Apple Vision landmarks" : "Tap a face to edit it; each face keeps its own settings").font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             }
             Text(model.info).font(.caption2).foregroundStyle(.secondary)
         }

@@ -16,7 +16,7 @@ final class EditorModel: ObservableObject {
     @Published var error: String?
     @Published var tool: Tool = .enhance
     @Published var smooth: Float = 0
-    @Published var slim: Float = 0
+    @Published var slim: Float = 0          // slim, eyes and nose show the selected face's values
     @Published var eyes: Float = 0
     @Published var nose: Float = 0
     @Published var brush: Float = 0.025      // heal brush radius as a fraction of the image width
@@ -27,6 +27,8 @@ final class EditorModel: ObservableObject {
     private var working: RGBAImage?     // full resolution, after Enhance/Heal
     private var preview: RGBAImage?     // long side <= previewSide, for live sliders
     @Published private(set) var faces: [FaceGeometry] = []
+    @Published private(set) var selectedFace: Int?   // the face the Face tab guides and sliders are on
+    private var shapes: [FaceShape] = []             // Face tab values for each face, same order as `faces`
     private var renderTask: Task<Void, Never>?
     @Published var enhanceOn = false
     private var unenhanced: RGBAImage?  // the photo as it was before Enhance, kept while Enhance is on
@@ -39,11 +41,61 @@ final class EditorModel: ObservableObject {
     var hasImage: Bool { working != nil }
     var previewSize: CGSize { preview.map { CGSize(width: $0.width, height: $0.height) } ?? .zero }
 
-    /// Outline guides for the Face tab, on the biggest face (the one the sliders change most visibly).
+    /// Outline guides for the Face tab, on the selected face (the one the sliders change).
     /// `minGap` is the smallest gap between the face and its guide, in preview pixels.
     func faceGuides(minGap: CGFloat) -> [[CGPoint]] {
-        guard let prev = preview, let f = faces.max(by: { $0.box.width < $1.box.width }) else { return [] }
-        return FaceAnalyzer.guideCurves(for: f, width: prev.width, height: prev.height, slim: slim, minGap: minGap)
+        guard let prev = preview, let i = selectedFace, i < faces.count else { return [] }
+        return FaceAnalyzer.guideCurves(for: faces[i], width: prev.width, height: prev.height, slim: slim, minGap: minGap)
+    }
+
+    // MARK: Which face the Face tab edits
+
+    /// Selects the face whose area holds `point` (preview pixels) and shows its own slider values.
+    /// Where face areas overlap, the face whose centre is nearest wins. A tap outside every face changes nothing.
+    func selectFace(at point: CGPoint) {
+        guard let prev = preview else { return }
+        let p = CGPoint(x: point.x / CGFloat(prev.width), y: point.y / CGFloat(prev.height))
+        let hits = faces.indices.filter { faces[$0].box.insetBy(dx: -faces[$0].box.width * 0.15, dy: -faces[$0].box.height * 0.15).contains(p) }
+        guard let i = hits.min(by: { centreDistance(faces[$0], p) < centreDistance(faces[$1], p) }), i != selectedFace else { return }
+        storeShape()
+        selectedFace = i
+        let v = shapes[i]
+        slim = v.slim; eyes = v.eyes; nose = v.nose
+        renderPreview()
+    }
+
+    private func centreDistance(_ f: FaceGeometry, _ p: CGPoint) -> CGFloat { hypot(f.box.midX - p.x, f.box.midY - p.y) }
+
+    /// Keeps the sliders' values as the selected face's own.
+    private func storeShape() {
+        guard let i = selectedFace, i < shapes.count else { return }
+        shapes[i] = FaceShape(slim: slim, eyes: eyes, nose: nose)
+    }
+
+    /// Starts the Face tab on the biggest face, with every face's sliders at zero.
+    private func resetFaces() {
+        shapes = Array(repeating: FaceShape(), count: faces.count)
+        selectedFace = faces.indices.max(by: { faces[$0].box.width < faces[$1].box.width })
+        slim = 0; eyes = 0; nose = 0
+    }
+
+    /// After faces are found again (Enhance on or off), gives each new face the values of the old face nearest it,
+    /// so settings and the selection stay with the same person.
+    private func carryShapes(to found: [FaceGeometry]) {
+        storeShape()
+        let old = faces, oldShapes = shapes, oldSel = selectedFace
+        func nearest(_ f: FaceGeometry) -> Int? {
+            let c = CGPoint(x: f.box.midX, y: f.box.midY)
+            return old.indices.filter { centreDistance(old[$0], c) < max(old[$0].box.width, f.box.width) * 0.5 }
+                .min(by: { centreDistance(old[$0], c) < centreDistance(old[$1], c) })
+        }
+        let match = found.map(nearest)
+        faces = found
+        shapes = match.map { $0.map { oldShapes[$0] } ?? FaceShape() }
+        selectedFace = match.firstIndex(where: { $0 != nil && $0 == oldSel })
+            ?? found.indices.max(by: { found[$0].box.width < found[$1].box.width })
+        let v = selectedFace.map { shapes[$0] } ?? FaceShape()
+        slim = v.slim; eyes = v.eyes; nose = v.nose
     }
 
     // MARK: Warm-up at launch, so the first tap on each tool isn't slow
@@ -117,9 +169,10 @@ final class EditorModel: ObservableObject {
         preview = prev
         faces = found
         faceCount = found.count
+        resetFaces()
         original = prev.uiImage()
         display = original
-        smooth = 0; slim = 0; eyes = 0; nose = 0
+        smooth = 0
         smoothOpened = false
         enhanceOn = false
         unenhanced = nil
@@ -250,7 +303,7 @@ final class EditorModel: ObservableObject {
         working = img
         preview = prev
         if let found {
-            faces = found
+            carryShapes(to: found)
             faceCount = found.count
         }
         info = "\(img.width)×\(img.height) · \(faceCount) face(s)"
@@ -262,7 +315,8 @@ final class EditorModel: ObservableObject {
     func renderPreview() {
         guard let prev = preview else { return }
         renderTask?.cancel()
-        let params = (smooth, slim, eyes, nose)
+        storeShape()
+        let smooth = self.smooth, shapes = self.shapes
         let faces = self.faces
         renderTask = Task {
             try? await Task.sleep(nanoseconds: 15_000_000)  // coalesce slider ticks
@@ -270,7 +324,7 @@ final class EditorModel: ObservableObject {
             let (img, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double, Double) in
                 let meter = MemoryMeter()
                 let t0 = CFAbsoluteTimeGetCurrent()
-                let out = EditorModel.apply(prev, faces: faces, smooth: params.0, slim: params.1, eyes: params.2, nose: params.3)
+                let out = EditorModel.apply(prev, faces: faces, smooth: smooth, shapes: shapes)
                 return (out, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
             if Task.isCancelled { return }
@@ -280,7 +334,7 @@ final class EditorModel: ObservableObject {
     }
 
     /// Smooth then warp. Runs at any resolution because the face geometry is normalised.
-    nonisolated static func apply(_ img: RGBAImage, faces: [FaceGeometry], smooth: Float, slim: Float, eyes: Float, nose: Float) -> RGBAImage {
+    nonisolated static func apply(_ img: RGBAImage, faces: [FaceGeometry], smooth: Float, shapes: [FaceShape]) -> RGBAImage {
         var out = img
         if smooth > 0.001, !faces.isEmpty {
             let s = min(1.0, 1024.0 / Double(max(img.width, img.height)))
@@ -289,8 +343,8 @@ final class EditorModel: ObservableObject {
             let faceW = Float((faces.map { $0.box.width }.max() ?? 0.2)) * Float(img.width)
             out = GPU.shared.smooth(out, mask: mask, maskWidth: mw, maskHeight: mh, strength: smooth, radius: max(3, faceW / 40))
         }
-        if slim > 0.001 || eyes > 0.001 || nose > 0.001 {
-            let ops = FaceAnalyzer.warpOps(faces: faces, width: img.width, height: img.height, slim: slim, eyes: eyes, nose: nose)
+        if shapes.contains(where: { !$0.isOff }) {
+            let ops = FaceAnalyzer.warpOps(faces: faces, shapes: shapes, width: img.width, height: img.height)
             out = GPU.shared.warp(out, ops: ops)
         }
         return out
@@ -307,12 +361,13 @@ final class EditorModel: ObservableObject {
             error = "Allow PhotoStudio to add photos in Settings to save."
             return
         }
-        let params = (smooth, slim, eyes, nose)
+        storeShape()
+        let smooth = self.smooth, shapes = self.shapes
         let faces = self.faces
         let (data, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (Data?, Double, Double) in
             let meter = MemoryMeter()
             let t0 = CFAbsoluteTimeGetCurrent()
-            let out = EditorModel.apply(img, faces: faces, smooth: params.0, slim: params.1, eyes: params.2, nose: params.3)
+            let out = EditorModel.apply(img, faces: faces, smooth: smooth, shapes: shapes)
             let data = out.uiImage().jpegData(compressionQuality: 0.95)
             return (data, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
         }.value
@@ -330,6 +385,7 @@ final class EditorModel: ObservableObject {
 
     func resetSliders() {
         smooth = 0; slim = 0; eyes = 0; nose = 0
+        shapes = Array(repeating: FaceShape(), count: faces.count)
         renderPreview()
     }
 

@@ -14,6 +14,14 @@ struct FaceGeometry {
     var nose: [CGPoint]
 }
 
+/// The Face tab's slider values for one face. Each face keeps its own.
+struct FaceShape: Equatable {
+    var slim: Float = 0
+    var eyes: Float = 0
+    var nose: Float = 0
+    var isOff: Bool { slim <= 0.001 && eyes <= 0.001 && nose <= 0.001 }
+}
+
 /// Matches the Metal `WarpOp` struct (32 bytes).
 struct WarpOp {
     var c: SIMD2<Float>      // centre (pixels)
@@ -92,7 +100,8 @@ enum FaceAnalyzer {
     // MARK: Warp handles for Face shape
 
     /// Local warps (Gustafsson-style translate and bulge) for the slim, eyes and nose sliders, in pixels of a w x h image.
-    static func warpOps(faces: [FaceGeometry], width w: Int, height h: Int, slim: Float, eyes: Float, nose: Float) -> [WarpOp] {
+    /// `shapes[i]` holds the slider values for `faces[i]`.
+    static func warpOps(faces: [FaceGeometry], shapes: [FaceShape], width w: Int, height h: Int) -> [WarpOp] {
         var ops: [WarpOp] = []
         let W = Float(w), H = Float(h)
         func v(_ p: CGPoint) -> SIMD2<Float> { SIMD2(Float(p.x) * W, Float(p.y) * H) }
@@ -100,7 +109,8 @@ enum FaceAnalyzer {
             ps.reduce(SIMD2<Float>(0, 0)) { $0 + v($1) } / Float(max(ps.count, 1))
         }
         // Biggest faces first, so the 64-handle cap drops background faces rather than the subject.
-        for f in faces.sorted(by: { $0.box.width > $1.box.width }) {
+        for i in faces.indices.sorted(by: { faces[$0].box.width > faces[$1].box.width }) where i < shapes.count {
+            let f = faces[i], (slim, eyes, nose) = (shapes[i].slim, shapes[i].eyes, shapes[i].nose)
             let faceW = Float(f.box.width) * W
             let mid = f.nose.isEmpty ? v(CGPoint(x: f.box.midX, y: f.box.midY)) : centroid(f.nose)
             if slim > 0.001, f.contour.count > 6 {
@@ -141,7 +151,7 @@ enum FaceAnalyzer {
         let W = CGFloat(w), H = CGFloat(h)
         var pts = f.contour.map { CGPoint(x: $0.x * W, y: $0.y * H) }
         // Move each point the way the slim warp moves the pixels under it (forward version of the shader's blend).
-        let ops = warpOps(faces: [f], width: w, height: h, slim: slim, eyes: 0, nose: 0)
+        let ops = warpOps(faces: [f], shapes: [FaceShape(slim: slim)], width: w, height: h)
         pts = pts.map { p in
             var d = CGVector.zero, ws: CGFloat = 0
             for op in ops where op.kind < 0.5 {
