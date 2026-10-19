@@ -135,7 +135,7 @@ enum FaceAnalyzer {
 
     /// Two curves bracketing the face's left and right sides, temple to jaw (chin left open), in normalised
     /// top-left coordinates. They sit just outside the jaw line and follow the slim warp, so they track the face as it changes.
-    static func guideCurves(for f: FaceGeometry, width w: Int, height h: Int, slim: Float) -> [[CGPoint]] {
+    static func guideCurves(for f: FaceGeometry, width w: Int, height h: Int, slim: Float, minGap: CGFloat = 0) -> [[CGPoint]] {
         let n = f.contour.count
         guard n > 6 else { return [] }
         let W = CGFloat(w), H = CGFloat(h)
@@ -158,7 +158,7 @@ enum FaceAnalyzer {
         // outward by a fixed gap along its own normal, from its top point down to where the jaw turns towards
         // the chin (the outline gets flatter than 45 degrees). The chin stays open.
         let cx = pts.map(\.x).reduce(0, +) / CGFloat(n), cy = pts.map(\.y).reduce(0, +) / CGFloat(n)
-        let gap = f.box.width * W * 0.1
+        let gap = max(f.box.width * W * 0.1, minGap)   // minGap (pixels) keeps small, distant faces readable
         func side(_ s: [CGPoint]) -> [CGPoint] {
             func tangent(_ i: Int) -> CGVector {
                 let a = s[max(i - 1, 0)], b = s[min(i + 1, s.count - 1)]

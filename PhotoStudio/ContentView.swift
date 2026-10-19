@@ -73,7 +73,7 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
                 }
                 if model.tool == .face, model.display != nil {
-                    FaceGuides(curves: model.faceGuides, imageSize: model.previewSize)
+                    FaceGuides(curves: model.faceGuides(minGap:), imageSize: model.previewSize)
                         .opacity(sliding || touching || comparing || model.busy != nil ? 0.3 : 1)  // dim, don't hide, while adjusting
                         .animation(.easeInOut(duration: sliding || touching ? 0.15 : 0.35), value: sliding || touching || comparing)
                         .allowsHitTesting(false)
@@ -187,7 +187,7 @@ struct ContentView: View {
 
 /// Two thin curves bracketing the face being shaped, drawn over the aspect-fit photo.
 private struct FaceGuides: View {
-    let curves: [[CGPoint]]     // normalised, top-left origin
+    let curves: (CGFloat) -> [[CGPoint]]     // normalised, top-left origin; takes the minimum gap in image pixels
     let imageSize: CGSize
 
     var body: some View {
@@ -195,6 +195,7 @@ private struct FaceGuides: View {
             let s = min(geo.size.width / max(imageSize.width, 1), geo.size.height / max(imageSize.height, 1))
             let fw = imageSize.width * s, fh = imageSize.height * s
             let ox = (geo.size.width - fw) / 2, oy = (geo.size.height - fh) / 2
+            let curves = self.curves(14 / max(s, 0.001))   // never closer than 14 points on screen
             let path = Path { p in
                 for c in curves where c.count > 1 {
                     let v = c.map { CGPoint(x: ox + $0.x * fw, y: oy + $0.y * fh) }

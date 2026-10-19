@@ -40,9 +40,10 @@ final class EditorModel: ObservableObject {
     var previewSize: CGSize { preview.map { CGSize(width: $0.width, height: $0.height) } ?? .zero }
 
     /// Outline guides for the Face tab, on the biggest face (the one the sliders change most visibly).
-    var faceGuides: [[CGPoint]] {
+    /// `minGap` is the smallest gap between the face and its guide, in preview pixels.
+    func faceGuides(minGap: CGFloat) -> [[CGPoint]] {
         guard let prev = preview, let f = faces.max(by: { $0.box.width < $1.box.width }) else { return [] }
-        return FaceAnalyzer.guideCurves(for: f, width: prev.width, height: prev.height, slim: slim)
+        return FaceAnalyzer.guideCurves(for: f, width: prev.width, height: prev.height, slim: slim, minGap: minGap)
     }
 
     // MARK: Warm-up at launch, so the first tap on each tool isn't slow
