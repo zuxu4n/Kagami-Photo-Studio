@@ -318,6 +318,9 @@ struct ContentView: View {
         .onChange(of: model.smirk) { _, _ in model.renderPreview() }
         .onChange(of: model.jaw) { _, _ in model.renderPreview() }
         .onChange(of: model.chin) { _, _ in model.renderPreview() }
+        .onChange(of: model.jawSize) { _, _ in model.renderPreview() }
+        .onChange(of: model.define) { _, _ in model.renderPreview() }
+        .onChange(of: model.jawLength) { _, _ in model.renderPreview() }
         .onChange(of: model.lips) { _, _ in model.renderPreview() }
         .onChange(of: model.smile) { _, _ in model.renderPreview() }
         .onChange(of: model.forehead) { _, _ in model.renderPreview() }
@@ -462,6 +465,9 @@ private enum FaceArea: String, CaseIterable, Identifiable {
         case (.jaw, "Jaw"): return .jaw
         case (.jaw, "Jawline"): return .slim
         case (.jaw, "Chin"): return .chin
+        case (.jaw, "Size"): return .jawSize
+        case (.jaw, "Define"): return .define
+        case (.jaw, "Length"): return .jawLength
         case (.nose, "Narrow"): return .nose
         case (.eyes, "Size"): return .eyes
         case (.lips, "Size"): return .lips
@@ -473,7 +479,8 @@ private enum FaceArea: String, CaseIterable, Identifiable {
 /// The Face tab's sliders. Slim, Eyes and Nose use Apple Vision's landmarks; the rest use MediaPipe's face mesh.
 private enum FaceFeature: String, CaseIterable, Identifiable {
     case slim = "Slim", size = "Size", width = "Width", position = "Position", perspective = "Perspective", eyes = "Eyes", nose = "Nose", jaw = "Jaw",
-         chin = "Chin", lips = "Lips", smile = "Smile", smirk = "Smirk", forehead = "Forehead"
+         chin = "Chin", jawSize = "Jaw size", define = "Define", jawLength = "Jaw length", lips = "Lips", smile = "Smile", smirk = "Smirk",
+         forehead = "Forehead"
     var id: String { rawValue }
 
     var value: ReferenceWritableKeyPath<EditorModel, Float> {
@@ -487,6 +494,9 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .nose: return \.nose
         case .jaw: return \.jaw
         case .chin: return \.chin
+        case .jawSize: return \.jawSize
+        case .define: return \.define
+        case .jawLength: return \.jawLength
         case .lips: return \.lips
         case .smile: return \.smile
         case .smirk: return \.smirk
@@ -496,16 +506,20 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .slim: return "Slim jawline"
+        case .slim: return "Jawline"
+        case .jawSize: return "Size"
+        case .jawLength: return "Length"
         case .eyes: return "Bigger eyes"
         case .nose: return "Slim nose"
-        case .jaw: return "Slim jaw"
+        case .jaw: return "Jaw"
         default: return rawValue
         }
     }
 
     /// Two-way sliders start in the middle: left makes it smaller, right bigger.
-    var range: ClosedRange<Float> { [.size, .width, .perspective, .chin, .lips, .smirk, .forehead].contains(self) ? -1...1 : 0...1 }
+    var range: ClosedRange<Float> {
+        [.slim, .size, .width, .perspective, .jaw, .chin, .jawSize, .jawLength, .lips, .smirk, .forehead].contains(self) ? -1...1 : 0...1
+    }
 
     var hint: String {
         switch self {
@@ -514,7 +528,12 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .perspective: return "Left as if further away, right closer"
         case .position: return "The head turns towards the oval"
         case .smirk: return "Left lifts the left corner, right the right one"
+        case .slim: return "Left slimmer, right fuller"
+        case .jaw: return "Left narrower, right wider"
         case .chin: return "Left shorter, right longer"
+        case .jawSize: return "Left smaller, right bigger"
+        case .define: return "Tightens under the jaw and sharpens its corners"
+        case .jawLength: return "Left shorter, right longer"
         case .lips: return "Left thinner, right fuller"
         case .forehead: return "Left lower hairline, right higher"
         default: return ""

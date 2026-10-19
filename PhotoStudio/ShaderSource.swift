@@ -57,13 +57,14 @@ struct WarpOp {
     float r;       // radius, pixels
     float kind;    // 0 = translate, 1 = bulge, 2 = Reshape push, 3 = squeeze (Width), 4 = scale (Size), 5 = Perspective translate
     float2 m;      // translate displacement, pixels; squeeze and scale: the unit axis r is measured along
-    float s;       // bulge, squeeze or scale strength
+    float s;       // bulge, squeeze or scale strength; translate: its slider's group (0-15)
     float pad;     // squeeze and scale: reach along the other axis, pixels (r is the reach along m)
 };
 
 // Inverse-mapped local warps: each output pixel looks up where its content comes from.
-// Translate handles are blended (weighted average, not summed), so overlapping jaw handles can't pile up and
-// tear the image. Perspective handles are blended the same way but on their own, and added to the translates.
+// Translate handles are blended (weighted average, not summed) within each slider's group, so overlapping handles
+// can't pile up and tear the image, and the groups' results are added, so one slider never weakens another.
+// Perspective handles are blended the same way as one more group.
 // Bulges (eyes) are applied afterwards. Reshape pushes were made on top of the slider warp, one after another,
 // so they are undone first, newest first. Each push is under 0.65 of its radius, so none folds. Size comes next:
 // it scales the whole head, so the handles after it line up with the photo's own landmarks.
@@ -99,8 +100,9 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
         if (x2 >= 1.0) continue;
         p = op.c + d * (1.0 - op.s * (1.0 - smoothstep(0.6, 1.0, sqrt(x2))));   // look nearer the middle to enlarge
     }
-    float2 dsum = 0.0, psum = 0.0;
-    float wsum = 0.0, pwsum = 0.0;
+    float2 gsum[17];
+    float gw[17];
+    for (int g = 0; g < 17; g++) { gsum[g] = 0.0; gw[g] = 0.0; }
     for (uint k = 0; k < count; k++) {
         WarpOp op = ops[k];
         bool persp = op.kind > 4.5;
@@ -111,10 +113,12 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
         if (dd >= rr) continue;
         float x2 = dd / rr;
         float wgt = (1.0 - x2) * (1.0 - x2);   // smooth bump: 1 at the centre, 0 with zero slope at the edge
-        if (persp) { psum += wgt * op.m; pwsum += wgt; }
-        else { dsum += wgt * op.m; wsum += wgt; }
+        int g = persp ? 16 : clamp(int(op.s + 0.5), 0, 15);
+        gsum[g] += wgt * op.m;
+        gw[g] += wgt;
     }
-    float2 q = p - dsum / max(1.0, wsum) - psum / max(1.0, pwsum);
+    float2 q = p;
+    for (int g = 0; g < 17; g++) { if (gw[g] > 0.0) q -= gsum[g] / max(1.0, gw[g]); }
     // Squeezes narrow (or widen) an oval area along one axis, most in the middle and fading to nothing at its edge.
     // They come after the translates, so Width adds to Slim jawline instead of being averaged with it.
     for (uint k = 0; k < count; k++) {

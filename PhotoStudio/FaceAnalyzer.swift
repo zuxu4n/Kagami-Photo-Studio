@@ -26,7 +26,7 @@ struct FacePush: Equatable {
 
 /// The Face tab's slider values and Reshape pushes for one face. Each face keeps its own.
 struct FaceShape: Equatable {
-    var slim: Float = 0
+    var slim: Float = 0       // -1...1, Jawline: slimmer or fuller (Apple Vision's outline)
     var eyes: Float = 0
     var nose: Float = 0
     var size: Float = 0       // -1...1, smaller or bigger head
@@ -34,8 +34,11 @@ struct FaceShape: Equatable {
     var perspective: Float = 0   // -1...1, as if the photo were taken from further away or closer
     var positionX: Float = 0  // Position: where the oval is, across and down the face, in half-widths and half-heights of the face
     var positionY: Float = 0
-    var jaw: Float = 0        // 0...1, narrower jaw
+    var jaw: Float = 0        // -1...1, narrower or wider jaw corners
     var chin: Float = 0       // -1...1, shorter or longer chin
+    var jawSize: Float = 0    // -1...1, smaller or bigger jaw
+    var define: Float = 0     // 0...1, tighter under the jaw, sharper corners
+    var jawLength: Float = 0  // -1...1, shorter or longer lower face
     var lips: Float = 0       // -1...1, thinner or fuller lips
     var smile: Float = 0      // 0...1, lifts the mouth corners
     var smirk: Float = 0      // -1...1, lifts the mouth corner on the photo's left or right
@@ -43,10 +46,10 @@ struct FaceShape: Equatable {
     var pushes: [FacePush] = []   // in the order they were made; applied after the sliders
     var meshOff: Bool {
         abs(size) <= 0.001 && abs(width) <= 0.001 && abs(perspective) <= 0.001 && abs(positionX) <= 0.001 && abs(positionY) <= 0.001
-            && jaw <= 0.001 && abs(chin) <= 0.001
+            && abs(jaw) <= 0.001 && abs(chin) <= 0.001 && abs(jawSize) <= 0.001 && define <= 0.001 && abs(jawLength) <= 0.001
             && abs(lips) <= 0.001 && smile <= 0.001 && abs(smirk) <= 0.001 && abs(forehead) <= 0.001
     }
-    var isOff: Bool { slim <= 0.001 && eyes <= 0.001 && nose <= 0.001 && meshOff && pushes.isEmpty }
+    var isOff: Bool { abs(slim) <= 0.001 && eyes <= 0.001 && nose <= 0.001 && meshOff && pushes.isEmpty }
 }
 
 /// Matches the Metal `WarpOp` struct (32 bytes).
@@ -55,8 +58,15 @@ struct WarpOp {
     var r: Float             // radius (pixels)
     var kind: Float          // 0 = translate, 1 = bulge, 2 = Reshape push, 3 = squeeze, 4 = scale, 5 = Perspective translate
     var m: SIMD2<Float>      // translate: displacement (pixels); squeeze and scale: the unit axis r is measured along
-    var s: Float             // bulge, squeeze or scale: strength
+    var s: Float             // bulge, squeeze or scale: strength; translate: its slider's group (see TranslateGroup)
     var pad: Float = 0       // squeeze and scale: reach along the other axis (pixels; r is the reach along m)
+}
+
+/// Each slider's translate handles are blended among themselves (a weighted average, so its handles and holds can't pile
+/// up), and the sliders' results are added. So one slider never weakens another where their handles overlap.
+enum TranslateGroup {
+    static let jawline: Float = 1, nose: Float = 2, jaw: Float = 3, chin: Float = 4, lips: Float = 5, mouth: Float = 6,
+               forehead: Float = 7, jawSize: Float = 8, define: Float = 9, jawLength: Float = 10
 }
 
 enum FaceAnalyzer {
@@ -160,12 +170,14 @@ enum FaceAnalyzer {
             let f = faces[i], (slim, eyes, nose) = (shapes[i].slim, shapes[i].eyes, shapes[i].nose)
             let faceW = Float(f.box.width) * W
             let mid = f.nose.isEmpty ? v(CGPoint(x: f.box.midX, y: f.box.midY)) : centroid(f.nose)
-            if slim > 0.001, f.contour.count > 6 {
-                // Pull the jaw line (not the temples) towards the face's vertical centre line.
+            if abs(slim) > 0.001, f.contour.count > 6 {
+                // Jawline: pull the jaw line (not the temples) towards the face's vertical centre line (slimmer is
+                // negative), or push it out (fuller, at most 5% of the face's width, as more looks swollen).
+                let amount = slim < 0 ? -slim * 0.07 : -slim * 0.05
                 for p in f.contour.dropFirst(2).dropLast(2) {
                     let c = v(p)
                     let dir: Float = c.x < mid.x ? 1 : -1
-                    ops.append(WarpOp(c: c, r: 0.25 * faceW, kind: 0, m: SIMD2(dir * slim * 0.07 * faceW, 0), s: 0))
+                    ops.append(WarpOp(c: c, r: 0.25 * faceW, kind: 0, m: SIMD2(dir * amount * faceW, 0), s: TranslateGroup.jawline))
                 }
             }
             if eyes > 0.001 {
@@ -181,8 +193,8 @@ enum FaceAnalyzer {
                 let nw = nmax - nmin
                 let c = centroid(f.nose)
                 let amt = nose * 0.12 * nw
-                ops.append(WarpOp(c: SIMD2(nmin, c.y), r: 0.8 * nw, kind: 0, m: SIMD2(amt, 0), s: 0))
-                ops.append(WarpOp(c: SIMD2(nmax, c.y), r: 0.8 * nw, kind: 0, m: SIMD2(-amt, 0), s: 0))
+                ops.append(WarpOp(c: SIMD2(nmin, c.y), r: 0.8 * nw, kind: 0, m: SIMD2(amt, 0), s: TranslateGroup.nose))
+                ops.append(WarpOp(c: SIMD2(nmax, c.y), r: 0.8 * nw, kind: 0, m: SIMD2(-amt, 0), s: TranslateGroup.nose))
             }
             if !shapes[i].meshOff, f.mesh.count == 478 {
                 ops += meshOps(f.mesh.map(v), f.meshDepth.map { Float($0) * W }, shapes[i])
@@ -202,6 +214,9 @@ enum FaceAnalyzer {
 
     /// Most slider handles kept across all faces. Biggest faces come first, so background faces are dropped first.
     static let maxSliderOps = 160
+
+    /// The lower part of the outline, from beside one ear round the chin (index 10) to beside the other.
+    static let lowerOutline = [234, 93, 132, 58, 172, 136, 150, 149, 176, 148, 152, 377, 400, 378, 379, 365, 397, 288, 361, 323, 454]
 
     /// MediaPipe's face outline, in order around the face from the top of the forehead.
     static let faceOval = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377,
@@ -234,8 +249,9 @@ enum FaceAnalyzer {
         let down = SIMD2(-across.y, across.x)
         let faceW = simd_length(m[454] - m[234])            // cheek to cheek
         let centre = (m[234] + m[454]) / 2
+        var group: Float = 0   // the slider whose handles are being added (see TranslateGroup)
         func move(_ idx: [Int], r: Float, _ by: (SIMD2<Float>) -> SIMD2<Float>) {
-            for k in idx { ops.append(WarpOp(c: m[k], r: r, kind: 0, m: by(m[k]), s: 0)) }
+            for k in idx { ops.append(WarpOp(c: m[k], r: r, kind: 0, m: by(m[k]), s: group)) }
         }
         func inward(_ p: SIMD2<Float>) -> SIMD2<Float> { simd_dot(p - centre, across) < 0 ? across : -across }
         // Handles that don't move: they hold features next to a moving area in place, so the move fades out
@@ -283,19 +299,61 @@ enum FaceAnalyzer {
             }
         }
         if s.jaw > 0.001 {
-            // The lower jaw on both sides, from the jaw's corner to beside the chin, towards the middle and slightly up.
-            move([172, 136, 150, 397, 365, 379], r: 0.22 * faceW) { (inward($0) - 0.2 * down) * s.jaw * 0.045 * faceW }
+            // The lower jaw on both sides, from the jaw's corner to beside the chin, towards the middle and slightly
+            // up (narrower is negative), or out and slightly down.
+            group = TranslateGroup.jaw
+            move([172, 136, 150, 397, 365, 379], r: 0.22 * faceW) { (inward($0) - 0.2 * down) * -s.jaw * 0.045 * faceW }
         }
         if abs(s.chin) > 0.001 {
             // The bottom of the chin, along the face's down direction (longer is positive). The lower lip stays.
+            group = TranslateGroup.chin
             move([152, 148, 377], r: 0.3 * faceW) { _ in down * s.chin * 0.05 * faceW }
             hold([17, 84, 314], r: 0.12 * faceW)
+        }
+        // How far along the lower outline a point is: 0 beside the ears, 1 at the chin.
+        func level(_ i: Int) -> Float { 1 - Float(abs(i - 10)) / 10 }
+        func ease(_ a: Float, _ b: Float, _ x: Float) -> Float { let t = min(1, max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t) }
+        if abs(s.jawSize) > 0.001 {
+            // The jaw's outline away from the middle of the mouth (bigger is positive) or towards it: the chin and
+            // jaw corners fully, fading out up the cheeks towards the ears. The mouth stays.
+            group = TranslateGroup.jawSize
+            let anchor = (m[61] + m[291]) / 2
+            for (i, k) in lowerOutline.enumerated() {
+                let w = ease(0, 0.45, level(i))
+                if w > 0.01 { move([k], r: 0.22 * faceW) { p in (p - anchor) * s.jawSize * 0.1 * w } }
+            }
+            hold([61, 291, 0, 17], r: 0.12 * faceW)
+        }
+        if abs(s.jawLength) > 0.001 {
+            // The lower face longer (positive) or shorter: the chin moves furthest along the face's down direction,
+            // the jaw corners about a fifth as far, nothing beside the ears. The mouth stays, so the area between the
+            // lower lip and the chin stretches.
+            group = TranslateGroup.jawLength
+            for (i, k) in lowerOutline.enumerated() {
+                let w = ease(0.15, 1, level(i))
+                if w > 0.01 { move([k], r: 0.25 * faceW) { _ in down * s.jawLength * 0.06 * faceW * w } }
+            }
+            hold([61, 291, 0, 17, 13, 14, 84, 314], r: 0.1 * faceW)
+        }
+        if s.define > 0.001 {
+            // A sharper jawline: the soft area just under the jaw (from the corners round the chin) is drawn up
+            // towards the jaw's edge, which stays put, so the edge gets crisper. The jaw corners move out a little.
+            group = TranslateGroup.define
+            for (i, k) in lowerOutline.enumerated() where level(i) >= 0.3 {
+                let a = m[lowerOutline[max(i - 1, 0)]], b = m[lowerOutline[min(i + 1, lowerOutline.count - 1)]]
+                var n = simd_normalize(SIMD2(-(b - a).y, (b - a).x))
+                if simd_dot(n, m[k] - centre) < 0 { n = -n }   // away from the face
+                ops.append(WarpOp(c: m[k] + n * 0.1 * faceW, r: 0.12 * faceW, kind: 0, m: -n * s.define * 0.045 * faceW, s: group))
+                if k != 172, k != 397 { hold([k], r: 0.06 * faceW) }
+            }
+            move([172, 397], r: 0.12 * faceW) { p in simd_normalize(p - centre) * s.define * 0.02 * faceW }
         }
         let mouthW = simd_length(m[291] - m[61])
         let lipH = simd_length(m[17] - m[0])
         if abs(s.lips) > 0.001 {
             // Upper lip's top edge up and lower lip's bottom edge down (fuller is positive), with the line between
             // the lips held still, so each lip grows outwards from it and the mouth doesn't open.
+            group = TranslateGroup.lips
             let amt = s.lips * 0.15 * lipH, r = 0.5 * lipH
             move([40, 39, 37, 0, 267, 269, 270], r: r) { _ in -down * amt }
             move([91, 181, 84, 17, 314, 405, 321], r: r) { _ in down * amt }
@@ -304,6 +362,7 @@ enum FaceAnalyzer {
         if s.smile > 0.001 || abs(s.smirk) > 0.001 {
             // Mouth corners up and a little outward; the middle of the lips stays. Smirk lifts one corner on top of
             // Smile: the one on the photo's left (negative) or right (positive). The other corner stays where Smile puts it.
+            group = TranslateGroup.mouth
             for i in [61, 291] {
                 let onLeft = simd_dot(m[i] - centre, across) < 0
                 let lift = s.smile * 0.1 + (onLeft ? max(0, -s.smirk) : max(0, s.smirk)) * 0.13
@@ -313,6 +372,7 @@ enum FaceAnalyzer {
         }
         if abs(s.forehead) > 0.001 {
             // The top of the forehead, up for a higher hairline (positive) or down for a lower one. The brows stay.
+            group = TranslateGroup.forehead
             move([10, 109, 338, 67, 297], r: 0.28 * faceW) { _ in -down * s.forehead * 0.06 * faceW }
             hold([70, 63, 105, 66, 107, 336, 296, 334, 293, 300], r: 0.15 * faceW)
         }
@@ -345,20 +405,24 @@ enum FaceAnalyzer {
         var pts = f.contour.map { CGPoint(x: $0.x * W, y: $0.y * H) }
         // Move each point the way the slim warp moves the pixels under it (forward version of the shader's blend).
         let outline = FaceShape(slim: shape.slim, size: shape.size, width: shape.width, perspective: shape.perspective,
-                                positionX: shape.positionX, positionY: shape.positionY, jaw: shape.jaw, chin: shape.chin)
+                                positionX: shape.positionX, positionY: shape.positionY, jaw: shape.jaw, chin: shape.chin,
+                                jawSize: shape.jawSize, define: shape.define, jawLength: shape.jawLength)
         let ops = warpOps(faces: [f], shapes: [outline], width: w, height: h)
         pts = pts.map { p in
-            // Translates and Perspective handles, each group blended among themselves as the shader does.
+            // Translates (each slider's group on its own) and Perspective handles, blended and added as the shader does.
             func blended(_ kind: Float) -> CGVector {
-                var d = CGVector.zero, ws: CGFloat = 0
+                var groups: [Int: (d: CGVector, ws: CGFloat)] = [:]
                 for op in ops where abs(op.kind - kind) < 0.5 {
                     let dx = p.x - CGFloat(op.c.x), dy = p.y - CGFloat(op.c.y)
                     let x2 = (dx * dx + dy * dy) / CGFloat(op.r * op.r)
                     guard x2 < 1 else { continue }
                     let wgt = (1 - x2) * (1 - x2)
-                    d.dx += wgt * CGFloat(op.m.x); d.dy += wgt * CGFloat(op.m.y); ws += wgt
+                    let g = kind < 0.5 ? Int(op.s.rounded()) : 0
+                    var e = groups[g] ?? (.zero, 0)
+                    e.d.dx += wgt * CGFloat(op.m.x); e.d.dy += wgt * CGFloat(op.m.y); e.ws += wgt
+                    groups[g] = e
                 }
-                return CGVector(dx: d.dx / max(1, ws), dy: d.dy / max(1, ws))
+                return groups.values.reduce(CGVector.zero) { CGVector(dx: $0.dx + $1.d.dx / max(1, $1.ws), dy: $0.dy + $1.d.dy / max(1, $1.ws)) }
             }
             let t = blended(0), pv = blended(5)
             var q = CGPoint(x: p.x + t.dx + pv.dx, y: p.y + t.dy + pv.dy)

@@ -16,7 +16,7 @@ final class EditorModel: ObservableObject {
     @Published var error: String?
     @Published var tool: Tool = .enhance
     @Published var smooth: Float = 0
-    @Published var slim: Float = 0          // slim, eyes and nose show the selected face's values
+    @Published var slim: Float = 0          // Jawline; every Face slider shows the selected face's values
     @Published var eyes: Float = 0
     @Published var nose: Float = 0
     @Published var size: Float = 0          // size, width, perspective, jaw, chin, lips, smile, smirk and forehead use the MediaPipe face mesh
@@ -26,6 +26,9 @@ final class EditorModel: ObservableObject {
     @Published var positionY: Float = 0
     @Published var jaw: Float = 0
     @Published var chin: Float = 0
+    @Published var jawSize: Float = 0
+    @Published var define: Float = 0
+    @Published var jawLength: Float = 0
     @Published var lips: Float = 0
     @Published var smile: Float = 0
     @Published var smirk: Float = 0
@@ -112,7 +115,7 @@ final class EditorModel: ObservableObject {
         var v = base
         v.slim = slim; v.eyes = eyes; v.nose = nose
         v.size = size; v.width = width; v.perspective = perspective; v.positionX = positionX; v.positionY = positionY
-        v.jaw = jaw; v.chin = chin; v.lips = lips; v.smile = smile; v.smirk = smirk; v.forehead = forehead
+        v.jaw = jaw; v.chin = chin; v.jawSize = jawSize; v.define = define; v.jawLength = jawLength; v.lips = lips; v.smile = smile; v.smirk = smirk; v.forehead = forehead
         return v
     }
 
@@ -120,7 +123,7 @@ final class EditorModel: ObservableObject {
     private func showSliders(_ v: FaceShape) {
         slim = v.slim; eyes = v.eyes; nose = v.nose
         size = v.size; width = v.width; perspective = v.perspective; positionX = v.positionX; positionY = v.positionY
-        jaw = v.jaw; chin = v.chin; lips = v.lips; smile = v.smile; smirk = v.smirk; forehead = v.forehead
+        jaw = v.jaw; chin = v.chin; jawSize = v.jawSize; define = v.define; jawLength = v.jawLength; lips = v.lips; smile = v.smile; smirk = v.smirk; forehead = v.forehead
     }
 
     /// Starts the Face tab on the biggest face, with every face's sliders at zero.
