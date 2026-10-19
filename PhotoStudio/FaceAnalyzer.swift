@@ -48,38 +48,151 @@ enum FaceAnalyzer {
 
     // MARK: Skin mask for Smooth
 
-    /// 8-bit mask at w x h: 255 on face skin (jaw contour plus forehead), 0 on eyes, brows and lips, feathered.
-    static func skinMask(faces: [FaceGeometry], width w: Int, height h: Int) -> [UInt8] {
-        var bytes = [UInt8](repeating: 0, count: w * h)
-        bytes.withUnsafeMutableBytes { buf in
-            guard let ctx = CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w,
-                                      space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue)
-            else { return }
-            // Draw in top-left pixel coordinates.
-            ctx.translateBy(x: 0, y: CGFloat(h))
-            ctx.scaleBy(x: 1, y: -1)
-            let S = CGSize(width: w, height: h)
-            func px(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x * S.width, y: p.y * S.height) }
+    /// Two-channel smoothing mask at w x h, interleaved as R,G bytes:
+    /// R = face skin (jaw contour plus forehead), smoothed with lenient colour gating;
+    /// G = body skin candidates, smoothed only where the colour is clearly skin. By default that's a fade down the
+    /// neck below each jaw; with `person` (Apple's person cutout, "All skin") it's the whole person, so walls, wood
+    /// and sand outside the person are never touched.
+    /// Eyes, brows and lips are cut out of both channels.
+    static func smoothMasks(faces: [FaceGeometry], width w: Int, height h: Int, person: [UInt8]?) -> [UInt8] {
+        let S = CGSize(width: w, height: h)
+        func px(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x * S.width, y: p.y * S.height) }
+
+        var face = [UInt8](repeating: 0, count: w * h)
+        draw(into: &face, width: w, height: h) { ctx in
+            ctx.setFillColor(gray: 1, alpha: 1)
             for f in faces where f.contour.count > 4 {
                 let jaw = f.contour.map(px)
                 let brows = (f.leftBrow + f.rightBrow).map(px)
                 let chin = jaw.max(by: { $0.y < $1.y }) ?? .zero
                 let browY = brows.isEmpty ? (jaw.map(\.y).min() ?? 0) : brows.map(\.y).reduce(0, +) / CGFloat(brows.count)
                 let lift = (chin.y - browY) * 0.45  // forehead height above the brows
-                let forehead = brows.map { CGPoint(x: $0.x, y: $0.y - lift) }
-                ctx.setFillColor(gray: 1, alpha: 1)
-                fillHull(ctx, hull(jaw + forehead))
-                ctx.setFillColor(gray: 0, alpha: 1)
+                fillHull(ctx, hull(jaw + brows.map { CGPoint(x: $0.x, y: $0.y - lift) }))
+            }
+        }
+
+        var body = person ?? [UInt8](repeating: 0, count: w * h)
+        if person == nil {
+            draw(into: &body, width: w, height: h) { ctx in
+                for f in faces where f.contour.count > 4 {
+                    let jaw = f.contour.map(px)
+                    let midY = jaw.map(\.y).reduce(0, +) / CGFloat(jaw.count)
+                    let lower = jaw.filter { $0.y >= midY }.sorted { $0.x < $1.x }
+                    guard let l = lower.first, let r = lower.last, r.x - l.x > 4 else { continue }
+                    let chinY = jaw.map(\.y).max() ?? midY
+                    let faceH = CGFloat(f.box.height) * S.height
+                    let depth = faceH * 0.75, inset = (r.x - l.x) * 0.12
+                    let poly = lower + [CGPoint(x: r.x - inset, y: chinY + depth), CGPoint(x: l.x + inset, y: chinY + depth)]
+                    ctx.saveGState()
+                    ctx.beginPath(); ctx.addLines(between: poly); ctx.closePath(); ctx.clip()
+                    let g = CGGradient(colorSpace: CGColorSpaceCreateDeviceGray(), colorComponents: [1, 1, 0, 1], locations: [0, 1], count: 2)!
+                    ctx.drawLinearGradient(g, start: CGPoint(x: 0, y: midY), end: CGPoint(x: 0, y: chinY + depth), options: [])
+                    ctx.restoreGState()
+                }
+            }
+        }
+
+        var protect = [UInt8](repeating: 0, count: w * h)
+        draw(into: &protect, width: w, height: h) { ctx in
+            ctx.setFillColor(gray: 1, alpha: 1)
+            for f in faces {
                 for region in [f.leftEye, f.rightEye] where !region.isEmpty { fillHull(ctx, scaled(region.map(px), 1.6)) }
                 for region in [f.leftBrow, f.rightBrow] where !region.isEmpty { fillHull(ctx, scaled(region.map(px), 1.4)) }
                 if !f.outerLips.isEmpty { fillHull(ctx, scaled(f.outerLips.map(px), 1.15)) }
             }
         }
-        // Feather with a tent blur sized to the face.
+
+        // Feather sized to the face (or the image when there's no face).
         let faceW = Int((faces.map { $0.box.width }.max() ?? 0.2) * CGFloat(w))
         let k = max(3, (faceW / 25) | 1)
+        face = tent(face, width: w, height: h, k: k)
+        body = tent(body, width: w, height: h, k: k)
+        protect = tent(protect, width: w, height: h, k: max(3, (k / 3) | 1))
+
+        var out = [UInt8](repeating: 0, count: w * h * 2)
+        for i in 0..<(w * h) {
+            let keep = 255 - Int(protect[i])
+            out[2 * i] = UInt8(Int(face[i]) * keep / 255)
+            out[2 * i + 1] = UInt8(Int(body[i]) * keep / 255)
+        }
+        return out
+    }
+
+    /// The person's own skin colour (luma, Cb, Cr) learned from the face channel of a smoothMasks mask.
+    /// Returns (mean, sigma) packed as float4s for the shader; mean.w = 1 marks it valid. Body smoothing then
+    /// only touches pixels close to this colour and brightness, which keeps hair out for any skin tone.
+    static func skinReference(_ img: RGBAImage, mask: [UInt8], maskWidth mw: Int, maskHeight mh: Int) -> (SIMD4<Float>, SIMD4<Float>) {
+        var n: Float = 0
+        var sum = SIMD3<Float>(repeating: 0), sum2 = SIMD3<Float>(repeating: 0)
+        for my in stride(from: 0, to: mh, by: 2) {
+            for mx in stride(from: 0, to: mw, by: 2) where mask[2 * (my * mw + mx)] >= 220 {
+                let x = mx * img.width / mw, y = my * img.height / mh
+                let i = (y * img.width + x) * 4
+                let r = Float(img.pixels[i]) / 255, g = Float(img.pixels[i + 1]) / 255, b = Float(img.pixels[i + 2]) / 255
+                let yv = 0.299 * r + 0.587 * g + 0.114 * b
+                let cb = 0.5 + (-0.168736 * r - 0.331264 * g + 0.5 * b)
+                let cr = 0.5 + (0.5 * r - 0.418688 * g - 0.081312 * b)
+                if cb < 0.29 || cb > 0.52 || cr < 0.52 || cr > 0.70 { continue }  // skip hair/eye pixels inside the face area
+                let v = SIMD3<Float>(yv, cb, cr)
+                sum += v; sum2 += v * v; n += 1
+            }
+        }
+        guard n > 50 else { return (SIMD4(0, 0, 0, 0), SIMD4(1, 1, 1, 0)) }
+        let mean = sum / n
+        let sd = (sum2 / n - mean * mean).squareRoot()  // per-component sqrt
+        let sigma = SIMD3<Float>(max(sd.x * 2.5, 0.12), max(sd.y * 2.5, 0.025), max(sd.z * 2.5, 0.025))
+        return (SIMD4(mean.x, mean.y, mean.z, 1), SIMD4(sigma.x, sigma.y, sigma.z, 0))
+    }
+
+    /// Apple Vision person cutout (soft matte), resampled to w x h. Used by "All skin".
+    static func personMask(_ image: CGImage, width w: Int, height h: Int) -> [UInt8]? {
+        let req = VNGeneratePersonSegmentationRequest()
+        req.qualityLevel = .accurate
+        req.outputPixelFormat = kCVPixelFormatType_OneComponent8
+        let handler = VNImageRequestHandler(cgImage: image, orientation: .up)
+        try? handler.perform([req])
+        guard let pb = req.results?.first?.pixelBuffer else { return nil }
+        CVPixelBufferLockBaseAddress(pb, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pb, .readOnly) }
+        var src = vImage_Buffer(data: CVPixelBufferGetBaseAddress(pb), height: vImagePixelCount(CVPixelBufferGetHeight(pb)),
+                                width: vImagePixelCount(CVPixelBufferGetWidth(pb)), rowBytes: CVPixelBufferGetBytesPerRow(pb))
+        return scalePlanar(&src, width: w, height: h)
+    }
+
+    /// Resamples an 8-bit mask to w x h.
+    static func resample(_ m: [UInt8], fromWidth sw: Int, height sh: Int, toWidth w: Int, height h: Int) -> [UInt8] {
+        if sw == w && sh == h { return m }
+        var copy = m
+        return copy.withUnsafeMutableBytes { sb -> [UInt8] in
+            var src = vImage_Buffer(data: sb.baseAddress, height: vImagePixelCount(sh), width: vImagePixelCount(sw), rowBytes: sw)
+            return scalePlanar(&src, width: w, height: h)
+        }
+    }
+
+    private static func scalePlanar(_ src: inout vImage_Buffer, width w: Int, height h: Int) -> [UInt8] {
         var out = [UInt8](repeating: 0, count: w * h)
-        bytes.withUnsafeMutableBytes { sb in
+        out.withUnsafeMutableBytes { db in
+            var dst = vImage_Buffer(data: db.baseAddress, height: vImagePixelCount(h), width: vImagePixelCount(w), rowBytes: w)
+            vImageScale_Planar8(&src, &dst, nil, vImage_Flags(kvImageHighQualityResampling))
+        }
+        return out
+    }
+
+    private static func draw(into bytes: inout [UInt8], width w: Int, height h: Int, _ body: (CGContext) -> Void) {
+        bytes.withUnsafeMutableBytes { buf in
+            guard let ctx = CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w,
+                                      space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue)
+            else { return }
+            ctx.translateBy(x: 0, y: CGFloat(h))  // top-left pixel coordinates
+            ctx.scaleBy(x: 1, y: -1)
+            body(ctx)
+        }
+    }
+
+    private static func tent(_ m: [UInt8], width w: Int, height h: Int, k: Int) -> [UInt8] {
+        var srcBytes = m
+        var out = [UInt8](repeating: 0, count: w * h)
+        srcBytes.withUnsafeMutableBytes { sb in
             out.withUnsafeMutableBytes { db in
                 var src = vImage_Buffer(data: sb.baseAddress, height: vImagePixelCount(h), width: vImagePixelCount(w), rowBytes: w)
                 var dst = vImage_Buffer(data: db.baseAddress, height: vImagePixelCount(h), width: vImagePixelCount(w), rowBytes: w)

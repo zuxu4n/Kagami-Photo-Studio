@@ -117,7 +117,8 @@ struct ContentView: View {
                 Text("Real-ESRGAN on device. Long side capped at 1024 px in, up to 4096 px out.").font(.caption).foregroundStyle(.secondary)
             case .smooth:
                 sliderRow("Smooth skin", value: $model.smooth)
-                HStack { Text(model.faceCount == 0 ? "No face found" : "Edges, eyes and lips stay sharp").font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
+                Toggle("All skin (neck, arms, shoulders)", isOn: $model.allSkin).font(.subheadline)
+                HStack { Text(model.faceCount == 0 && !model.allSkin ? "No face found" : (model.allSkin ? "Only skin inside the person is touched" : "Face and neck; eyes, brows and lips stay sharp")).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             case .heal:
                 sliderRow("Brush", value: $model.brush, range: 0.01...0.08)
                 Text("Tap a spot to remove it (LaMa, on device).").font(.caption).foregroundStyle(.secondary)
@@ -130,6 +131,7 @@ struct ContentView: View {
             Text(model.info).font(.caption2).foregroundStyle(.secondary)
         }
         .onChange(of: model.smooth) { _, _ in model.renderPreview() }
+        .onChange(of: model.allSkin) { _, _ in model.renderPreview() }
         .onChange(of: model.slim) { _, _ in model.renderPreview() }
         .onChange(of: model.eyes) { _, _ in model.renderPreview() }
         .onChange(of: model.nose) { _, _ in model.renderPreview() }

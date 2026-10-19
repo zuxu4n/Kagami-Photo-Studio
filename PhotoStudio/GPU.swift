@@ -29,13 +29,14 @@ final class GPU {
         return t
     }
 
-    private func grayTexture(_ bytes: [UInt8], width w: Int, height h: Int) -> MTLTexture {
-        let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r8Unorm, width: w, height: h, mipmapped: false)
+    /// Two-channel (RG) 8-bit mask texture from interleaved bytes.
+    private func maskTexture(_ bytes: [UInt8], width w: Int, height h: Int) -> MTLTexture {
+        let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rg8Unorm, width: w, height: h, mipmapped: false)
         d.usage = [.shaderRead]
         d.storageMode = .shared
         let t = device.makeTexture(descriptor: d)!
         bytes.withUnsafeBytes {
-            t.replace(region: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0, withBytes: $0.baseAddress!, bytesPerRow: w)
+            t.replace(region: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0, withBytes: $0.baseAddress!, bytesPerRow: w * 2)
         }
         return t
     }
@@ -61,9 +62,11 @@ final class GPU {
         enc.dispatchThreads(MTLSize(width: w, height: h, depth: 1), threadsPerThreadgroup: MTLSize(width: tw, height: th, depth: 1))
     }
 
-    /// Skin smoothing. `mask` can be lower resolution than `img`; the kernel samples it with normalised coordinates.
-    func smooth(_ img: RGBAImage, mask: [UInt8], maskWidth: Int, maskHeight: Int, strength: Float, radius: Float) -> RGBAImage {
-        let src = texture(img), msk = grayTexture(mask, width: maskWidth, height: maskHeight)
+    /// Skin smoothing. `mask` is the interleaved RG mask from FaceAnalyzer.smoothMasks and can be lower resolution
+    /// than `img`; the kernel samples it with normalised coordinates.
+    func smooth(_ img: RGBAImage, mask: [UInt8], maskWidth: Int, maskHeight: Int, strength: Float, radius: Float,
+                skinMean: SIMD4<Float> = .zero, skinSigma: SIMD4<Float> = .one) -> RGBAImage {
+        let src = texture(img), msk = maskTexture(mask, width: maskWidth, height: maskHeight)
         let dst = outputTexture(width: img.width, height: img.height)
         var s = strength, r = radius
         let cb = queue.makeCommandBuffer()!
@@ -74,6 +77,9 @@ final class GPU {
         enc.setTexture(dst, index: 2)
         enc.setBytes(&s, length: 4, index: 0)
         enc.setBytes(&r, length: 4, index: 1)
+        var mean = skinMean, sigma = skinSigma
+        enc.setBytes(&mean, length: 16, index: 2)
+        enc.setBytes(&sigma, length: 16, index: 3)
         dispatch(enc, smoothPSO, width: img.width, height: img.height)
         enc.endEncoding()
         cb.commit()
