@@ -1,6 +1,8 @@
 import CoreML
+import CoreGraphics
 
-/// 4x enhance/upscale with Real-ESRGAN general-x4v3 (BSD-3), converted to Core ML at a fixed 512x512 tile.
+/// Enhance with Real-ESRGAN general-x4v3 (BSD-3), converted to Core ML at a fixed 512x512 tile (4x out).
+/// It works from the photo's own pixels in tiles and never makes the photo smaller; see `plan`.
 final class EnhanceEngine {
     static let shared = EnhanceEngine()
 
@@ -8,7 +10,9 @@ final class EnhanceEngine {
     let overlap = 32
     let scale = 4
     private var model: MLModel?
+    private var neuralEngineModel: MLModel?, gpuModel: MLModel?  // for sharing tiles; loaded on first use
     private let lock = NSLock()  // the launch warm-up and a tap can both ask for the model
+    private let splitLock = NSLock()  // same for the Neural Engine + GPU copies, separately so small photos don't wait
 
     func loadIfNeeded() throws -> MLModel {
         lock.lock()
@@ -28,6 +32,56 @@ final class EnhanceEngine {
         let blank = try MLTensors.rgbTensor(from: RGBAImage(width: tile, height: tile), x0: 0, y0: 0, size: tile)
         _ = try m.prediction(from: MLDictionaryFeatureProvider(dictionary: ["input": blank]))
         return ((t1 - t0) * 1000, (CFAbsoluteTimeGetCurrent() - t1) * 1000)
+    }
+
+    /// One copy of the model on the Neural Engine and one on the GPU, so runTiles can share the tiles between them.
+    func splitModels() throws -> [MLModel] {
+        splitLock.lock()
+        defer { splitLock.unlock() }
+        return try loadSplit()
+    }
+
+    /// Loads the Neural Engine and GPU copies and runs a blank tile on each, so the first big Enhance doesn't pay for
+    /// setup. Returns (load ms, first-run ms), or nil if they were already loaded.
+    func warmUpSplit() throws -> (load: Double, run: Double)? {
+        splitLock.lock()
+        defer { splitLock.unlock() }
+        guard neuralEngineModel == nil || gpuModel == nil else { return nil }
+        let t0 = CFAbsoluteTimeGetCurrent()
+        let models = try loadSplit()
+        let t1 = CFAbsoluteTimeGetCurrent()
+        let blank = try MLTensors.rgbTensor(from: RGBAImage(width: tile, height: tile), x0: 0, y0: 0, size: tile)
+        for m in models { _ = try m.prediction(from: MLDictionaryFeatureProvider(dictionary: ["input": blank])) }
+        return ((t1 - t0) * 1000, (CFAbsoluteTimeGetCurrent() - t1) * 1000)
+    }
+
+    private func loadSplit() throws -> [MLModel] {
+        func make(_ units: MLComputeUnits) throws -> MLModel {
+            let cfg = MLModelConfiguration()
+            cfg.computeUnits = units
+            guard let url = Bundle.main.url(forResource: "RealESRGANGeneralX4", withExtension: "mlmodelc") else {
+                throw EngineError.missingModel("RealESRGANGeneralX4")
+            }
+            return try MLModel(contentsOf: url, configuration: cfg)
+        }
+        if neuralEngineModel == nil { neuralEngineModel = try make(.cpuAndNeuralEngine) }
+        if gpuModel == nil { gpuModel = try make(.cpuAndGPU) }
+        return [neuralEngineModel!, gpuModel!]
+    }
+
+    /// Time spent in each step of runTiles, summed over tiles, in milliseconds. With several models the steps of
+    /// different tiles overlap, so the sums can exceed the wall-clock time.
+    final class TileStats {
+        private(set) var prepare = 0.0, predict = 0.0, toPixels = 0.0, resize = 0.0, paste = 0.0, tiles = 0
+        private let lock = NSLock()
+        func add(prepare a: Double, predict b: Double, toPixels c: Double, resize d: Double, paste e: Double) {
+            lock.lock()
+            prepare += a; predict += b; toPixels += c; resize += d; paste += e; tiles += 1
+            lock.unlock()
+        }
+        var dictionary: [String: Double] {
+            ["prepare_ms": prepare, "predict_ms": predict, "to_pixels_ms": toPixels, "resize_ms": resize, "paste_ms": paste, "tiles": Double(tiles)]
+        }
     }
 
     private func load() throws -> MLModel {
@@ -50,40 +104,122 @@ final class EnhanceEngine {
         return starts
     }
 
-    /// Enhances `input` 4x. The input is first capped to `maxInputSide` on its long side, so a 1024 px cap
-    /// gives an output of up to 4096 px (about 12 MP for 4:3).
-    func enhance(_ input: RGBAImage, maxInputSide: Int = 1024, progress: ((Double) -> Void)? = nil) throws -> RGBAImage {
-        let model = try loadIfNeeded()
-        var src = input
-        if max(src.width, src.height) > maxInputSide {
-            src = RGBAImage(cgImage: input.cgImage(), maxSide: maxInputSide)
-        }
+    /// How a photo is enhanced. The model sees the photo divided by `inputDivisor` (1 = its own pixels) and the result
+    /// is `outputScale` times the photo, so each model input pixel becomes `outputScale * inputDivisor` result pixels
+    /// (at most the model's 4; below 4 each tile's 4x result is scaled down before stitching).
+    struct Plan: Equatable, CustomStringConvertible {
+        var inputDivisor: Int
+        var outputScale: Int
+        var description: String { "model input 1/\(inputDivisor), result x\(outputScale)" }
+    }
+
+    /// The result is never smaller than the photo, and is enlarged up to 4x while it stays within `maxOutputPixels`
+    /// (4x for a typical 0.8 MP selfie, 1x for a 12 MP camera photo). The model runs on the photo's own pixels unless
+    /// that takes more than `maxTiles` tiles; then it runs on a half-size copy (a 12 MP photo: 20 tiles instead of 63).
+    func plan(width w: Int, height h: Int, maxOutputPixels: Int = 12_600_000, maxTiles: Int = 20) -> Plan {
+        var s = 4
+        while s > 1 && w * h * s * s > maxOutputPixels { s -= 1 }
+        var d = 1
+        while d < 4 && tileStarts((w + d - 1) / d).count * tileStarts((h + d - 1) / d).count > maxTiles { d += 1 }
+        return Plan(inputDivisor: d, outputScale: max(1, min(s, 4 / d)))
+    }
+
+    /// Enhances `photo` as `plan` says, then gives face areas `faceTreatment` of the original face instead of the
+    /// model's result (Enhance must not redraw faces; restoring faces is a separate tool), and finally a light sharpen
+    /// when the model ran below its native 4x.
+    func enhance(_ photo: RGBAImage, plan: Plan, faces: [FaceGeometry] = [], faceTreatment: FaceTreatment = .smallChanges(limit: 0),
+                 sharpen: Float = 0.6, progress: ((Double) -> Void)? = nil) throws -> RGBAImage {
+        let d = plan.inputDivisor
+        // Photos big enough to need the half-size copy share their tiles between the Neural Engine and GPU copies
+        // (3.7 s instead of 4.3 s for 12 MP on an iPhone 14 Pro); smaller photos use the single model.
+        let models = d > 1 ? try splitModels() : [try loadIfNeeded()]
+        let src = d == 1 ? photo : RGBAImage(cgImage: photo.cgImage(), exactWidth: (photo.width + d - 1) / d,
+                                             exactHeight: (photo.height + d - 1) / d)
+        var out = try runTiles(src, perPixel: plan.outputScale * d, models: models, progress: progress)
+        EnhanceEngine.treatFaces(&out, original: photo, faces: faces, treatment: faceTreatment)
+        if plan.outputScale * d < scale { EnhanceEngine.sharpen(&out, amount: sharpen) }
+        return out
+    }
+
+    /// Runs the model over `src` in overlapping tiles and stitches the results at the overlap midpoints, with `g` result
+    /// pixels per input pixel (1...4). Several models (for example one on the Neural Engine and one on the GPU) share
+    /// the tiles between them; each writes only its own tiles' areas of the result.
+    func runTiles(_ src: RGBAImage, perPixel g: Int, models: [MLModel], stats: TileStats? = nil,
+                  progress: ((Double) -> Void)? = nil) throws -> RGBAImage {
+        precondition((1...scale).contains(g) && !models.isEmpty)
         let w = src.width, h = src.height
         let padded = src.paddedByReplication(minWidth: tile, minHeight: tile)
         let xs = tileStarts(padded.width), ys = tileStarts(padded.height)
-        var out = RGBAImage(width: w * scale, height: h * scale)
-        let total = xs.count * ys.count
-        var done = 0
+        var jobs: [(x0: Int, y0: Int, vx0: Int, vy0: Int, vx1: Int, vy1: Int)] = []
         for (iy, y0) in ys.enumerated() {
-            // Each tile keeps the part up to the middle of its overlap with each neighbour.
             let vy0 = iy == 0 ? 0 : (ys[iy - 1] + tile + y0) / 2
             let vy1 = min(h, iy == ys.count - 1 ? y0 + tile : (y0 + tile + ys[iy + 1]) / 2)
             for (ix, x0) in xs.enumerated() {
                 let vx0 = ix == 0 ? 0 : (xs[ix - 1] + tile + x0) / 2
                 let vx1 = min(w, ix == xs.count - 1 ? x0 + tile : (x0 + tile + xs[ix + 1]) / 2)
-                let inArr = try MLTensors.rgbTensor(from: padded, x0: x0, y0: y0, size: tile)
-                let res = try model.prediction(from: MLDictionaryFeatureProvider(dictionary: ["input": inArr]))
-                guard let outArr = res.featureValue(for: "output")?.multiArrayValue else { throw EngineError.badOutput }
-                if vx1 > vx0 && vy1 > vy0 {
-                    MLTensors.copyRGB(from: outArr,
-                                      tx0: (vx0 - x0) * scale, ty0: (vy0 - y0) * scale,
-                                      width: (vx1 - vx0) * scale, height: (vy1 - vy0) * scale,
-                                      into: &out, dx0: vx0 * scale, dy0: vy0 * scale)
-                }
-                done += 1
-                progress?(Double(done) / Double(total))
+                if vx1 > vx0 && vy1 > vy0 { jobs.append((x0, y0, vx0, vy0, vx1, vy1)) }
             }
         }
+        let outW = w * g, outH = h * g
+        var out = RGBAImage(width: outW, height: outH)
+        let side = tile * g  // one tile's result after scaling
+        let queueLock = NSLock()
+        var next = 0, done = 0
+        var failure: Error?
+        out.pixels.withUnsafeMutableBufferPointer { dst in
+            DispatchQueue.concurrentPerform(iterations: models.count) { worker in
+                var full = RGBAImage(width: tile * scale, height: tile * scale)
+                var planes: [UInt8] = []  // scratch for copyRGBFast
+                while true {
+                    queueLock.lock()
+                    let j = next
+                    next += 1
+                    let stop = failure != nil
+                    queueLock.unlock()
+                    if stop || j >= jobs.count { return }
+                    let t = jobs[j]
+                    do {
+                        // Core ML hands back autoreleased buffers (25 MB per tile); drain them every tile.
+                        try autoreleasepool {
+                            let c0 = CFAbsoluteTimeGetCurrent()
+                            let inArr = try MLTensors.rgbTensor(from: padded, x0: t.x0, y0: t.y0, size: tile)
+                            let c1 = CFAbsoluteTimeGetCurrent()
+                            let res = try models[worker].prediction(from: MLDictionaryFeatureProvider(dictionary: ["input": inArr]))
+                            guard let outArr = res.featureValue(for: "output")?.multiArrayValue else { throw EngineError.badOutput }
+                            let c2 = CFAbsoluteTimeGetCurrent()
+                            MLTensors.copyRGBFast(from: outArr, into: &full, planes: &planes)
+                            let c3 = CFAbsoluteTimeGetCurrent()
+                            let part = g == scale ? full : full.scaled(toWidth: side, height: side)
+                            let c4 = CFAbsoluteTimeGetCurrent()
+                            // Copy this tile's share of the result.
+                            let cx0 = (t.vx0 - t.x0) * g, cy0 = (t.vy0 - t.y0) * g
+                            let cw = (t.vx1 - t.vx0) * g, ch = (t.vy1 - t.vy0) * g
+                            part.pixels.withUnsafeBufferPointer { sp in
+                                for row in 0..<ch {
+                                    let si = ((cy0 + row) * side + cx0) * 4
+                                    let di = ((t.vy0 * g + row) * outW + t.vx0 * g) * 4
+                                    (dst.baseAddress! + di).update(from: sp.baseAddress! + si, count: cw * 4)
+                                }
+                            }
+                            let ms = { (a: CFAbsoluteTime, b: CFAbsoluteTime) in (b - a) * 1000 }
+                            stats?.add(prepare: ms(c0, c1), predict: ms(c1, c2), toPixels: ms(c2, c3), resize: ms(c3, c4),
+                                       paste: ms(c4, CFAbsoluteTimeGetCurrent()))
+                        }
+                    } catch {
+                        queueLock.lock()
+                        failure = failure ?? error
+                        queueLock.unlock()
+                        return
+                    }
+                    queueLock.lock()
+                    done += 1
+                    let fraction = Double(done) / Double(jobs.count)
+                    queueLock.unlock()
+                    progress?(fraction)
+                }
+            }
+        }
+        if let failure { throw failure }
         return out
     }
 }

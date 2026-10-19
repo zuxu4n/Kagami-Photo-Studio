@@ -52,6 +52,7 @@ final class EditorModel: ObservableObject {
         record("Warm-up: slider GPU code", gpuMs, peakMB: gpuPeak)
         await warmModel("Heal") { try HealEngine.shared.warmUp() }  // biggest first-use cost (about 3.5 s), so first
         await warmModel("Enhance") { try EnhanceEngine.shared.warmUp() }
+        await warmModel("Enhance Neural Engine + GPU") { try EnhanceEngine.shared.warmUpSplit() }  // for 12 MP photos
     }
 
     private func warmModel(_ name: String, _ body: @escaping @Sendable () throws -> (load: Double, run: Double)?) async {
@@ -65,6 +66,18 @@ final class EditorModel: ObservableObject {
             record("Warm-up: \(name) model", times.load + times.run, peakMB: peak,
                    extra: ["load_ms": times.load, "first_run_ms": times.run])
         }
+    }
+
+    /// Test builds: times the Enhance options on this phone (see EnhanceBench), keeping the screen awake meanwhile.
+    func runEnhanceBench() async {
+        busy = "Timing Enhance options… keep the app open"
+        UIApplication.shared.isIdleTimerDisabled = true
+        defer {
+            busy = nil
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
+        let ok = await Task.detached(priority: .userInitiated) { EnhanceBench.runAndSave() }.value
+        info = ok ? "Enhance timing done" : "Enhance timing failed"
     }
 
     func noteMemoryWarning() {
@@ -116,20 +129,22 @@ final class EditorModel: ObservableObject {
         if smooth < 0.001 { smooth = smoothStart }
     }
 
-    // MARK: Enhance (Real-ESRGAN, destructive)
+    // MARK: Enhance (Real-ESRGAN from the photo's own pixels, faces kept as they are; destructive)
 
     func runEnhance() async {
         guard let src = working else { return }
         busy = "Enhancing…"
         defer { busy = nil }
+        let faces = self.faces
         do {
             let (out, ms, peak) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double, Double) in
                 let meter = MemoryMeter()
                 let t0 = CFAbsoluteTimeGetCurrent()
-                let out = try EnhanceEngine.shared.enhance(src, maxInputSide: 1024)
+                let engine = EnhanceEngine.shared
+                let out = try engine.enhance(src, plan: engine.plan(width: src.width, height: src.height), faces: faces)
                 return (out, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
-            record("Enhance x4 (\(out.width)×\(out.height))", ms, peakMB: peak)
+            record("Enhance (\(out.width)×\(out.height))", ms, peakMB: peak)
             await setWorking(out)
         } catch {
             self.error = error.localizedDescription

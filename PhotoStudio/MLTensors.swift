@@ -1,4 +1,5 @@
 import CoreML
+import Accelerate
 
 /// Moves pixels between RGBAImage and Core ML tensors shaped [1, C, H, W] with values in 0...1.
 enum MLTensors {
@@ -29,6 +30,38 @@ enum MLTensors {
         let dst = arr.dataPointer.bindMemory(to: Float.self, capacity: size * size)
         for i in 0..<(size * size) { dst[i] = mask[i] > 127 ? 1 : 0 }
         return arr
+    }
+
+    /// The whole [1, 3, H, W] tensor into `dst` (H x W), like copyRGB but with vImage when the tensor is float16 with
+    /// contiguous rows: several times faster, and the same bytes (0...1 maps to 0...255 with the same rounding).
+    /// `planes` is scratch space reused between calls.
+    static func copyRGBFast(from arr: MLMultiArray, into dst: inout RGBAImage, planes: inout [UInt8]) {
+        let st = arr.strides.map { $0.intValue }, sh = arr.shape.map { $0.intValue }
+        let h = sh[2], w = sh[3], plane = w * h
+        guard arr.dataType == .float16, st[3] == 1, dst.width == w, dst.height == h else {
+            copyRGB(from: arr, tx0: 0, ty0: 0, width: w, height: h, into: &dst, dx0: 0, dy0: 0)
+            return
+        }
+        if planes.count < 3 * plane { planes = [UInt8](repeating: 0, count: 3 * plane) }
+        let rows = vImagePixelCount(h), cols = vImagePixelCount(w)
+        arr.withUnsafeBufferPointer(ofType: Float16.self) { p in
+            planes.withUnsafeMutableBytes { pl in
+                for c in 0..<3 {
+                    var s = vImage_Buffer(data: UnsafeMutableRawPointer(mutating: p.baseAddress! + c * st[1]), height: rows, width: cols,
+                                          rowBytes: st[2] * MemoryLayout<Float16>.size)
+                    var d = vImage_Buffer(data: pl.baseAddress! + c * plane, height: rows, width: cols, rowBytes: w)
+                    vImageConvert_Planar16FtoPlanar8(&s, &d, vImage_Flags(kvImageNoFlags))
+                }
+                var r = vImage_Buffer(data: pl.baseAddress!, height: rows, width: cols, rowBytes: w)
+                var g = vImage_Buffer(data: pl.baseAddress! + plane, height: rows, width: cols, rowBytes: w)
+                var b = vImage_Buffer(data: pl.baseAddress! + 2 * plane, height: rows, width: cols, rowBytes: w)
+                dst.pixels.withUnsafeMutableBytes { dp in
+                    var out = vImage_Buffer(data: dp.baseAddress!, height: rows, width: cols, rowBytes: w * 4)
+                    // Memory order of BGRX is (first, second, third, alpha), so passing R, G, B writes RGBA.
+                    vImageConvert_Planar8ToBGRX8888(&r, &g, &b, 255, &out, vImage_Flags(kvImageNoFlags))
+                }
+            }
+        }
     }
 
     /// Copies a region of a [1, 3, H, W] output tensor into `dst`.
