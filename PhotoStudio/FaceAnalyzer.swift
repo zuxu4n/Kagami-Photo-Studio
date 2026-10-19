@@ -175,10 +175,33 @@ enum FaceAnalyzer {
             }
         }
         let m = n / 2 + 1   // top point on each side through to the one beside the chin
-        return [side(Array(pts.prefix(m))), side(Array(pts.suffix(m).reversed()))]
+        return [side(Array(pts.prefix(m))), side(Array(pts.suffix(m).reversed()))].map(smoothed)
     }
 
     // MARK: Geometry helpers
+
+    /// Irons out the kinks between landmarks (two neighbour-averaging passes), then rounds the corners
+    /// (Chaikin, twice). Both ends stay where they were.
+    static func smoothed(_ pts: [CGPoint]) -> [CGPoint] {
+        guard pts.count > 2 else { return pts }
+        var p = pts
+        for _ in 0..<2 {
+            p = p.indices.map { i in
+                guard i > 0, i < p.count - 1 else { return p[i] }
+                return CGPoint(x: (p[i - 1].x + 2 * p[i].x + p[i + 1].x) / 4, y: (p[i - 1].y + 2 * p[i].y + p[i + 1].y) / 4)
+            }
+        }
+        for _ in 0..<2 {
+            var q = [p[0]]
+            for (a, b) in zip(p, p.dropFirst()) {
+                q.append(CGPoint(x: 0.75 * a.x + 0.25 * b.x, y: 0.75 * a.y + 0.25 * b.y))
+                q.append(CGPoint(x: 0.25 * a.x + 0.75 * b.x, y: 0.25 * a.y + 0.75 * b.y))
+            }
+            q.append(p[p.count - 1])
+            p = q
+        }
+        return p
+    }
 
     /// The polyline cut to the first `keep` fraction of its length.
     static func trimEnd(_ pts: [CGPoint], keep: CGFloat) -> [CGPoint] {
