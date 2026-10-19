@@ -332,6 +332,11 @@ struct ContentView: View {
         .onChange(of: model.lips) { _, _ in model.renderPreview() }
         .onChange(of: model.lipSize) { _, _ in model.renderPreview() }
         .onChange(of: model.lipWidth) { _, _ in model.renderPreview() }
+        .onChange(of: model.browThick) { _, _ in model.renderPreview() }
+        .onChange(of: model.browLift) { _, _ in model.renderPreview() }
+        .onChange(of: model.browShape) { _, _ in model.renderPreview() }
+        .onChange(of: model.browTilt) { _, _ in model.renderPreview() }
+        .onChange(of: model.browRaise) { _, _ in model.renderPreview() }
         .onChange(of: model.smile) { _, _ in model.renderPreview() }
         .onChange(of: model.forehead) { _, _ in model.renderPreview() }
     }
@@ -491,6 +496,11 @@ private enum FaceArea: String, CaseIterable, Identifiable {
         case (.lips, "Size"): return .lipSize
         case (.lips, "Height"): return .lips
         case (.lips, "Width"): return .lipWidth
+        case (.eyebrows, "Thick"): return .browThick
+        case (.eyebrows, "Lift"): return .browLift
+        case (.eyebrows, "Shape"): return .browShape
+        case (.eyebrows, "Tilt"): return .browTilt
+        case (.eyebrows, "Raise"): return .browRaise
         default: return nil
         }
     }
@@ -502,7 +512,8 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
          eyeTilt = "Eye tilt", eyeDistance = "Eye distance", nose = "Nose",
          noseSize = "Nose size", noseWidth = "Nose width", noseLift = "Nose lift", noseTip = "Nose tip", jaw = "Jaw",
          chin = "Chin", jawSize = "Jaw size", define = "Define", jawLength = "Jaw length", lips = "Lips", lipSize = "Lip size",
-         lipWidth = "Lip width", smile = "Smile", smirk = "Smirk",
+         lipWidth = "Lip width", browThick = "Brow thick", browLift = "Brow lift", browShape = "Brow shape", browTilt = "Brow tilt",
+         browRaise = "Brow raise", smile = "Smile", smirk = "Smirk",
          forehead = "Forehead"
     var id: String { rawValue }
 
@@ -531,6 +542,11 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .lips: return \.lips
         case .lipSize: return \.lipSize
         case .lipWidth: return \.lipWidth
+        case .browThick: return \.browThick
+        case .browLift: return \.browLift
+        case .browShape: return \.browShape
+        case .browTilt: return \.browTilt
+        case .browRaise: return \.browRaise
         case .smile: return \.smile
         case .smirk: return \.smirk
         case .forehead: return \.forehead
@@ -545,6 +561,11 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .lips: return "Height"
         case .lipSize: return "Size"
         case .lipWidth: return "Width"
+        case .browThick: return "Thick"
+        case .browLift: return "Lift"
+        case .browShape: return "Shape"
+        case .browTilt: return "Tilt"
+        case .browRaise: return "Raise"
         case .eyes: return "Size"
         case .eyeWidth: return "Width"
         case .eyeHeight: return "Height"
@@ -562,7 +583,7 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
 
     /// Two-way sliders start in the middle: left makes it smaller, right bigger.
     var range: ClosedRange<Float> {
-        [.slim, .size, .width, .perspective, .eyes, .eyeWidth, .eyeHeight, .eyeTilt, .eyeDistance, .noseSize, .noseWidth, .noseLift, .noseTip, .jaw, .chin, .jawSize, .jawLength, .lips, .lipSize, .lipWidth, .smirk,
+        [.slim, .size, .width, .perspective, .eyes, .eyeWidth, .eyeHeight, .eyeTilt, .eyeDistance, .noseSize, .noseWidth, .noseLift, .noseTip, .jaw, .chin, .jawSize, .jawLength, .lips, .lipSize, .lipWidth, .browThick, .browLift, .browShape, .browTilt, .browRaise, .smirk,
          .forehead].contains(self) ? -1...1 : 0...1
     }
 
@@ -592,6 +613,11 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .lips: return "Left thinner, right fuller"
         case .lipSize: return "Left smaller, right bigger"
         case .lipWidth: return "Left narrower, right wider"
+        case .browThick: return "Left thinner, right thicker"
+        case .browLift: return "Left outer ends down, right up; inner ends stay"
+        case .browShape: return "Left flatter, right more arched"
+        case .browTilt: return "Left outer ends down, right up, turning about the middle"
+        case .browRaise: return "Left lower, right higher"
         case .forehead: return "Left lower hairline, right higher"
         default: return ""
         }

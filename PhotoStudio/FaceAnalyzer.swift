@@ -50,6 +50,11 @@ struct FaceShape: Equatable {
     var lips: Float = 0       // -1...1, Lips › Height: thinner or fuller lips
     var lipSize: Float = 0    // -1...1, smaller or bigger mouth
     var lipWidth: Float = 0   // -1...1, narrower or wider mouth
+    var browThick: Float = 0  // -1...1, thinner or thicker brows
+    var browLift: Float = 0   // -1...1, outer ends down or up (inner ends stay)
+    var browShape: Float = 0  // -1...1, flatter or more arched
+    var browTilt: Float = 0   // -1...1, outer ends down or up, turning about the middle
+    var browRaise: Float = 0  // -1...1, whole brows lower or higher
     var smile: Float = 0      // 0...1, lifts the mouth corners
     var smirk: Float = 0      // -1...1, lifts the mouth corner on the photo's left or right
     var forehead: Float = 0   // -1...1, lower or higher hairline
@@ -59,6 +64,8 @@ struct FaceShape: Equatable {
             && abs(eyeWidth) <= 0.001 && abs(eyeHeight) <= 0.001 && abs(eyeTilt) <= 0.001 && abs(eyeDistance) <= 0.001
             && nose <= 0.001 && abs(noseSize) <= 0.001 && abs(noseWidth) <= 0.001 && abs(noseLift) <= 0.001 && abs(noseTip) <= 0.001
             && abs(jaw) <= 0.001 && abs(chin) <= 0.001 && abs(jawSize) <= 0.001 && define <= 0.001 && abs(jawLength) <= 0.001
+            && abs(browThick) <= 0.001 && abs(browLift) <= 0.001 && abs(browShape) <= 0.001 && abs(browTilt) <= 0.001
+            && abs(browRaise) <= 0.001
             && abs(lips) <= 0.001 && abs(lipSize) <= 0.001 && abs(lipWidth) <= 0.001 && smile <= 0.001 && abs(smirk) <= 0.001 && abs(forehead) <= 0.001
     }
     var isOff: Bool { abs(slim) <= 0.001 && abs(eyes) <= 0.001 && meshOff && pushes.isEmpty }
@@ -80,7 +87,8 @@ enum TranslateGroup {
     static let jawline: Float = 1, nose: Float = 2, jaw: Float = 3, chin: Float = 4, lips: Float = 5, mouth: Float = 6,
                forehead: Float = 7, jawSize: Float = 8, define: Float = 9, jawLength: Float = 10, noseSize: Float = 11,
                noseWidth: Float = 12, noseLift: Float = 13, eyeWidth: Float = 14, eyeHeight: Float = 15, eyeTilt: Float = 16,
-               eyeDistance: Float = 17, lipSize: Float = 18, lipWidth: Float = 19
+               eyeDistance: Float = 17, lipSize: Float = 18, lipWidth: Float = 19, browRaise: Float = 20, browLift: Float = 21,
+               browShape: Float = 22, browTilt: Float = 23
 }
 
 enum FaceAnalyzer {
@@ -226,6 +234,12 @@ enum FaceAnalyzer {
         MeshEye(outer: 33, inner: 133, upper: [246, 161, 160, 159, 158, 157, 173], lower: [7, 163, 144, 145, 153, 154, 155], iris: 468),
         MeshEye(outer: 263, inner: 362, upper: [466, 388, 387, 386, 385, 384, 398], lower: [249, 390, 373, 374, 380, 381, 382], iris: 473),
     ]
+
+    /// One eyebrow in MediaPipe's mesh: its upper and lower edge, each from the outer end to the inner end, in
+    /// matching columns. The outermost column sits just under the tail.
+    struct MeshBrow { let upper: [Int], lower: [Int] }
+    static let meshBrows = [MeshBrow(upper: [70, 63, 105, 66, 107], lower: [46, 53, 52, 65, 55]),
+                            MeshBrow(upper: [300, 293, 334, 296, 336], lower: [276, 283, 282, 295, 285])]
 
     /// The lips' outer edge (from one corner round the upper lip and back round the lower lip) and inner edge.
     static let outerLips = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146]
@@ -383,6 +397,69 @@ enum FaceAnalyzer {
                 move(contour + [e.iris], r: 0.45 * eyeW) { _ in away * s.eyeDistance * 0.15 * eyeW }
             }
             hold([168, 6, 197], r: 0.08 * faceW)
+        }
+
+        // Eyebrows tab. Each brow's columns run from the outer end (u = 0) to the inner end (u = 1); the middle of
+        // each column is on the brow's centre line. The eyes stay where the brows move.
+        let brows = meshBrows.map { b -> (b: MeshBrow, mids: [SIMD2<Float>], c: SIMD2<Float>, thick: Float) in
+            let mids = zip(b.upper, b.lower).map { (m[$0] + m[$1]) / 2 }
+            let thick = (1...3).map { simd_length(m[b.upper[$0]] - m[b.lower[$0]]) }.reduce(0, +) / 3
+            return (b, mids, mids.reduce(SIMD2<Float>(0, 0), +) / Float(mids.count), thick)
+        }
+        let eyeHolds = [159, 158, 160, 157, 161, 33, 133, 386, 385, 387, 384, 388, 263, 362]
+        // Moves every column of both brows by `by(column, u)`, upper and lower edge alike, holding the eyes.
+        func moveBrows(_ by: (Int, Float) -> SIMD2<Float>) {
+            for (b, _, _, _) in brows {
+                for i in 0..<b.upper.count {
+                    let d = by(i, Float(i) / Float(b.upper.count - 1))
+                    move([b.upper[i], b.lower[i]], r: 0.09 * faceW) { _ in d }
+                }
+            }
+            hold(eyeHolds, r: 0.05 * faceW)
+        }
+        if abs(s.browRaise) > 0.001 {
+            // The whole brows up (positive) or down.
+            group = TranslateGroup.browRaise
+            moveBrows { _, _ in -down * s.browRaise * 0.035 * faceW }
+        }
+        if abs(s.browLift) > 0.001 {
+            // The outer end up (positive) or down, less towards the middle, the inner end not at all.
+            group = TranslateGroup.browLift
+            moveBrows { _, u in -down * s.browLift * 0.035 * faceW * (1 - u) }
+        }
+        if abs(s.browShape) > 0.001 {
+            // More arched (positive) or flatter: the arch, a third of the way in from the outer end, up or down;
+            // both ends stay.
+            group = TranslateGroup.browShape
+            moveBrows { _, u in
+                let t = u < 0.35 ? 0.5 * u / 0.35 : 0.5 + 0.5 * (u - 0.35) / 0.65
+                return -down * s.browShape * 0.025 * faceW * sin(.pi * t)
+            }
+        }
+        if abs(s.browTilt) > 0.001 {
+            // Each brow turns about its middle so its outer end goes up (positive) or down, up to 7 degrees.
+            group = TranslateGroup.browTilt
+            for (b, mids, c, _) in brows {
+                let angle = s.browTilt * 0.12 * (simd_dot(mids[0] - c, across) < 0 ? 1 : -1)
+                let (co, si) = (cos(angle), sin(angle))
+                move(b.upper + b.lower, r: 0.09 * faceW) { p in
+                    let d = p - c
+                    return SIMD2(d.x * co - d.y * si, d.x * si + d.y * co) - d
+                }
+            }
+            hold(eyeHolds, r: 0.05 * faceW)
+        }
+        if abs(s.browThick) > 0.001 {
+            // Thicker (positive) or thinner: each stretch of the brow's centre line gets a stretch (or squeeze) across
+            // the brow, reaching 2.5 brow-thicknesses out and fading to nothing, so the brow widens about its own line.
+            for (_, mids, _, thick) in brows {
+                for i in 0..<(mids.count - 1) {
+                    let along = mids[i + 1] - mids[i]
+                    let normal = simd_normalize(SIMD2(-along.y, along.x))
+                    ops.append(WarpOp(c: (mids[i] + mids[i + 1]) / 2, r: 2.5 * thick, kind: 3, m: normal,
+                                      s: -s.browThick * 0.4, pad: simd_length(along)))
+                }
+            }
         }
 
         // Nose tab. The nose's own axis runs from between the eyes (168) to the tip (1); its width is wing to wing.
