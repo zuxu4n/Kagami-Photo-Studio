@@ -101,20 +101,22 @@ final class EditorModel: ObservableObject {
         record("Open + face landmarks", ms, peakMB: meter.stop(), extra: ["decode_ms": decodeMs])
     }
 
-    // MARK: Enhance (Real-ESRGAN, destructive)
+    // MARK: Enhance (Real-ESRGAN from the photo's own pixels, faces kept as they are; destructive)
 
     func runEnhance() async {
         guard let src = working else { return }
         busy = "Enhancing…"
         defer { busy = nil }
+        let faces = self.faces
         do {
             let (out, ms, peak) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double, Double) in
                 let meter = MemoryMeter()
                 let t0 = CFAbsoluteTimeGetCurrent()
-                let out = try EnhanceEngine.shared.enhance(src, maxInputSide: 1024)
+                let engine = EnhanceEngine.shared
+                let out = try engine.enhance(src, plan: engine.plan(width: src.width, height: src.height), faces: faces)
                 return (out, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
-            record("Enhance x4 (\(out.width)×\(out.height))", ms, peakMB: peak)
+            record("Enhance (\(out.width)×\(out.height))", ms, peakMB: peak)
             await setWorking(out)
         } catch {
             self.error = error.localizedDescription

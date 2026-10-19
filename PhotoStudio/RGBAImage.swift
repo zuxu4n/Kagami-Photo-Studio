@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import Accelerate
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -59,6 +60,20 @@ struct RGBAImage {
     func resampled(region: CGRect, width w: Int, height h: Int) -> RGBAImage {
         let src = cgImage().cropping(to: region.integral) ?? cgImage()
         return RGBAImage(cgImage: src, exactWidth: w, exactHeight: h)
+    }
+
+    /// Resized to exactly `w` x `h` with vImage's high-quality (Lanczos) filter.
+    func scaled(toWidth w: Int, height h: Int) -> RGBAImage {
+        var out = RGBAImage(width: w, height: h)
+        pixels.withUnsafeBytes { sp in
+            out.pixels.withUnsafeMutableBytes { dp in
+                var s = vImage_Buffer(data: UnsafeMutableRawPointer(mutating: sp.baseAddress), height: vImagePixelCount(height),
+                                      width: vImagePixelCount(width), rowBytes: width * 4)
+                var d = vImage_Buffer(data: dp.baseAddress, height: vImagePixelCount(h), width: vImagePixelCount(w), rowBytes: w * 4)
+                vImageScale_ARGB8888(&s, &d, nil, vImage_Flags(kvImageHighQualityResampling))
+            }
+        }
+        return out
     }
 
     /// Copy with edges replicated so the result is at least `minW` x `minH`.

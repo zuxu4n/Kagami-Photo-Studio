@@ -111,14 +111,14 @@ struct ContentView: View {
                     Button {
                         Task { await model.runEnhance() }
                     } label: {
-                        Label("Enhance ×4", systemImage: "sparkles")
+                        Label("Enhance", systemImage: "sparkles")
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.busy != nil)
                     Spacer()
                     compareButton
                 }
-                Text("Real-ESRGAN on device. Long side capped at 1024 px in, up to 4096 px out.").font(.caption).foregroundStyle(.secondary)
+                Text("Real-ESRGAN on device, from the photo's own pixels. Never smaller than the original (up to 4x for small photos); faces stay as they are.").font(.caption).foregroundStyle(.secondary)
             case .smooth:
                 sliderRow("Smooth skin", value: $model.smooth)
                 HStack { Text(model.faceCount == 0 ? "No face found" : "Edges, eyes and lips stay sharp").font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
