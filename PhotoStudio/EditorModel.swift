@@ -33,11 +33,16 @@ final class EditorModel: ObservableObject {
     @Published var info: String = ""
 
     private var working: RGBAImage?     // full resolution, after Enhance/Heal
-    private var preview: RGBAImage?     // long side <= previewSide, for live sliders
-    @Published private(set) var faces: [FaceGeometry] = []
+    private var preview: RGBAImage? { didSet { sourceVersion &+= 1 } }   // long side <= previewSide, for live sliders
+    @Published private(set) var faces: [FaceGeometry] = [] { didSet { sourceVersion &+= 1 } }
+    private var sourceVersion = 0       // changes with the preview photo or the faces, so cached renders aren't reused
     @Published private(set) var selectedFace: Int?   // the face the Face tab guides and sliders are on
     private var shapes: [FaceShape] = []             // Face tab values for each face, same order as `faces`
-    private var renderTask: Task<Void, Never>?
+    private var smoothed: (version: Int, smooth: Float, image: RGBAImage)?  // the preview after Smooth, reused while only Face values move
+    private var rendering = false       // a preview frame is being drawn
+    private var renderAgain = false     // values changed while it was drawn
+    private var lastPreviewLog: CFAbsoluteTime = 0
+    private var dragFrames = (count: 0, start: CFAbsoluteTime(0))   // frames shown during the current slider drag
     @Published var enhanceOn = false
     private var unenhanced: RGBAImage?  // the photo as it was before Enhance, kept while Enhance is on
     private var healsSinceEnhance: [(center: CGPoint, brush: Double)] = []  // replayed on `unenhanced` when Enhance goes off
@@ -451,8 +456,13 @@ final class EditorModel: ObservableObject {
     func sliderEditing(_ editing: Bool) {
         if editing {
             sliderStart = undoStep(.unchanged)
+            dragFrames = (0, CFAbsoluteTimeGetCurrent())
         } else if let start = sliderStart {
             sliderStart = nil
+            let secs = CFAbsoluteTimeGetCurrent() - dragFrames.start
+            if secs > 0.3 {
+                record("Slider drag: \(dragFrames.count) frames, \(Int(Double(dragFrames.count) / secs)) per second", secs * 1000)
+            }
             storeShape()
             if start.smooth != smooth || start.shapes != shapes { pushUndo(start) }
         }
@@ -516,24 +526,42 @@ final class EditorModel: ObservableObject {
 
     // MARK: Live sliders (Smooth, Face shape)
 
+    /// Draws the preview with the current values. Frames are drawn one after another: a change made while a frame
+    /// is drawn is picked up as soon as it's done, with the values as they are by then. So a dragged slider updates
+    /// continuously instead of each new tick throwing away the frame in progress.
     func renderPreview() {
         guard let prev = preview else { return }
-        renderTask?.cancel()
         storeShape()
-        let smooth = self.smooth, shapes = self.shapes
-        let faces = self.faces
-        renderTask = Task {
-            try? await Task.sleep(nanoseconds: 15_000_000)  // coalesce slider ticks
-            if Task.isCancelled { return }
-            let (img, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double, Double) in
+        if rendering {
+            renderAgain = true
+            return
+        }
+        rendering = true
+        renderAgain = false
+        let smooth = self.smooth, shapes = self.shapes, faces = self.faces, version = sourceVersion
+        let cached = smoothed.flatMap { $0.version == version && $0.smooth == smooth ? $0.image : nil }
+        Task {
+            let (base, img, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (RGBAImage, UIImage, Double, Double) in
                 let meter = MemoryMeter()
                 let t0 = CFAbsoluteTimeGetCurrent()
-                let out = EditorModel.apply(prev, faces: faces, smooth: smooth, shapes: shapes)
-                return (out, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
+                let base = cached ?? EditorModel.apply(prev, faces: faces, smooth: smooth, shapes: [])
+                let out = EditorModel.apply(base, faces: faces, smooth: 0, shapes: shapes)
+                let ui = out.uiImage()
+                return (base, ui, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
-            if Task.isCancelled { return }
-            display = img.uiImage()
-            record("Preview render \(prev.width)×\(prev.height)", ms, peakMB: peak)
+            rendering = false
+            if version == sourceVersion {   // a new photo or new faces make this frame stale; the next one replaces it
+                smoothed = (version, smooth, base)
+                display = img
+                dragFrames.count += 1
+            }
+            // Logged at most twice a second, so dragging doesn't rewrite the log file on every frame.
+            let now = CFAbsoluteTimeGetCurrent()
+            if now - lastPreviewLog > 0.5 {
+                lastPreviewLog = now
+                record("Preview render \(prev.width)×\(prev.height)\(cached == nil ? "" : " (Smooth reused)")", ms, peakMB: peak)
+            }
+            if renderAgain || version != sourceVersion { renderPreview() }
         }
     }
 
