@@ -74,7 +74,7 @@ struct ContentView: View {
                 }
                 if model.tool == .face, model.display != nil {
                     FaceGuides(curves: model.faceGuides, imageSize: model.previewSize)
-                        .opacity(sliding || touching || comparing || model.busy != nil ? 0 : 1)
+                        .opacity(sliding || touching || comparing || model.busy != nil ? 0.3 : 1)  // dim, don't hide, while adjusting
                         .animation(.easeInOut(duration: sliding || touching ? 0.15 : 0.35), value: sliding || touching || comparing)
                         .allowsHitTesting(false)
                 }

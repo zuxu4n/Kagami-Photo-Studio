@@ -154,20 +154,18 @@ enum FaceAnalyzer {
             let k = max(1, ws)
             return CGPoint(x: p.x + d.dx / k, y: p.y + d.dy / k)
         }
-        // Push outward from the face centre so the line brackets the face instead of covering its edge.
-        let brows = (f.leftBrow + f.rightBrow).map { CGPoint(x: $0.x * W, y: $0.y * H) }
+        // Bracket the face rather than cover its edge: push each side outward, more at the top (cheekbones)
+        // than at the jaw, so the pair opens out like a wide "V" instead of hugging the contour.
         let cx = pts.map(\.x).reduce(0, +) / CGFloat(n)
-        let cy = brows.isEmpty ? pts.map(\.y).min() ?? 0 : brows.map(\.y).reduce(0, +) / CGFloat(brows.count)
-        pts = pts.map { CGPoint(x: cx + ($0.x - cx) * 1.07, y: cy + ($0.y - cy) * 1.03) }
-        // Keep the outer ~40% at each end; extend each end up towards the temple.
-        let m = Int((Double(n) * 0.4).rounded())
+        let faceW = f.box.width * W
+        let m = Int((Double(n) * 0.4).rounded())   // outer ~40% at each end; the chin stays open
         func side(_ s: [CGPoint]) -> [CGPoint] {
-            guard s.count > 2, let a = s.first else { return s }
-            let b = s[2]
-            let len = hypot(a.x - b.x, a.y - b.y)
-            let lift = f.box.height * H * 0.12
-            let top = CGPoint(x: a.x + (a.x - b.x) / len * lift * 0.5, y: a.y + (a.y - b.y) / len * lift)
-            return ([top] + s).map { CGPoint(x: $0.x / W, y: $0.y / H) }
+            let k = CGFloat(max(s.count - 1, 1))
+            return s.enumerated().map { i, p in
+                let t = 1 - CGFloat(i) / k   // 1 at the top, 0 at the jaw end
+                let dir: CGFloat = p.x < cx ? -1 : 1
+                return CGPoint(x: (p.x + dir * faceW * (0.05 + 0.13 * t)) / W, y: p.y / H)
+            }
         }
         return [side(Array(pts.prefix(m))), side(Array(pts.suffix(m).reversed()))]
     }
