@@ -268,6 +268,9 @@ struct ContentView: View {
                     sliderRow(feature.title, value: Binding(get: { model[keyPath: feature.value] }, set: { model[keyPath: feature.value] = $0 }),
                               range: feature.range)
                         .disabled(feature.needsMesh && !model.selectedHasMesh)
+                    if feature == .slim {
+                        sliderRow("Slim head", value: $model.head).disabled(!model.selectedHasMesh)
+                    }
                 }
                 HStack { Text(faceCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             }
@@ -277,6 +280,7 @@ struct ContentView: View {
         .onChange(of: model.slim) { _, _ in model.renderPreview() }
         .onChange(of: model.eyes) { _, _ in model.renderPreview() }
         .onChange(of: model.nose) { _, _ in model.renderPreview() }
+        .onChange(of: model.head) { _, _ in model.renderPreview() }
         .onChange(of: model.jaw) { _, _ in model.renderPreview() }
         .onChange(of: model.chin) { _, _ in model.renderPreview() }
         .onChange(of: model.lips) { _, _ in model.renderPreview() }
@@ -292,7 +296,7 @@ struct ContentView: View {
                     Button { feature = f } label: {
                         HStack(spacing: 4) {
                             Text(f.rawValue)
-                            if abs(model[keyPath: f.value]) > 0.001 { Circle().frame(width: 5, height: 5) }
+                            if abs(model[keyPath: f.value]) > 0.001 || (f == .slim && model.head > 0.001) { Circle().frame(width: 5, height: 5) }
                         }
                         .font(.caption.bold())
                         .padding(.horizontal, 10).padding(.vertical, 6)

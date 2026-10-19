@@ -28,13 +28,14 @@ struct FaceShape: Equatable {
     var slim: Float = 0
     var eyes: Float = 0
     var nose: Float = 0
+    var head: Float = 0       // 0...1, narrower head (face, temples and hair)
     var jaw: Float = 0        // 0...1, narrower jaw
     var chin: Float = 0       // -1...1, shorter or longer chin
     var lips: Float = 0       // -1...1, thinner or fuller lips
     var smile: Float = 0      // 0...1, lifts the mouth corners
     var forehead: Float = 0   // -1...1, lower or higher hairline
     var pushes: [FacePush] = []   // in the order they were made; applied after the sliders
-    var meshOff: Bool { jaw <= 0.001 && abs(chin) <= 0.001 && abs(lips) <= 0.001 && smile <= 0.001 && abs(forehead) <= 0.001 }
+    var meshOff: Bool { head <= 0.001 && jaw <= 0.001 && abs(chin) <= 0.001 && abs(lips) <= 0.001 && smile <= 0.001 && abs(forehead) <= 0.001 }
     var isOff: Bool { slim <= 0.001 && eyes <= 0.001 && nose <= 0.001 && meshOff && pushes.isEmpty }
 }
 
@@ -42,10 +43,10 @@ struct FaceShape: Equatable {
 struct WarpOp {
     var c: SIMD2<Float>      // centre (pixels)
     var r: Float             // radius (pixels)
-    var kind: Float          // 0 = translate, 1 = bulge, 2 = Reshape push
-    var m: SIMD2<Float>      // translate: displacement (pixels)
-    var s: Float             // bulge: strength
-    var pad: Float = 0
+    var kind: Float          // 0 = translate, 1 = bulge, 2 = Reshape push, 3 = squeeze
+    var m: SIMD2<Float>      // translate: displacement (pixels); squeeze: unit axis it narrows along
+    var s: Float             // bulge or squeeze: strength
+    var pad: Float = 0       // squeeze: reach along the other axis (pixels; r is the reach along m)
 }
 
 enum FaceAnalyzer {
@@ -207,6 +208,11 @@ enum FaceAnalyzer {
         // Handles that don't move: they hold features next to a moving area in place, so the move fades out
         // smoothly before it reaches them instead of dragging them along (or folding where two moves meet).
         func hold(_ idx: [Int], r: Float) { move(idx, r: r) { _ in .zero } }
+        if s.head > 0.001 {
+            // The whole head narrower, hair included: one squeeze across the face, centred between the cheeks,
+            // reaching a face width out to each side and a bit more up and down. It fades to nothing at its edge.
+            ops.append(WarpOp(c: centre - down * 0.1 * faceW, r: 1.0 * faceW, kind: 3, m: across, s: s.head * 0.12, pad: 1.15 * faceW))
+        }
         if s.jaw > 0.001 {
             // The lower jaw on both sides, from the jaw's corner to beside the chin, towards the middle and slightly up.
             move([172, 136, 150, 397, 365, 379], r: 0.22 * faceW) { (inward($0) - 0.2 * down) * s.jaw * 0.045 * faceW }
@@ -264,7 +270,7 @@ enum FaceAnalyzer {
         let W = CGFloat(w), H = CGFloat(h)
         var pts = f.contour.map { CGPoint(x: $0.x * W, y: $0.y * H) }
         // Move each point the way the slim warp moves the pixels under it (forward version of the shader's blend).
-        let ops = warpOps(faces: [f], shapes: [FaceShape(slim: shape.slim, jaw: shape.jaw, chin: shape.chin)], width: w, height: h)
+        let ops = warpOps(faces: [f], shapes: [FaceShape(slim: shape.slim, head: shape.head, jaw: shape.jaw, chin: shape.chin)], width: w, height: h)
         pts = pts.map { p in
             var d = CGVector.zero, ws: CGFloat = 0
             for op in ops where op.kind < 0.5 {
@@ -275,7 +281,18 @@ enum FaceAnalyzer {
                 d.dx += wgt * CGFloat(op.m.x); d.dy += wgt * CGFloat(op.m.y); ws += wgt
             }
             let k = max(1, ws)
-            return pushed(CGPoint(x: p.x + d.dx / k, y: p.y + d.dy / k), by: shape.pushes, width: w, height: h)
+            var q = CGPoint(x: p.x + d.dx / k, y: p.y + d.dy / k)
+            for op in ops where op.kind > 2.5 {
+                // The shader samples q + axis * a * s * fall, so content at q shows about a * s * fall nearer the middle.
+                let ax = CGFloat(op.m.x), ay = CGFloat(op.m.y)
+                let dx = q.x - CGFloat(op.c.x), dy = q.y - CGFloat(op.c.y)
+                let a = dx * ax + dy * ay, b = -dx * ay + dy * ax
+                let x2 = a * a / CGFloat(op.r * op.r) + b * b / CGFloat(op.pad * op.pad)
+                guard x2 < 1 else { continue }
+                let shift = a * CGFloat(op.s) * (1 - x2) * (1 - x2) / (1 + CGFloat(op.s))
+                q.x -= ax * shift; q.y -= ay * shift
+            }
+            return pushed(q, by: shape.pushes, width: w, height: h)
         }
         // Both the shape and the ends come from the detected outline: each side is the outline itself, moved
         // outward by a fixed gap along its own normal, from its top point down to where the jaw turns towards

@@ -55,10 +55,10 @@ kernel void smoothSkin(texture2d<float, access::sample> src [[texture(0)]],
 struct WarpOp {
     float2 c;      // centre, pixels
     float r;       // radius, pixels
-    float kind;    // 0 = translate, 1 = bulge, 2 = Reshape push
-    float2 m;      // translate displacement, pixels
-    float s;       // bulge strength
-    float pad;
+    float kind;    // 0 = translate, 1 = bulge, 2 = Reshape push, 3 = squeeze (Slim head)
+    float2 m;      // translate displacement, pixels; squeeze: unit axis it narrows along
+    float s;       // bulge or squeeze strength
+    float pad;     // squeeze: reach along the other axis, pixels (r is the reach along m)
 };
 
 // Inverse-mapped local warps: each output pixel looks up where its content comes from.
@@ -77,7 +77,7 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
     float2 p = float2(gid) + 0.5;
     for (int k = int(count) - 1; k >= 0; k--) {
         WarpOp op = ops[k];
-        if (op.kind < 1.5) continue;
+        if (op.kind < 1.5 || op.kind > 2.5) continue;   // Reshape pushes only
         float2 d = p - op.c;
         float dd = dot(d, d);
         float rr = op.r * op.r;
@@ -100,6 +100,18 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
         wsum += wgt;
     }
     float2 q = p - dsum / max(1.0, wsum);
+    // Squeezes narrow an oval area along one axis, most in the middle and fading to nothing at its edge. They
+    // come after the translates, so Slim head adds to Slim face instead of being averaged with it.
+    for (uint k = 0; k < count; k++) {
+        WarpOp op = ops[k];
+        if (op.kind < 2.5) continue;
+        float2 d = q - op.c;
+        float a = dot(d, op.m);
+        float b = dot(d, float2(-op.m.y, op.m.x));
+        float x2 = (a * a) / (op.r * op.r) + (b * b) / (op.pad * op.pad);
+        if (x2 >= 1.0) continue;
+        q += op.m * a * op.s * (1.0 - x2) * (1.0 - x2);   // look further out, so the content draws inward
+    }
     for (uint k = 0; k < count; k++) {
         WarpOp op = ops[k];
         if (op.kind < 0.5 || op.kind > 1.5) continue;  // bulge only

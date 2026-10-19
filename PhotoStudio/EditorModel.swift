@@ -19,7 +19,8 @@ final class EditorModel: ObservableObject {
     @Published var slim: Float = 0          // slim, eyes and nose show the selected face's values
     @Published var eyes: Float = 0
     @Published var nose: Float = 0
-    @Published var jaw: Float = 0           // jaw, chin, lips, smile and forehead use the MediaPipe face mesh
+    @Published var head: Float = 0          // Slim head
+    @Published var jaw: Float = 0           // head, jaw, chin, lips, smile and forehead use the MediaPipe face mesh
     @Published var chin: Float = 0
     @Published var lips: Float = 0
     @Published var smile: Float = 0
@@ -105,14 +106,14 @@ final class EditorModel: ObservableObject {
     private func sliderShape(keeping base: FaceShape) -> FaceShape {
         var v = base
         v.slim = slim; v.eyes = eyes; v.nose = nose
-        v.jaw = jaw; v.chin = chin; v.lips = lips; v.smile = smile; v.forehead = forehead
+        v.head = head; v.jaw = jaw; v.chin = chin; v.lips = lips; v.smile = smile; v.forehead = forehead
         return v
     }
 
     /// Shows a face's own values on the sliders.
     private func showSliders(_ v: FaceShape) {
         slim = v.slim; eyes = v.eyes; nose = v.nose
-        jaw = v.jaw; chin = v.chin; lips = v.lips; smile = v.smile; forehead = v.forehead
+        head = v.head; jaw = v.jaw; chin = v.chin; lips = v.lips; smile = v.smile; forehead = v.forehead
     }
 
     /// Starts the Face tab on the biggest face, with every face's sliders at zero.
