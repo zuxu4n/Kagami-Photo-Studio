@@ -171,7 +171,11 @@ enum FaceAnalyzer {
         // the eyes down to the chin. That distance shrinks when the photo is taken from above, so those guides
         // come out shorter too. On a turned face the side facing the camera runs further down (up to 103%).
         let cx = pts.map(\.x).reduce(0, +) / CGFloat(n), cy = pts.map(\.y).reduce(0, +) / CGFloat(n)
-        let gap = max(f.box.width * W * 0.1, minGap)   // minGap (pixels) keeps small, distant faces readable
+        // The gap is 10% of the face's width, raised towards minGap (pixels, about 14 pt on screen) so mid-size faces
+        // stay readable, but never above 15% of the face, so small faces in group shots keep their lines close.
+        // minGap * 0.3 (about 4 pt) is the floor, so the line never touches the face.
+        let faceW = f.box.width * W
+        let gap = max(faceW * 0.1, min(minGap, faceW * 0.15), minGap * 0.3)
         let eyePts = (f.leftEye + f.rightEye).map { CGPoint(x: $0.x * W, y: $0.y * H) }
         let chin = pts[n / 2]
         let eyes = eyePts.isEmpty ? CGPoint(x: cx, y: cy)
