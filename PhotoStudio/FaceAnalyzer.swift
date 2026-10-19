@@ -32,7 +32,7 @@ struct FaceShape: Equatable {
     var size: Float = 0       // -1...1, smaller or bigger head
     var width: Float = 0      // -1...1, narrower or wider head (face, temples and hair)
     var perspective: Float = 0   // -1...1, as if the photo were taken from further away or closer
-    var positionX: Float = 0  // Position: where the circle is, across and down the face (inside the unit circle)
+    var positionX: Float = 0  // Position: where the oval is, across and down the face, in half-widths and half-heights of the face
     var positionY: Float = 0
     var jaw: Float = 0        // 0...1, narrower jaw
     var chin: Float = 0       // -1...1, shorter or longer chin
@@ -211,8 +211,8 @@ enum FaceAnalyzer {
     static let depthPoints = [1, 6, 197, 98, 327, 33, 133, 362, 263, 105, 334, 50, 280, 117, 346, 205, 425, 123, 352,
                                     61, 291, 0, 17, 199, 151, 108, 337]
 
-    /// Where the Position circle moves: an oval just outside the face outline, centred on the middle of the face (about
-    /// the nose) and turned with the face. `ra` and `rb` are its reach along `across` and `down`, in pixels of a w x h image.
+    /// The frame the Position oval moves in: the middle of the face (about the nose) and the face's own axes, with the
+    /// outline's half-width `ra` along `across` and half-height `rb` along `down`, in pixels of a w x h image.
     static func positionFrame(for f: FaceGeometry, width w: Int, height h: Int) -> (centre: SIMD2<Float>, across: SIMD2<Float>, down: SIMD2<Float>, ra: Float, rb: Float)? {
         guard f.mesh.count == 478 else { return nil }
         let m = f.mesh.map { SIMD2(Float($0.x) * Float(w), Float($0.y) * Float(h)) }
@@ -221,7 +221,7 @@ enum FaceAnalyzer {
         let mid = oval.reduce(SIMD2<Float>(0, 0), +) / Float(oval.count)
         let ra = oval.map { abs(simd_dot($0 - mid, across)) }.max() ?? 1
         let rb = oval.map { abs(simd_dot($0 - mid, down)) }.max() ?? 1
-        return (mid, across, down, ra * 1.12, rb * 1.08)
+        return (mid, across, down, ra, rb)
     }
 
     /// Size, Width, Perspective, Position, Jaw, Chin, Lips, Smile, Smirk and Forehead handles from the MediaPipe mesh (`m`, in
@@ -261,16 +261,17 @@ enum FaceAnalyzer {
             // So each point moves away from the middle of the face (closer) or towards it (further) in proportion
             // to how far it sits in front of the face's average depth: the nose grows a little and the sides of the
             // face, which sit furthest back, come in.
-            // Position: the head turns towards the circle, about the back of the head. Each point moves that way by
-            // how far it sits in front of the sides of the face: the nose most, the eyes and mouth about half as
-            // far, the sides of the face not at all.
+            // Position: the head turns towards the oval, about the back of the head, more the further out it is (the
+            // nose moves 3% of the face's width with the oval on the outline). Each point moves that way by how far it
+            // sits in front of the sides of the face: the nose most, the eyes and mouth about half as far, the sides
+            // of the face not at all.
             // A ring a third of the way further out than the outline moves the hair and ears beside each outline
             // point with it (Position: a bit less), and the change fades out beyond that. Both share these handles,
             // blended among themselves, so they add to the other sliders.
             let zRef = z.prefix(468).reduce(0, +) / 468
             let k = s.perspective * 0.2 / faceW
             let zBack = (z[234] + z[454]) / 2, zFront = z[1]       // the sides of the face and the nose tip
-            let turnBy = (across * turn.x + down * turn.y) * 0.08 * faceW
+            let turnBy = (across * turn.x + down * turn.y) * 0.03 * faceW
             func shift(_ p: SIMD2<Float>, _ depth: Float, ring: Bool = false) -> SIMD2<Float> {
                 let front = min(1, max(0, (depth - zBack) / max(zFront - zBack, 1)))
                 return (p - mid) * k * (depth - zRef) + turnBy * front * (ring ? 0.6 : 1)

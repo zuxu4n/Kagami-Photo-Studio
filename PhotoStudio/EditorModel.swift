@@ -22,7 +22,7 @@ final class EditorModel: ObservableObject {
     @Published var size: Float = 0          // size, width, perspective, jaw, chin, lips, smile, smirk and forehead use the MediaPipe face mesh
     @Published var width: Float = 0
     @Published var perspective: Float = 0
-    @Published var positionX: Float = 0     // Position: the circle's place across and down the face (inside the unit circle)
+    @Published var positionX: Float = 0     // Position: the oval's place across and down the face, in half-widths and half-heights
     @Published var positionY: Float = 0
     @Published var jaw: Float = 0
     @Published var chin: Float = 0
@@ -220,33 +220,37 @@ final class EditorModel: ObservableObject {
 
     var selectedHasPushes: Bool { selectedFace.map { $0 < shapes.count && !shapes[$0].pushes.isEmpty } ?? false }
 
-    // MARK: Position (drag a circle around the head to turn it)
+    // MARK: Position (drag an oval around the head to turn it)
 
-    private var positionDrag: (face: Int, start: SIMD2<Float>)?   // the face and the circle's place when the drag began
+    private var positionDrag: (face: Int, start: SIMD2<Float>)?   // the face and the oval's place when the drag began
 
-    /// The Position circle on the selected face, in normalised photo coordinates (0...1): its centre, its radius (as a
-    /// fraction of the photo's width) and the oval it moves within. Nil when the face has no mesh.
-    func positionHandle() -> (puck: CGPoint, radius: CGFloat, orbit: [CGPoint])? {
+    /// How far out the oval can go, in half-widths and half-heights of the face (1 = on the outline).
+    let positionReach: Float = 1.7
+
+    /// The Position oval on the selected face: its centre in normalised photo coordinates (0...1), its long and short
+    /// radii (fractions of the photo's width) and the direction of its short axis (radians, y down). It's drawn like a
+    /// disc on the surface of the head facing out from its middle: round in the middle of the face, flatter towards
+    /// the outline and beyond, with the short axis pointing at the middle. Nil when the face has no mesh.
+    func positionHandle() -> (puck: CGPoint, major: CGFloat, minor: CGFloat, angle: CGFloat)? {
         guard let i = selectedFace, i < faces.count, let prev = preview,
               let o = FaceAnalyzer.positionFrame(for: faces[i], width: prev.width, height: prev.height) else { return nil }
         let W = CGFloat(prev.width), H = CGFloat(prev.height)
-        func norm(_ v: SIMD2<Float>) -> CGPoint { CGPoint(x: CGFloat(v.x) / W, y: CGFloat(v.y) / H) }
-        let puck = o.centre + o.across * o.ra * positionX + o.down * o.rb * positionY
-        let orbit = (0...60).map { k -> CGPoint in
-            let a = Float(k) / 60 * 2 * .pi
-            return norm(o.centre + o.across * o.ra * cos(a) + o.down * o.rb * sin(a))
-        }
-        return (norm(puck), CGFloat(o.ra) * 0.22 / W, orbit)
+        let offset = o.across * o.ra * positionX + o.down * o.rb * positionY
+        let puck = o.centre + offset
+        let d = hypot(positionX, positionY)
+        let major = CGFloat(o.ra) * 0.4 / W
+        return (CGPoint(x: CGFloat(puck.x) / W, y: CGFloat(puck.y) / H), major, major * CGFloat(max(0.38, 1 - 0.5 * d * d)),
+                CGFloat(atan2(offset.y, offset.x)))
     }
 
-    /// Starts moving the Position circle when the finger lands on it, or on a face (which it selects first).
+    /// Starts moving the Position oval when the finger lands on it, or on a face (which it selects first).
     /// Returns false otherwise, so the drag can pan instead. `point` is in preview pixels.
     func beginPosition(at point: CGPoint) -> Bool {
         guard busy == nil, positionDrag == nil, let prev = preview else { return false }
         let W = CGFloat(prev.width), H = CGFloat(prev.height)
         var face = faceIndex(at: point)
-        if let h = positionHandle(), hypot(point.x - h.puck.x * W, point.y - h.puck.y * H) < h.radius * W * 1.6 {
-            face = selectedFace   // on the circle, even where it sits outside the face
+        if let h = positionHandle(), hypot(point.x - h.puck.x * W, point.y - h.puck.y * H) < h.major * W * 1.6 {
+            face = selectedFace   // on the oval, even where it sits outside the face
         }
         guard let i = face, !faces[i].mesh.isEmpty else { return false }
         if i != selectedFace {
@@ -259,13 +263,22 @@ final class EditorModel: ObservableObject {
         return true
     }
 
-    /// Moves the circle by the finger's travel since the drag began (preview pixels). It stays inside its oval.
+    /// Moves the oval by the finger's travel since the drag began (preview pixels). It goes up to `positionReach`
+    /// out from the middle of the face, and stays on the photo.
     func movePosition(by t: CGSize) {
         guard let d = positionDrag, let prev = preview, d.face < faces.count,
               let o = FaceAnalyzer.positionFrame(for: faces[d.face], width: prev.width, height: prev.height) else { return }
         let v = SIMD2(Float(t.width), Float(t.height))
         var p = d.start + SIMD2(simd_dot(v, o.across) / o.ra, simd_dot(v, o.down) / o.rb)
-        if simd_length(p) > 1 { p /= simd_length(p) }
+        if simd_length(p) > positionReach { p *= positionReach / simd_length(p) }
+        // Pull it back along the same line if it would leave the photo.
+        let u = o.across * o.ra * p.x + o.down * o.rb * p.y
+        var k: Float = 1
+        for (c, du, side) in [(o.centre.x, u.x, Float(prev.width)), (o.centre.y, u.y, Float(prev.height))] {
+            if c + du > side { k = min(k, (side - c) / du) }
+            if c + du < 0 { k = min(k, -c / du) }
+        }
+        p *= max(0, k)
         positionX = p.x
         positionY = p.y
     }
@@ -277,7 +290,7 @@ final class EditorModel: ObservableObject {
         sliderEditing(false)
     }
 
-    /// Puts the circle back where the drag began (a second finger turned it into a pinch).
+    /// Puts the oval back where the drag began (a second finger turned it into a pinch).
     func cancelPosition() {
         guard let d = positionDrag else { return }
         positionX = d.start.x
@@ -286,7 +299,7 @@ final class EditorModel: ObservableObject {
         sliderEditing(false)
     }
 
-    /// Puts the selected face's circle back in the middle (one undo step).
+    /// Puts the selected face's oval back in the middle (one undo step).
     func resetPosition() {
         sliderEditing(true)
         positionX = 0
