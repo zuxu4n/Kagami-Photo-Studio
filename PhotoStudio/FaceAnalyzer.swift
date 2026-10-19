@@ -161,16 +161,35 @@ enum FaceAnalyzer {
         let m = n / 2   // each side runs down to the point beside the chin; the chin itself stays open
         func side(_ s: [CGPoint]) -> [CGPoint] {
             let k = CGFloat(max(s.count - 1, 1))
-            return s.enumerated().map { i, p in
+            let pushed = s.enumerated().map { i, p in
                 let t = 1 - CGFloat(i) / k   // 1 at the top, 0 at the jaw end
                 let dir: CGFloat = p.x < cx ? -1 : 1
-                return CGPoint(x: (p.x + dir * faceW * (0.05 + 0.13 * t)) / W, y: p.y / H)
+                return CGPoint(x: p.x + dir * faceW * (0.05 + 0.13 * t), y: p.y)
             }
+            return trimEnd(pushed, keep: 0.9).map { CGPoint(x: $0.x / W, y: $0.y / H) }
         }
         return [side(Array(pts.prefix(m))), side(Array(pts.suffix(m).reversed()))]
     }
 
     // MARK: Geometry helpers
+
+    /// The polyline cut to the first `keep` fraction of its length.
+    static func trimEnd(_ pts: [CGPoint], keep: CGFloat) -> [CGPoint] {
+        guard pts.count > 1 else { return pts }
+        let segs = zip(pts, pts.dropFirst()).map { hypot($1.x - $0.x, $1.y - $0.y) }
+        var left = segs.reduce(0, +) * keep
+        var out = [pts[0]]
+        for (i, len) in segs.enumerated() {
+            if len >= left {
+                let u = len > 0 ? left / len : 0
+                out.append(CGPoint(x: pts[i].x + (pts[i + 1].x - pts[i].x) * u, y: pts[i].y + (pts[i + 1].y - pts[i].y) * u))
+                return out
+            }
+            out.append(pts[i + 1])
+            left -= len
+        }
+        return out
+    }
 
     static func hull(_ points: [CGPoint]) -> [CGPoint] {
         let p = points.sorted { $0.x == $1.x ? $0.y < $1.y : $0.x < $1.x }
