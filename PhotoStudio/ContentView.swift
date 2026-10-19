@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var area: FaceArea = .face          // the Face main tab shown
     @State private var subtabs: [FaceArea: String] = [:]  // the subtab picked in each main tab
     @State private var reshapeDrag: Bool?      // Reshape on: nil until the finger moves, then true (pushing a face) or false (panning)
+    @State private var positionDrag: Bool?     // Position shown: nil until the finger moves, then true (moving the circle) or false (panning)
     private let maxZoom: CGFloat = 8
 
     var body: some View {
@@ -84,6 +85,9 @@ struct ContentView: View {
                                 .opacity(sliding || touching || comparing || model.busy != nil ? 0.3 : 1)  // dim, don't hide, while adjusting
                                 .animation(.easeInOut(duration: sliding || touching ? 0.15 : 0.35), value: sliding || touching || comparing)
                                 .allowsHitTesting(false)
+                            if positionOn, !comparing {
+                                PositionHandle(model: model, zoom: zoom).allowsHitTesting(false)
+                            }
                         }
                     }
                     .scaleEffect(zoom)
@@ -130,7 +134,8 @@ struct ContentView: View {
             .onLongPressGesture(minimumDuration: 0.15, maximumDistance: 30, pressing: { pressing in
                 // While zoomed a one-finger drag pans, so holding the photo doesn't compare (the Compare button still does).
                 // With Reshape on, holding a face is the start of a push, so only the Compare button compares.
-                if model.tool != .heal, !reshapeOn { comparing = pressing && zoom <= 1.01 && pinchStart == nil }
+                // With Position shown, holding the photo is the start of moving the circle.
+                if model.tool != .heal, !reshapeOn, !positionOn { comparing = pressing && zoom <= 1.01 && pinchStart == nil }
             }, perform: {})
             .simultaneousGesture(DragGesture(minimumDistance: 0)
                 .onChanged { v in
@@ -150,6 +155,20 @@ struct ContentView: View {
                             return
                         }
                     }
+                    if positionOn {
+                        if pinchStart != nil {
+                            if positionDrag == true { model.cancelPosition() }
+                            positionDrag = false
+                        } else if positionDrag == nil {
+                            guard hypot(v.translation.width, v.translation.height) > 4 else { return }
+                            positionDrag = imagePoint(v.startLocation, in: geo.size).map { model.beginPosition(at: $0) } ?? false
+                        }
+                        if positionDrag == true, let a = imagePoint(v.startLocation, in: geo.size, clamp: false),
+                           let b = imagePoint(v.location, in: geo.size, clamp: false) {
+                            model.movePosition(by: CGSize(width: b.x - a.x, height: b.y - a.y))
+                            return
+                        }
+                    }
                     guard zoom > 1.01, pinchStart == nil else { dragStart = nil; return }
                     // Starts from where the photo is now, so lifting one finger after a pinch doesn't jump.
                     let start = dragStart ?? CGSize(width: pan.width - v.translation.width, height: pan.height - v.translation.height)
@@ -160,6 +179,8 @@ struct ContentView: View {
                     touching = false; dragStart = nil
                     if reshapeDrag == true { model.endReshape() }
                     reshapeDrag = nil
+                    if positionDrag == true { model.endPosition() }
+                    positionDrag = nil
                 })
             .simultaneousGesture(MagnifyGesture()
                 .onChanged { v in
@@ -200,6 +221,8 @@ struct ContentView: View {
     }
 
     private var reshapeOn: Bool { model.tool == .face && model.reshaping }
+    /// The Face › Position circle is on the photo: one-finger drags on a face move it.
+    private var positionOn: Bool { model.tool == .face && !model.reshaping && feature == .position && model.selectedHasMesh }
 
     /// Maps a tap in the view to preview pixel coordinates, undoing the zoom and pan first (the image is aspect-fit).
     /// Points off the photo are nil unless `clamp` is false (a drag that runs past the edge).
@@ -267,7 +290,19 @@ struct ContentView: View {
                 } else {
                     areaTabs
                     subtabChips
-                    if let f = feature {
+                    if feature == .position {
+                        HStack {
+                            Text("Drag the circle around the head").font(.subheadline)
+                            Spacer()
+                            Button { model.resetPosition() } label: {
+                                Image(systemName: "arrow.counterclockwise").font(.footnote.bold())
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(!model.positionMoved || model.busy != nil)
+                            .accessibilityLabel("Reset Position")
+                        }
+                        .disabled(!model.selectedHasMesh)
+                    } else if let f = feature {
                         sliderRow(f.title, value: Binding(get: { model[keyPath: f.value] }, set: { model[keyPath: f.value] = $0 }),
                                   range: f.range)
                             .disabled(f.needsMesh && !model.selectedHasMesh)
@@ -284,6 +319,8 @@ struct ContentView: View {
         .onChange(of: model.size) { _, _ in model.renderPreview() }
         .onChange(of: model.width) { _, _ in model.renderPreview() }
         .onChange(of: model.perspective) { _, _ in model.renderPreview() }
+        .onChange(of: model.positionX) { _, _ in model.renderPreview() }
+        .onChange(of: model.positionY) { _, _ in model.renderPreview() }
         .onChange(of: model.smirk) { _, _ in model.renderPreview() }
         .onChange(of: model.jaw) { _, _ in model.renderPreview() }
         .onChange(of: model.chin) { _, _ in model.renderPreview() }
@@ -298,7 +335,10 @@ struct ContentView: View {
 
     /// Whether any slider in this main tab (or behind this subtab) is moved on the selected face.
     private func changed(_ a: FaceArea, _ sub: String? = nil) -> Bool {
-        (sub.map { [a.feature($0)] } ?? a.subtabs.map(a.feature)).contains { f in f.map { abs(model[keyPath: $0.value]) > 0.001 } ?? false }
+        (sub.map { [a.feature($0)] } ?? a.subtabs.map(a.feature)).contains { f in
+            guard let f else { return false }
+            return f == .position ? model.positionMoved : abs(model[keyPath: f.value]) > 0.001
+        }
     }
 
     /// The six main Face tabs; a dot marks the ones with a slider moved on the selected face.
@@ -422,6 +462,7 @@ private enum FaceArea: String, CaseIterable, Identifiable {
         case (.face, "Size"): return .size
         case (.face, "Width"): return .width
         case (.face, "Smile"): return .smile
+        case (.face, "Position"): return .position
         case (.face, "Perspective"): return .perspective
         case (.face, "Smirk"): return .smirk
         case (.jaw, "Jaw"): return .jaw
@@ -437,7 +478,7 @@ private enum FaceArea: String, CaseIterable, Identifiable {
 
 /// The Face tab's sliders. Slim, Eyes and Nose use Apple Vision's landmarks; the rest use MediaPipe's face mesh.
 private enum FaceFeature: String, CaseIterable, Identifiable {
-    case slim = "Slim", size = "Size", width = "Width", perspective = "Perspective", eyes = "Eyes", nose = "Nose", jaw = "Jaw",
+    case slim = "Slim", size = "Size", width = "Width", position = "Position", perspective = "Perspective", eyes = "Eyes", nose = "Nose", jaw = "Jaw",
          chin = "Chin", lips = "Lips", smile = "Smile", smirk = "Smirk", forehead = "Forehead"
     var id: String { rawValue }
 
@@ -447,6 +488,7 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .size: return \.size
         case .width: return \.width
         case .perspective: return \.perspective
+        case .position: return \.positionX   // Position has a circle on the photo instead of a slider
         case .eyes: return \.eyes
         case .nose: return \.nose
         case .jaw: return \.jaw
@@ -476,6 +518,7 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .size: return "Left smaller, right bigger"
         case .width: return "Left narrower, right wider"
         case .perspective: return "Left as if further away, right closer"
+        case .position: return "The head turns towards the circle"
         case .smirk: return "Left lifts the left corner, right the right one"
         case .chin: return "Left shorter, right longer"
         case .lips: return "Left thinner, right fuller"
@@ -485,6 +528,34 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
     }
 
     var needsMesh: Bool { ![.slim, .eyes, .nose].contains(self) }
+}
+
+/// Face › Position: the circle to drag, on the selected face, and the oval it moves within (dashed), drawn over the
+/// aspect-fit photo. The circle is at least 16 points across the radius on screen, so it stays easy to see on small faces.
+private struct PositionHandle: View {
+    @ObservedObject var model: EditorModel
+    var zoom: CGFloat = 1
+
+    var body: some View {
+        let imageSize = model.previewSize
+        GeometryReader { geo in
+            if let h = model.positionHandle() {
+                let s = min(geo.size.width / max(imageSize.width, 1), geo.size.height / max(imageSize.height, 1))
+                let fw = imageSize.width * s, fh = imageSize.height * s
+                let ox = (geo.size.width - fw) / 2, oy = (geo.size.height - fh) / 2
+                let orbit = h.orbit.map { CGPoint(x: ox + $0.x * fw, y: oy + $0.y * fh) }
+                let r = max(h.radius * fw, 16 / zoom)
+                ZStack {
+                    Path { $0.addLines(orbit) }
+                        .stroke(Color.white.opacity(0.55), style: StrokeStyle(lineWidth: 1.25 / zoom, dash: [5 / zoom, 5 / zoom]))
+                    Circle().fill(Color.white.opacity(0.3))
+                        .overlay(Circle().stroke(Color(red: 0.2, green: 0.85, blue: 0.95), lineWidth: 2.5 / zoom))
+                        .frame(width: 2 * r, height: 2 * r)
+                        .position(x: ox + h.puck.x * fw, y: oy + h.puck.y * fh)
+                }
+            }
+        }
+    }
 }
 
 /// Two thin curves bracketing each face, drawn over the aspect-fit photo: cyan on the selected face, white on the others.

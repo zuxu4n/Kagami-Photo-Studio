@@ -22,6 +22,8 @@ final class EditorModel: ObservableObject {
     @Published var size: Float = 0          // size, width, perspective, jaw, chin, lips, smile, smirk and forehead use the MediaPipe face mesh
     @Published var width: Float = 0
     @Published var perspective: Float = 0
+    @Published var positionX: Float = 0     // Position: the circle's place across and down the face (inside the unit circle)
+    @Published var positionY: Float = 0
     @Published var jaw: Float = 0
     @Published var chin: Float = 0
     @Published var lips: Float = 0
@@ -109,7 +111,7 @@ final class EditorModel: ObservableObject {
     private func sliderShape(keeping base: FaceShape) -> FaceShape {
         var v = base
         v.slim = slim; v.eyes = eyes; v.nose = nose
-        v.size = size; v.width = width; v.perspective = perspective
+        v.size = size; v.width = width; v.perspective = perspective; v.positionX = positionX; v.positionY = positionY
         v.jaw = jaw; v.chin = chin; v.lips = lips; v.smile = smile; v.smirk = smirk; v.forehead = forehead
         return v
     }
@@ -117,7 +119,7 @@ final class EditorModel: ObservableObject {
     /// Shows a face's own values on the sliders.
     private func showSliders(_ v: FaceShape) {
         slim = v.slim; eyes = v.eyes; nose = v.nose
-        size = v.size; width = v.width; perspective = v.perspective
+        size = v.size; width = v.width; perspective = v.perspective; positionX = v.positionX; positionY = v.positionY
         jaw = v.jaw; chin = v.chin; lips = v.lips; smile = v.smile; smirk = v.smirk; forehead = v.forehead
     }
 
@@ -217,6 +219,82 @@ final class EditorModel: ObservableObject {
     var reshapeRadiusFraction: CGFloat { selectedFace.map { faces[$0].box.width * CGFloat(reshapeSize) } ?? 0 }
 
     var selectedHasPushes: Bool { selectedFace.map { $0 < shapes.count && !shapes[$0].pushes.isEmpty } ?? false }
+
+    // MARK: Position (drag a circle around the head to turn it)
+
+    private var positionDrag: (face: Int, start: SIMD2<Float>)?   // the face and the circle's place when the drag began
+
+    /// The Position circle on the selected face, in normalised photo coordinates (0...1): its centre, its radius (as a
+    /// fraction of the photo's width) and the oval it moves within. Nil when the face has no mesh.
+    func positionHandle() -> (puck: CGPoint, radius: CGFloat, orbit: [CGPoint])? {
+        guard let i = selectedFace, i < faces.count, let prev = preview,
+              let o = FaceAnalyzer.positionFrame(for: faces[i], width: prev.width, height: prev.height) else { return nil }
+        let W = CGFloat(prev.width), H = CGFloat(prev.height)
+        func norm(_ v: SIMD2<Float>) -> CGPoint { CGPoint(x: CGFloat(v.x) / W, y: CGFloat(v.y) / H) }
+        let puck = o.centre + o.across * o.ra * positionX + o.down * o.rb * positionY
+        let orbit = (0...60).map { k -> CGPoint in
+            let a = Float(k) / 60 * 2 * .pi
+            return norm(o.centre + o.across * o.ra * cos(a) + o.down * o.rb * sin(a))
+        }
+        return (norm(puck), CGFloat(o.ra) * 0.22 / W, orbit)
+    }
+
+    /// Starts moving the Position circle when the finger lands on it, or on a face (which it selects first).
+    /// Returns false otherwise, so the drag can pan instead. `point` is in preview pixels.
+    func beginPosition(at point: CGPoint) -> Bool {
+        guard busy == nil, positionDrag == nil, let prev = preview else { return false }
+        let W = CGFloat(prev.width), H = CGFloat(prev.height)
+        var face = faceIndex(at: point)
+        if let h = positionHandle(), hypot(point.x - h.puck.x * W, point.y - h.puck.y * H) < h.radius * W * 1.6 {
+            face = selectedFace   // on the circle, even where it sits outside the face
+        }
+        guard let i = face, !faces[i].mesh.isEmpty else { return false }
+        if i != selectedFace {
+            storeShape()
+            selectedFace = i
+            showSliders(shapes[i])
+        }
+        sliderEditing(true)
+        positionDrag = (i, SIMD2(positionX, positionY))
+        return true
+    }
+
+    /// Moves the circle by the finger's travel since the drag began (preview pixels). It stays inside its oval.
+    func movePosition(by t: CGSize) {
+        guard let d = positionDrag, let prev = preview, d.face < faces.count,
+              let o = FaceAnalyzer.positionFrame(for: faces[d.face], width: prev.width, height: prev.height) else { return }
+        let v = SIMD2(Float(t.width), Float(t.height))
+        var p = d.start + SIMD2(simd_dot(v, o.across) / o.ra, simd_dot(v, o.down) / o.rb)
+        if simd_length(p) > 1 { p /= simd_length(p) }
+        positionX = p.x
+        positionY = p.y
+    }
+
+    /// Ends the drag as one undo step.
+    func endPosition() {
+        guard positionDrag != nil else { return }
+        positionDrag = nil
+        sliderEditing(false)
+    }
+
+    /// Puts the circle back where the drag began (a second finger turned it into a pinch).
+    func cancelPosition() {
+        guard let d = positionDrag else { return }
+        positionX = d.start.x
+        positionY = d.start.y
+        positionDrag = nil
+        sliderEditing(false)
+    }
+
+    /// Puts the selected face's circle back in the middle (one undo step).
+    func resetPosition() {
+        sliderEditing(true)
+        positionX = 0
+        positionY = 0
+        sliderEditing(false)
+    }
+
+    var positionMoved: Bool { hypot(positionX, positionY) > 0.001 }
 
     // MARK: Warm-up at launch, so the first tap on each tool isn't slow
 

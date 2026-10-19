@@ -32,6 +32,8 @@ struct FaceShape: Equatable {
     var size: Float = 0       // -1...1, smaller or bigger head
     var width: Float = 0      // -1...1, narrower or wider head (face, temples and hair)
     var perspective: Float = 0   // -1...1, as if the photo were taken from further away or closer
+    var positionX: Float = 0  // Position: where the circle is, across and down the face (inside the unit circle)
+    var positionY: Float = 0
     var jaw: Float = 0        // 0...1, narrower jaw
     var chin: Float = 0       // -1...1, shorter or longer chin
     var lips: Float = 0       // -1...1, thinner or fuller lips
@@ -40,7 +42,8 @@ struct FaceShape: Equatable {
     var forehead: Float = 0   // -1...1, lower or higher hairline
     var pushes: [FacePush] = []   // in the order they were made; applied after the sliders
     var meshOff: Bool {
-        abs(size) <= 0.001 && abs(width) <= 0.001 && abs(perspective) <= 0.001 && jaw <= 0.001 && abs(chin) <= 0.001
+        abs(size) <= 0.001 && abs(width) <= 0.001 && abs(perspective) <= 0.001 && abs(positionX) <= 0.001 && abs(positionY) <= 0.001
+            && jaw <= 0.001 && abs(chin) <= 0.001
             && abs(lips) <= 0.001 && smile <= 0.001 && abs(smirk) <= 0.001 && abs(forehead) <= 0.001
     }
     var isOff: Bool { slim <= 0.001 && eyes <= 0.001 && nose <= 0.001 && meshOff && pushes.isEmpty }
@@ -204,11 +207,24 @@ enum FaceAnalyzer {
     static let faceOval = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377,
                            152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109]
 
-    /// Points inside the outline that carry the Perspective change: nose, eyes, brows, cheeks, mouth, chin, forehead.
-    static let perspectivePoints = [1, 6, 197, 98, 327, 33, 133, 362, 263, 105, 334, 50, 280, 117, 346, 205, 425, 123, 352,
+    /// Points inside the outline that carry the Perspective and Position changes: nose, eyes, brows, cheeks, mouth, chin, forehead.
+    static let depthPoints = [1, 6, 197, 98, 327, 33, 133, 362, 263, 105, 334, 50, 280, 117, 346, 205, 425, 123, 352,
                                     61, 291, 0, 17, 199, 151, 108, 337]
 
-    /// Size, Width, Perspective, Jaw, Chin, Lips, Smile, Smirk and Forehead handles from the MediaPipe mesh (`m`, in
+    /// Where the Position circle moves: an oval just outside the face outline, centred on the middle of the face (about
+    /// the nose) and turned with the face. `ra` and `rb` are its reach along `across` and `down`, in pixels of a w x h image.
+    static func positionFrame(for f: FaceGeometry, width w: Int, height h: Int) -> (centre: SIMD2<Float>, across: SIMD2<Float>, down: SIMD2<Float>, ra: Float, rb: Float)? {
+        guard f.mesh.count == 478 else { return nil }
+        let m = f.mesh.map { SIMD2(Float($0.x) * Float(w), Float($0.y) * Float(h)) }
+        let across = simd_normalize(m[263] - m[33]), down = SIMD2(-across.y, across.x)
+        let oval = faceOval.map { m[$0] }
+        let mid = oval.reduce(SIMD2<Float>(0, 0), +) / Float(oval.count)
+        let ra = oval.map { abs(simd_dot($0 - mid, across)) }.max() ?? 1
+        let rb = oval.map { abs(simd_dot($0 - mid, down)) }.max() ?? 1
+        return (mid, across, down, ra * 1.12, rb * 1.08)
+    }
+
+    /// Size, Width, Perspective, Position, Jaw, Chin, Lips, Smile, Smirk and Forehead handles from the MediaPipe mesh (`m`, in
     /// pixels, and `z`, each point's distance towards the camera in pixels). Directions follow the face's own axes
     /// (across = eye corner to eye corner, down = at right angles to it), so a tilted head changes the same way as an
     /// upright one.
@@ -239,20 +255,30 @@ enum FaceAnalyzer {
             // the cheeks, reaching a face width out to each side and a bit more up and down. It fades to nothing at its edge.
             ops.append(WarpOp(c: centre - down * 0.1 * faceW, r: 1.0 * faceW, kind: 3, m: across, s: -s.width * 0.12, pad: 1.15 * faceW))
         }
-        if abs(s.perspective) > 0.001, z.count == m.count {
-            // A camera closer to the face enlarges what's nearer to it more than what's further away. So each point
-            // moves away from the middle of the face (closer) or towards it (further) in proportion to how far it sits
-            // in front of the face's average depth: the nose grows a little and the sides of the face, which sit
-            // furthest back, come in. A ring a third of the way further out moves the hair and ears beside each
-            // outline point with it, and the change fades out beyond that. These handles are blended among
-            // themselves, so they add to the other sliders.
+        let turn = SIMD2(s.positionX, s.positionY)
+        if abs(s.perspective) > 0.001 || simd_length(turn) > 0.001, z.count == m.count {
+            // Perspective: a camera closer to the face enlarges what's nearer to it more than what's further away.
+            // So each point moves away from the middle of the face (closer) or towards it (further) in proportion
+            // to how far it sits in front of the face's average depth: the nose grows a little and the sides of the
+            // face, which sit furthest back, come in.
+            // Position: the head turns towards the circle, about the back of the head. Each point moves that way by
+            // how far it sits in front of the sides of the face: the nose most, the eyes and mouth about half as
+            // far, the sides of the face not at all.
+            // A ring a third of the way further out than the outline moves the hair and ears beside each outline
+            // point with it (Position: a bit less), and the change fades out beyond that. Both share these handles,
+            // blended among themselves, so they add to the other sliders.
             let zRef = z.prefix(468).reduce(0, +) / 468
             let k = s.perspective * 0.2 / faceW
-            func shift(_ p: SIMD2<Float>, _ depth: Float) -> SIMD2<Float> { (p - mid) * k * (depth - zRef) }
-            for i in perspectivePoints { ops.append(WarpOp(c: m[i], r: 0.2 * faceW, kind: 5, m: shift(m[i], z[i]), s: 0)) }
+            let zBack = (z[234] + z[454]) / 2, zFront = z[1]       // the sides of the face and the nose tip
+            let turnBy = (across * turn.x + down * turn.y) * 0.08 * faceW
+            func shift(_ p: SIMD2<Float>, _ depth: Float, ring: Bool = false) -> SIMD2<Float> {
+                let front = min(1, max(0, (depth - zBack) / max(zFront - zBack, 1)))
+                return (p - mid) * k * (depth - zRef) + turnBy * front * (ring ? 0.6 : 1)
+            }
+            for i in depthPoints { ops.append(WarpOp(c: m[i], r: 0.2 * faceW, kind: 5, m: shift(m[i], z[i]), s: 0)) }
             for i in faceOval {
                 ops.append(WarpOp(c: m[i], r: 0.25 * faceW, kind: 5, m: shift(m[i], z[i]), s: 0))
-                ops.append(WarpOp(c: mid + (m[i] - mid) * 1.35, r: 0.4 * faceW, kind: 5, m: shift(m[i], z[i]), s: 0))
+                ops.append(WarpOp(c: mid + (m[i] - mid) * 1.35, r: 0.4 * faceW, kind: 5, m: shift(m[i], z[i], ring: true), s: 0))
             }
         }
         if s.jaw > 0.001 {
@@ -309,15 +335,16 @@ enum FaceAnalyzer {
     // MARK: Outline guides for the Face tab
 
     /// Two curves bracketing the face's left and right sides, temple to jaw (chin left open), in normalised
-    /// top-left coordinates. They sit just outside the jaw line and follow the Slim, Size, Width, Perspective, Jaw
-    /// and Chin warps and the Reshape pushes, so they track the face as it changes.
+    /// top-left coordinates. They sit just outside the jaw line and follow the Slim, Size, Width, Perspective, Position,
+    /// Jaw and Chin warps and the Reshape pushes, so they track the face as it changes.
     static func guideCurves(for f: FaceGeometry, width w: Int, height h: Int, shape: FaceShape, minGap: CGFloat = 0) -> [[CGPoint]] {
         let n = f.contour.count
         guard n > 6 else { return [] }
         let W = CGFloat(w), H = CGFloat(h)
         var pts = f.contour.map { CGPoint(x: $0.x * W, y: $0.y * H) }
         // Move each point the way the slim warp moves the pixels under it (forward version of the shader's blend).
-        let outline = FaceShape(slim: shape.slim, size: shape.size, width: shape.width, perspective: shape.perspective, jaw: shape.jaw, chin: shape.chin)
+        let outline = FaceShape(slim: shape.slim, size: shape.size, width: shape.width, perspective: shape.perspective,
+                                positionX: shape.positionX, positionY: shape.positionY, jaw: shape.jaw, chin: shape.chin)
         let ops = warpOps(faces: [f], shapes: [outline], width: w, height: h)
         pts = pts.map { p in
             // Translates and Perspective handles, each group blended among themselves as the shader does.
