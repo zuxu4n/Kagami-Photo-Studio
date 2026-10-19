@@ -157,7 +157,7 @@ enum FaceAnalyzer {
         // Both the shape and the ends come from the detected outline: each side is the outline itself, moved
         // outward by a fixed gap along its own normal, from its top point down to where the jaw turns towards
         // the chin (the outline gets flatter than 45 degrees). The chin stays open.
-        // Where they end is set by the size of the head: both sides stop at the same level, 80% of the way from
+        // Where they end is set by the size of the head: both sides stop at the same level, 88% of the way from
         // the eyes down to the chin. That distance shrinks when the photo is taken from above, so those guides
         // come out shorter too.
         let cx = pts.map(\.x).reduce(0, +) / CGFloat(n), cy = pts.map(\.y).reduce(0, +) / CGFloat(n)
@@ -183,7 +183,7 @@ enum FaceAnalyzer {
                 if nx * (s[i].x - cx) + ny * (s[i].y - cy) < 0 { nx = -nx; ny = -ny }   // point away from the face
                 return CGPoint(x: s[i].x + nx * gap, y: s[i].y + ny * gap)
             }
-            return trim(curve, atLevel: 0.8, level).map { CGPoint(x: $0.x / W, y: $0.y / H) }
+            return trim(curve, atLevel: 0.88, level).map { CGPoint(x: $0.x / W, y: $0.y / H) }
         }
         let m = n / 2 + 1   // top point on each side through to the one beside the chin
         return [side(Array(pts.prefix(m))), side(Array(pts.suffix(m).reversed()))].map(smoothed)
