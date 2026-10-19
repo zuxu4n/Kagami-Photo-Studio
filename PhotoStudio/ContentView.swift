@@ -209,7 +209,6 @@ private struct FaceGuides: View {
                 }
             }
             ZStack {
-                path.stroke(Color.black.opacity(0.35), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
                 path.stroke(Color(red: 0.2, green: 0.85, blue: 0.95), style: StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round))
             }
         }
