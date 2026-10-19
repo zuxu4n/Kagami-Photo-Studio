@@ -38,6 +38,8 @@ struct ContentView: View {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button { Task { await model.undo() } } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
                         .disabled(!model.canUndo || model.busy != nil)
+                    Button { Task { await model.redo() } } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
+                        .disabled(!model.canRedo || model.busy != nil)
                     Button("Save") { Task { await model.save() } }
                         .disabled(!model.hasImage || model.busy != nil)
                 }

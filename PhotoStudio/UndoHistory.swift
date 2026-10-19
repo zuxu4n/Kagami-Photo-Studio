@@ -30,24 +30,45 @@ struct UndoStep {
     var smooth: Float
 }
 
-/// Undo steps, newest last. Old steps are dropped once the saved pixels pass `maxBytes`, so a long session
-/// can't hold many full-size photos in memory (one 12 MP photo is about 48 MB).
+/// Undo and redo steps, newest last. Old undo steps are dropped once the saved pixels pass `maxBytes`, so a long
+/// session can't hold many full-size photos in memory (one 12 MP photo is about 48 MB). A new edit clears redo.
 struct UndoHistory {
     private(set) var steps: [UndoStep] = []
+    private(set) var redoSteps: [UndoStep] = []
     let maxSteps = 40
     let maxBytes = 200 * 1024 * 1024
 
     var canUndo: Bool { !steps.isEmpty }
+    var canRedo: Bool { !redoSteps.isEmpty }
 
+    /// A new edit: it can be undone, and anything undone before it can no longer be redone.
     mutating func push(_ step: UndoStep) {
+        redoSteps = []
+        pushUndo(step)
+    }
+
+    /// Adds an undo step without clearing redo (used when redoing).
+    mutating func pushUndo(_ step: UndoStep) {
         steps.append(step)
-        while steps.count > maxSteps || (steps.count > 1 && steps.reduce(0, { $0 + $1.pixels.bytes }) > maxBytes) {
-            steps.removeFirst()
-        }
+        trim()
+    }
+
+    mutating func pushRedo(_ step: UndoStep) {
+        redoSteps.append(step)
+        trim()
     }
 
     mutating func pop() -> UndoStep? { steps.popLast() }
-    mutating func clear() { steps = [] }
+    mutating func popRedo() -> UndoStep? { redoSteps.popLast() }
+    mutating func clear() { steps = []; redoSteps = [] }
+
+    /// Drops the oldest undo steps first, then the furthest redo steps, until both fit the limits.
+    private mutating func trim() {
+        func bytes() -> Int { (steps + redoSteps).reduce(0) { $0 + $1.pixels.bytes } }
+        while steps.count + redoSteps.count > maxSteps || (steps.count + redoSteps.count > 1 && bytes() > maxBytes) {
+            if !steps.isEmpty { steps.removeFirst() } else { redoSteps.removeFirst() }
+        }
+    }
 }
 
 extension RGBAImage {

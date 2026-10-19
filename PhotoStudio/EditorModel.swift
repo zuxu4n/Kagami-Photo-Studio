@@ -36,6 +36,7 @@ final class EditorModel: ObservableObject {
     private var warmedUp = false
     private var history = UndoHistory()
     @Published private(set) var canUndo = false
+    @Published private(set) var canRedo = false
     private var sliderStart: UndoStep?  // the state when a slider drag began
 
     let maxWorkingSide = 4032
@@ -185,6 +186,7 @@ final class EditorModel: ObservableObject {
         healsSinceEnhance = []
         history.clear()
         canUndo = false
+        canRedo = false
         toolShown(tool)
         info = "\(full.width)×\(full.height) · \(found.count) face(s)"
         record("Open + face landmarks", ms, peakMB: meter.stop(), extra: ["decode_ms": decodeMs])
@@ -339,6 +341,7 @@ final class EditorModel: ObservableObject {
     private func pushUndo(_ step: UndoStep) {
         history.push(step)
         canUndo = history.canUndo
+        canRedo = history.canRedo
     }
 
     /// A slider drag is one undo step: the values from when the finger went down.
@@ -354,9 +357,33 @@ final class EditorModel: ObservableObject {
 
     /// Puts back the photo, the Enhance switch and the slider values from before the last change.
     func undo() async {
-        guard busy == nil, var img = working, let step = history.pop() else { return }
+        guard busy == nil, working != nil, let step = history.pop() else { return }
+        let back = await restore(step, label: "Undo")
+        history.pushRedo(back)
         canUndo = history.canUndo
+        canRedo = history.canRedo
+    }
+
+    /// Puts back the last change that was undone.
+    func redo() async {
+        guard busy == nil, working != nil, let step = history.popRedo() else { return }
+        let back = await restore(step, label: "Redo")
+        history.pushUndo(back)
+        canUndo = history.canUndo
+        canRedo = history.canRedo
+    }
+
+    /// Applies `step` and returns the step that reverses it (the state just before, with the same pixels saved).
+    private func restore(_ step: UndoStep, label: String) async -> UndoStep {
         let t0 = CFAbsoluteTimeGetCurrent()
+        let current = working!
+        let reverse: PixelUndo
+        switch step.pixels {
+        case .unchanged: reverse = .unchanged
+        case .whole: reverse = .whole(current)
+        case .patch(let x, let y, let old): reverse = .patch(x: x, y: y, current.crop(CGRect(x: x, y: y, width: old.width, height: old.height)))
+        }
+        let back = undoStep(reverse)
         enhanceOn = step.enhanceOn
         unenhanced = step.unenhanced
         healsSinceEnhance = step.healsSinceEnhance
@@ -371,16 +398,18 @@ final class EditorModel: ObservableObject {
         case .unchanged:
             renderPreview()
         case .whole(let old):
-            busy = "Undoing…"
+            busy = label == "Undo" ? "Undoing…" : "Redoing…"
             defer { busy = nil }
             await setWorking(old, redetectFaces: false)
         case .patch(let x, let y, let old):
-            busy = "Undoing…"
+            busy = label == "Undo" ? "Undoing…" : "Redoing…"
             defer { busy = nil }
+            var img = current
             img.paste(old, x: x, y: y)
             await setWorking(img, redetectFaces: false)
         }
-        record("Undo", (CFAbsoluteTimeGetCurrent() - t0) * 1000)
+        record(label, (CFAbsoluteTimeGetCurrent() - t0) * 1000)
+        return back
     }
 
     // MARK: Live sliders (Smooth, Face shape)
