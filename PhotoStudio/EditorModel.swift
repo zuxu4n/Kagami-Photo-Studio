@@ -243,21 +243,10 @@ final class EditorModel: ObservableObject {
                 CGFloat(atan2(offset.y, offset.x)))
     }
 
-    /// Starts moving the Position oval when the finger lands on it, or on a face (which it selects first).
-    /// Returns false otherwise, so the drag can pan instead. `point` is in preview pixels.
-    func beginPosition(at point: CGPoint) -> Bool {
-        guard busy == nil, positionDrag == nil, let prev = preview else { return false }
-        let W = CGFloat(prev.width), H = CGFloat(prev.height)
-        var face = faceIndex(at: point)
-        if let h = positionHandle(), hypot(point.x - h.puck.x * W, point.y - h.puck.y * H) < h.major * W * 1.6 {
-            face = selectedFace   // on the oval, even where it sits outside the face
-        }
-        guard let i = face, !faces[i].mesh.isEmpty else { return false }
-        if i != selectedFace {
-            storeShape()
-            selectedFace = i
-            showSliders(shapes[i])
-        }
+    /// Starts moving the selected face's Position oval: a drag anywhere moves it (a tap on another face picks that
+    /// face). Returns false when there's nothing to move, so the drag can pan instead.
+    func beginPosition() -> Bool {
+        guard busy == nil, positionDrag == nil, let i = selectedFace, i < faces.count, !faces[i].mesh.isEmpty else { return false }
         sliderEditing(true)
         positionDrag = (i, SIMD2(positionX, positionY))
         return true

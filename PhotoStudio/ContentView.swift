@@ -161,7 +161,7 @@ struct ContentView: View {
                             positionDrag = false
                         } else if positionDrag == nil {
                             guard hypot(v.translation.width, v.translation.height) > 4 else { return }
-                            positionDrag = imagePoint(v.startLocation, in: geo.size).map { model.beginPosition(at: $0) } ?? false
+                            positionDrag = model.beginPosition()
                         }
                         if positionDrag == true, let a = imagePoint(v.startLocation, in: geo.size, clamp: false),
                            let b = imagePoint(v.location, in: geo.size, clamp: false) {
@@ -221,7 +221,7 @@ struct ContentView: View {
     }
 
     private var reshapeOn: Bool { model.tool == .face && model.reshaping }
-    /// The Face › Position oval is on the photo: one-finger drags on a face (or on the oval) move it.
+    /// The Face › Position oval is on the photo: a one-finger drag anywhere on the canvas moves it (instead of panning).
     private var positionOn: Bool { model.tool == .face && !model.reshaping && feature == .position && model.selectedHasMesh }
 
     /// Maps a tap in the view to preview pixel coordinates, undoing the zoom and pan first (the image is aspect-fit).
