@@ -245,7 +245,7 @@ struct ContentView: View {
                 sliderRow("Smooth skin", value: $model.smooth)
                 HStack { Text(model.faceCount == 0 ? "No face found" : "Edges, eyes and lips stay sharp").font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             case .heal:
-                sliderRow("Brush", value: $model.brush, range: 0.004...0.08, undoable: false)
+                sliderRow("Brush", value: $model.brush, range: 0.004...0.08, reset: 0.025, undoable: false)
                 Text("Tap a spot to remove it (LaMa, on device). Pinch to zoom in on small spots.").font(.caption).foregroundStyle(.secondary)
             case .face:
                 Picker("Face mode", selection: $model.reshaping) {
@@ -254,8 +254,8 @@ struct ContentView: View {
                 }
                 .pickerStyle(.segmented)
                 if model.reshaping {
-                    sliderRow("Size", value: $model.reshapeSize, range: 0.08...0.5, undoable: false)
-                    sliderRow("Strength", value: $model.reshapeStrength, range: 0.1...1, undoable: false)
+                    sliderRow("Size", value: $model.reshapeSize, range: 0.08...0.5, reset: 0.22, undoable: false)
+                    sliderRow("Strength", value: $model.reshapeStrength, range: 0.1...1, reset: 1, undoable: false)
                     HStack {
                         Text("Drag on a face to push it. Pinch to zoom; drag off the face to move around.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -326,13 +326,25 @@ struct ContentView: View {
             .onLongPressGesture(minimumDuration: 0, maximumDistance: 60, pressing: { comparing = $0 }, perform: {})
     }
 
-    private func sliderRow(_ title: String, value: Binding<Float>, range: ClosedRange<Float> = 0...1, undoable: Bool = true) -> some View {
+    /// A labelled slider with a reset button that puts it back to `reset` (greyed out while it's already there).
+    /// For undoable sliders the reset is one undo step, like a drag.
+    private func sliderRow(_ title: String, value: Binding<Float>, range: ClosedRange<Float> = 0...1, reset: Float = 0, undoable: Bool = true) -> some View {
         HStack {
             Text(title).font(.subheadline).frame(width: 96, alignment: .leading)
             Slider(value: value, in: range) { editing in
                 sliding = editing
                 if undoable { model.sliderEditing(editing) } else { brushRing = editing }
             }
+            Button {
+                if undoable { model.sliderEditing(true) }
+                value.wrappedValue = reset
+                if undoable { model.sliderEditing(false) }
+            } label: {
+                Image(systemName: "arrow.counterclockwise").font(.footnote.bold())
+            }
+            .buttonStyle(.borderless)
+            .disabled(abs(value.wrappedValue - reset) < 0.001 || model.busy != nil)
+            .accessibilityLabel("Reset \(title)")
         }
     }
 
