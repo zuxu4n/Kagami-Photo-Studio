@@ -97,8 +97,23 @@ final class EditorModel: ObservableObject {
         original = prev.uiImage()
         display = original
         smooth = 0; slim = 0; eyes = 0; nose = 0
+        smoothOpened = false
+        toolShown(tool)
         info = "\(full.width)×\(full.height) · \(found.count) face(s)"
         record("Open + face landmarks", ms, peakMB: meter.stop(), extra: ["decode_ms": decodeMs])
+    }
+
+    // MARK: Where Smooth starts
+
+    /// The Smooth slider's starting value the first time the Smooth tool is shown on a photo ((picked in testing)).
+    /// Photos that never go into Smooth aren't smoothed.
+    let smoothStart: Float = 0.3
+    private var smoothOpened = false
+
+    func toolShown(_ t: Tool) {
+        guard t == .smooth, !smoothOpened, hasImage else { return }
+        smoothOpened = true
+        if smooth < 0.001 { smooth = smoothStart }
     }
 
     // MARK: Enhance (Real-ESRGAN from the photo's own pixels, faces kept as they are; destructive)
