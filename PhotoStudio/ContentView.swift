@@ -189,9 +189,9 @@ struct ContentView: View {
     }
 }
 
-/// Two thin curves bracketing the face being shaped, drawn over the aspect-fit photo.
+/// Two thin curves bracketing each face, drawn over the aspect-fit photo: cyan on the selected face, white on the others.
 private struct FaceGuides: View {
-    let curves: (CGFloat) -> [[CGPoint]]     // normalised, top-left origin; takes the minimum gap in image pixels
+    let curves: (CGFloat) -> [(curves: [[CGPoint]], selected: Bool)]   // normalised, top-left origin; takes the minimum gap in image pixels
     let imageSize: CGSize
 
     var body: some View {
@@ -199,21 +199,26 @@ private struct FaceGuides: View {
             let s = min(geo.size.width / max(imageSize.width, 1), geo.size.height / max(imageSize.height, 1))
             let fw = imageSize.width * s, fh = imageSize.height * s
             let ox = (geo.size.width - fw) / 2, oy = (geo.size.height - fh) / 2
-            let curves = self.curves(14 / max(s, 0.001))   // never closer than 14 points on screen
-            let path = Path { p in
-                for c in curves where c.count > 1 {
-                    let v = c.map { CGPoint(x: ox + $0.x * fw, y: oy + $0.y * fh) }
-                    // Smooth curve through the landmarks: quadratic segments between midpoints.
-                    p.move(to: v[0])
-                    for i in 1..<v.count - 1 {
-                        let mid = CGPoint(x: (v[i].x + v[i + 1].x) / 2, y: (v[i].y + v[i + 1].y) / 2)
-                        p.addQuadCurve(to: mid, control: v[i])
-                    }
-                    p.addLine(to: v[v.count - 1])
-                }
-            }
+            let faces = self.curves(14 / max(s, 0.001))   // never closer than 14 points on screen
+            let style = StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round)
             ZStack {
-                path.stroke(Color(red: 0.2, green: 0.85, blue: 0.95), style: StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round))
+                Self.path(faces.filter { !$0.selected }.flatMap(\.curves), ox, oy, fw, fh).stroke(Color.white, style: style)
+                Self.path(faces.filter(\.selected).flatMap(\.curves), ox, oy, fw, fh).stroke(Color(red: 0.2, green: 0.85, blue: 0.95), style: style)
+            }
+        }
+    }
+
+    /// Smooth curves through the landmarks (quadratic segments between midpoints), placed on the fitted photo.
+    private static func path(_ curves: [[CGPoint]], _ ox: CGFloat, _ oy: CGFloat, _ fw: CGFloat, _ fh: CGFloat) -> Path {
+        Path { p in
+            for c in curves where c.count > 1 {
+                let v = c.map { CGPoint(x: ox + $0.x * fw, y: oy + $0.y * fh) }
+                p.move(to: v[0])
+                for i in 1..<v.count - 1 {
+                    let mid = CGPoint(x: (v[i].x + v[i + 1].x) / 2, y: (v[i].y + v[i + 1].y) / 2)
+                    p.addQuadCurve(to: mid, control: v[i])
+                }
+                p.addLine(to: v[v.count - 1])
             }
         }
     }

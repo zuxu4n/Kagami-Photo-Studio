@@ -41,11 +41,14 @@ final class EditorModel: ObservableObject {
     var hasImage: Bool { working != nil }
     var previewSize: CGSize { preview.map { CGSize(width: $0.width, height: $0.height) } ?? .zero }
 
-    /// Outline guides for the Face tab, on the selected face (the one the sliders change).
-    /// `minGap` is the smallest gap between the face and its guide, in preview pixels.
-    func faceGuides(minGap: CGFloat) -> [[CGPoint]] {
-        guard let prev = preview, let i = selectedFace, i < faces.count else { return [] }
-        return FaceAnalyzer.guideCurves(for: faces[i], width: prev.width, height: prev.height, slim: slim, minGap: minGap)
+    /// Outline guides for the Face tab, on every face, each following its own Slim value. `selected` marks the
+    /// face the sliders change. `minGap` is the smallest gap between a face and its guide, in preview pixels.
+    func faceGuides(minGap: CGFloat) -> [(curves: [[CGPoint]], selected: Bool)] {
+        guard let prev = preview else { return [] }
+        return faces.indices.map { i in
+            let s = i == selectedFace ? slim : (i < shapes.count ? shapes[i].slim : 0)
+            return (FaceAnalyzer.guideCurves(for: faces[i], width: prev.width, height: prev.height, slim: s, minGap: minGap), i == selectedFace)
+        }
     }
 
     // MARK: Which face the Face tab edits
