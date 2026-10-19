@@ -157,8 +157,18 @@ enum FaceAnalyzer {
         // Both the shape and the ends come from the detected outline: each side is the outline itself, moved
         // outward by a fixed gap along its own normal, from its top point down to where the jaw turns towards
         // the chin (the outline gets flatter than 45 degrees). The chin stays open.
+        // Where they end is set by the size of the head: both sides stop at the same level, 80% of the way from
+        // the eyes down to the chin. That distance shrinks when the photo is taken from above, so those guides
+        // come out shorter too.
         let cx = pts.map(\.x).reduce(0, +) / CGFloat(n), cy = pts.map(\.y).reduce(0, +) / CGFloat(n)
         let gap = max(f.box.width * W * 0.1, minGap)   // minGap (pixels) keeps small, distant faces readable
+        let eyePts = (f.leftEye + f.rightEye).map { CGPoint(x: $0.x * W, y: $0.y * H) }
+        let chin = pts[n / 2]
+        let eyes = eyePts.isEmpty ? CGPoint(x: cx, y: cy)
+            : CGPoint(x: eyePts.map(\.x).reduce(0, +) / CGFloat(eyePts.count), y: eyePts.map(\.y).reduce(0, +) / CGFloat(eyePts.count))
+        let down = CGVector(dx: chin.x - eyes.x, dy: chin.y - eyes.y)          // eyes -> chin, follows head tilt
+        let dd = max(down.dx * down.dx + down.dy * down.dy, 1)
+        func level(_ p: CGPoint) -> CGFloat { ((p.x - eyes.x) * down.dx + (p.y - eyes.y) * down.dy) / dd }   // 0 at the eyes, 1 at the chin
         func side(_ s: [CGPoint]) -> [CGPoint] {
             func tangent(_ i: Int) -> CGVector {
                 let a = s[max(i - 1, 0)], b = s[min(i + 1, s.count - 1)]
@@ -167,12 +177,13 @@ enum FaceAnalyzer {
             }
             var last = s.count - 1
             for i in 1..<s.count where abs(tangent(i).dy) < abs(tangent(i).dx) { last = i; break }
-            return (0...last).map { i in
+            let curve = (0...last).map { i in
                 let t = tangent(i)
                 var nx = -t.dy, ny = t.dx
                 if nx * (s[i].x - cx) + ny * (s[i].y - cy) < 0 { nx = -nx; ny = -ny }   // point away from the face
-                return CGPoint(x: (s[i].x + nx * gap) / W, y: (s[i].y + ny * gap) / H)
+                return CGPoint(x: s[i].x + nx * gap, y: s[i].y + ny * gap)
             }
+            return trim(curve, atLevel: 0.8, level).map { CGPoint(x: $0.x / W, y: $0.y / H) }
         }
         let m = n / 2 + 1   // top point on each side through to the one beside the chin
         return [side(Array(pts.prefix(m))), side(Array(pts.suffix(m).reversed()))].map(smoothed)
@@ -203,20 +214,18 @@ enum FaceAnalyzer {
         return p
     }
 
-    /// The polyline cut to the first `keep` fraction of its length.
-    static func trimEnd(_ pts: [CGPoint], keep: CGFloat) -> [CGPoint] {
-        guard pts.count > 1 else { return pts }
-        let segs = zip(pts, pts.dropFirst()).map { hypot($1.x - $0.x, $1.y - $0.y) }
-        var left = segs.reduce(0, +) * keep
-        var out = [pts[0]]
-        for (i, len) in segs.enumerated() {
-            if len >= left {
-                let u = len > 0 ? left / len : 0
-                out.append(CGPoint(x: pts[i].x + (pts[i + 1].x - pts[i].x) * u, y: pts[i].y + (pts[i + 1].y - pts[i].y) * u))
+    /// The polyline up to where `level` first reaches `cut` (interpolated), or all of it if it never does.
+    static func trim(_ pts: [CGPoint], atLevel cut: CGFloat, _ level: (CGPoint) -> CGFloat) -> [CGPoint] {
+        guard let first = pts.first else { return pts }
+        var out = [first]
+        for (a, b) in zip(pts, pts.dropFirst()) {
+            let la = level(a), lb = level(b)
+            if lb >= cut {
+                let u = lb > la ? max(0, (cut - la) / (lb - la)) : 0
+                out.append(CGPoint(x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u))
                 return out
             }
-            out.append(pts[i + 1])
-            left -= len
+            out.append(b)
         }
         return out
     }
