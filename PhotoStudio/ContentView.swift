@@ -43,6 +43,10 @@ struct ContentView: View {
             } message: {
                 Text(model.error ?? "")
             }
+            .task { await model.warmUp() }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+                model.noteMemoryWarning()
+            }
         }
     }
 

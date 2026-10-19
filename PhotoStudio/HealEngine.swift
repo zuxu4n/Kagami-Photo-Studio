@@ -8,8 +8,30 @@ final class HealEngine {
 
     let size = 512
     private var model: MLModel?
+    private let lock = NSLock()  // the launch warm-up and a tap can both ask for the model
 
     func loadIfNeeded() throws -> MLModel {
+        lock.lock()
+        defer { lock.unlock() }
+        return try load()
+    }
+
+    /// Loads the model and runs one blank 512 pass, so the first real Heal doesn't pay for setup.
+    /// Returns (load ms, first-run ms), or nil if the model was already loaded.
+    func warmUp() throws -> (load: Double, run: Double)? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard model == nil else { return nil }
+        let t0 = CFAbsoluteTimeGetCurrent()
+        let m = try load()
+        let t1 = CFAbsoluteTimeGetCurrent()
+        let image = try MLTensors.rgbTensor(from: RGBAImage(width: size, height: size), x0: 0, y0: 0, size: size)
+        let mask = try MLTensors.maskTensor(from: [UInt8](repeating: 0, count: size * size), size: size)
+        _ = try m.prediction(from: MLDictionaryFeatureProvider(dictionary: ["image": image, "mask": mask]))
+        return ((t1 - t0) * 1000, (CFAbsoluteTimeGetCurrent() - t1) * 1000)
+    }
+
+    private func load() throws -> MLModel {
         if let model { return model }
         let cfg = MLModelConfiguration()
         cfg.computeUnits = .cpuAndGPU

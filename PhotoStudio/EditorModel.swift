@@ -28,6 +28,7 @@ final class EditorModel: ObservableObject {
     private var preview: RGBAImage?     // long side <= previewSide, for live sliders
     private var faces: [FaceGeometry] = []
     private var renderTask: Task<Void, Never>?
+    private var warmedUp = false
 
     let maxWorkingSide = 4032
     let previewSide = 1600
@@ -35,15 +36,53 @@ final class EditorModel: ObservableObject {
     var hasImage: Bool { working != nil }
     var previewSize: CGSize { preview.map { CGSize(width: $0.width, height: $0.height) } ?? .zero }
 
+    // MARK: Warm-up at launch, so the first tap on each tool isn't slow
+
+    /// Compiles the slider GPU code, then loads the Heal and Enhance models in the background, one at a time.
+    /// A tap that needs a model while it's still loading waits for that load instead of starting another.
+    func warmUp() async {
+        guard !warmedUp else { return }
+        warmedUp = true
+        let (gpuMs, gpuPeak) = await Task.detached(priority: .userInitiated) { () -> (Double, Double) in
+            let meter = MemoryMeter()
+            let t0 = CFAbsoluteTimeGetCurrent()
+            GPU.shared.warmUp()
+            return ((CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
+        }.value
+        record("Warm-up: slider GPU code", gpuMs, peakMB: gpuPeak)
+        await warmModel("Heal") { try HealEngine.shared.warmUp() }  // biggest first-use cost (about 3.5 s), so first
+        await warmModel("Enhance") { try EnhanceEngine.shared.warmUp() }
+    }
+
+    private func warmModel(_ name: String, _ body: @escaping @Sendable () throws -> (load: Double, run: Double)?) async {
+        let (times, peak, failure) = await Task.detached(priority: .userInitiated) { () -> ((load: Double, run: Double)?, Double, String?) in
+            let meter = MemoryMeter()
+            do { return (try body(), meter.stop(), nil) } catch { return (nil, meter.stop(), error.localizedDescription) }
+        }.value
+        if let failure {
+            record("Warm-up: \(name) failed (\(failure))", 0, peakMB: peak)
+        } else if let times {  // nil when a tap loaded the model first
+            record("Warm-up: \(name) model", times.load + times.run, peakMB: peak,
+                   extra: ["load_ms": times.load, "first_run_ms": times.run])
+        }
+    }
+
+    func noteMemoryWarning() {
+        record("Memory warning", 0)
+    }
+
     // MARK: Loading
 
     func load(data: Data) async {
         busy = "Opening…"
         defer { busy = nil }
+        let meter = MemoryMeter()
+        let td = CFAbsoluteTimeGetCurrent()
         guard let ui = UIImage(data: data), let cg = ui.normalizedCGImage(maxSide: maxWorkingSide) else {
             error = "Couldn't read that photo."
             return
         }
+        let decodeMs = (CFAbsoluteTimeGetCurrent() - td) * 1000
         let (full, prev, found, ms) = await Task.detached(priority: .userInitiated) { () -> (RGBAImage, RGBAImage, [FaceGeometry], Double) in
             let t0 = CFAbsoluteTimeGetCurrent()
             let full = RGBAImage(cgImage: cg)
@@ -59,7 +98,7 @@ final class EditorModel: ObservableObject {
         display = original
         smooth = 0; slim = 0; eyes = 0; nose = 0
         info = "\(full.width)×\(full.height) · \(found.count) face(s)"
-        record("Open + face landmarks", ms)
+        record("Open + face landmarks", ms, peakMB: meter.stop(), extra: ["decode_ms": decodeMs])
     }
 
     // MARK: Enhance (Real-ESRGAN, destructive)
@@ -69,12 +108,13 @@ final class EditorModel: ObservableObject {
         busy = "Enhancing…"
         defer { busy = nil }
         do {
-            let (out, ms) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double) in
+            let (out, ms, peak) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double, Double) in
+                let meter = MemoryMeter()
                 let t0 = CFAbsoluteTimeGetCurrent()
                 let out = try EnhanceEngine.shared.enhance(src, maxInputSide: 1024)
-                return (out, (CFAbsoluteTimeGetCurrent() - t0) * 1000)
+                return (out, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
-            record("Enhance x4 (\(out.width)×\(out.height))", ms)
+            record("Enhance x4 (\(out.width)×\(out.height))", ms, peakMB: peak)
             await setWorking(out)
         } catch {
             self.error = error.localizedDescription
@@ -92,7 +132,8 @@ final class EditorModel: ObservableObject {
         let cx = Int(point.x * sx), cy = Int(point.y * sx)
         let radius = max(4, Int(Double(brush) * Double(img.width)))
         do {
-            let (out, ms) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double) in
+            let (out, ms, peak) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double, Double) in
+                let meter = MemoryMeter()
                 let t0 = CFAbsoluteTimeGetCurrent()
                 var mask = [UInt8](repeating: 0, count: img.width * img.height)
                 let r2 = radius * radius
@@ -103,9 +144,9 @@ final class EditorModel: ObservableObject {
                     }
                 }
                 try HealEngine.shared.heal(&img, mask: mask)
-                return (img, (CFAbsoluteTimeGetCurrent() - t0) * 1000)
+                return (img, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
-            record("Heal spot r=\(radius)px", ms)
+            record("Heal spot r=\(radius)px", ms, peakMB: peak)
             await setWorking(out, redetectFaces: false)
         } catch {
             self.error = error.localizedDescription
@@ -139,14 +180,15 @@ final class EditorModel: ObservableObject {
         renderTask = Task {
             try? await Task.sleep(nanoseconds: 15_000_000)  // coalesce slider ticks
             if Task.isCancelled { return }
-            let (img, ms) = await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double) in
+            let (img, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double, Double) in
+                let meter = MemoryMeter()
                 let t0 = CFAbsoluteTimeGetCurrent()
                 let out = EditorModel.apply(prev, faces: faces, smooth: params.0, slim: params.1, eyes: params.2, nose: params.3)
-                return (out, (CFAbsoluteTimeGetCurrent() - t0) * 1000)
+                return (out, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
             if Task.isCancelled { return }
             display = img.uiImage()
-            record("Preview render \(prev.width)×\(prev.height)", ms)
+            record("Preview render \(prev.width)×\(prev.height)", ms, peakMB: peak)
         }
     }
 
@@ -180,13 +222,14 @@ final class EditorModel: ObservableObject {
         }
         let params = (smooth, slim, eyes, nose)
         let faces = self.faces
-        let (data, ms) = await Task.detached(priority: .userInitiated) { () -> (Data?, Double) in
+        let (data, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (Data?, Double, Double) in
+            let meter = MemoryMeter()
             let t0 = CFAbsoluteTimeGetCurrent()
             let out = EditorModel.apply(img, faces: faces, smooth: params.0, slim: params.1, eyes: params.2, nose: params.3)
             let data = out.uiImage().jpegData(compressionQuality: 0.95)
-            return (data, (CFAbsoluteTimeGetCurrent() - t0) * 1000)
+            return (data, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
         }.value
-        record("Full-size render + JPEG (\(img.width)×\(img.height))", ms)
+        record("Full-size render + JPEG (\(img.width)×\(img.height))", ms, peakMB: peak)
         guard let data else { error = "Couldn't encode the photo."; return }
         do {
             try await PHPhotoLibrary.shared().performChanges {
@@ -205,12 +248,22 @@ final class EditorModel: ObservableObject {
 
     // MARK: Timings (also written to Documents/timings.json for collection over USB)
 
-    private func record(_ label: String, _ ms: Double) {
+    private static let logQueue = DispatchQueue(label: "timings-log", qos: .utility)  // one file writer at a time
+
+    /// Logs a timing with this app's memory: mem_mb now, peak_mb during the tool, avail_mb left before iOS would
+    /// close the app, and the working photo's size.
+    private func record(_ label: String, _ ms: Double, peakMB: Double? = nil, extra: [String: Double] = [:]) {
         timings.removeAll { $0.0 == label }
         timings.insert((label, ms), at: 0)
         if timings.count > 8 { timings.removeLast() }
-        let entry: [String: Any] = ["label": label, "ms": (ms * 10).rounded() / 10, "at": ISO8601DateFormatter().string(from: Date())]
-        Task.detached(priority: .utility) {
+        func r1(_ v: Double) -> Double { (v * 10).rounded() / 10 }
+        var entry: [String: Any] = ["label": label, "ms": r1(ms), "at": ISO8601DateFormatter().string(from: Date()),
+                                    "mem_mb": r1(MemoryMeter.footprintMB())]
+        if let peakMB { entry["peak_mb"] = r1(peakMB) }
+        if let free = MemoryMeter.availableMB() { entry["avail_mb"] = r1(free) }
+        if let w = working { entry["photo"] = "\(w.width)x\(w.height)" }
+        for (k, v) in extra { entry[k] = r1(v) }
+        EditorModel.logQueue.async {
             let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("timings.json")
             var all = (try? JSONSerialization.jsonObject(with: Data(contentsOf: url))) as? [[String: Any]] ?? []
             all.append(entry)

@@ -8,8 +8,29 @@ final class EnhanceEngine {
     let overlap = 32
     let scale = 4
     private var model: MLModel?
+    private let lock = NSLock()  // the launch warm-up and a tap can both ask for the model
 
     func loadIfNeeded() throws -> MLModel {
+        lock.lock()
+        defer { lock.unlock() }
+        return try load()
+    }
+
+    /// Loads the model and runs one blank tile, so the first real Enhance doesn't pay for setup.
+    /// Returns (load ms, first-run ms), or nil if the model was already loaded.
+    func warmUp() throws -> (load: Double, run: Double)? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard model == nil else { return nil }
+        let t0 = CFAbsoluteTimeGetCurrent()
+        let m = try load()
+        let t1 = CFAbsoluteTimeGetCurrent()
+        let blank = try MLTensors.rgbTensor(from: RGBAImage(width: tile, height: tile), x0: 0, y0: 0, size: tile)
+        _ = try m.prediction(from: MLDictionaryFeatureProvider(dictionary: ["input": blank]))
+        return ((t1 - t0) * 1000, (CFAbsoluteTimeGetCurrent() - t1) * 1000)
+    }
+
+    private func load() throws -> MLModel {
         if let model { return model }
         let cfg = MLModelConfiguration()
         cfg.computeUnits = .all  // fastest for this model in the M1 test (Neural Engine + GPU)

@@ -17,6 +17,14 @@ final class GPU {
         warpPSO = try! device.makeComputePipelineState(function: lib.makeFunction(name: "faceWarp")!)
     }
 
+    /// Runs each kernel once on a tiny image. The kernels compile in init (on first use of `shared`), so calling
+    /// this at launch keeps that cost off the first slider move.
+    func warmUp() {
+        let img = RGBAImage(width: 8, height: 8)
+        _ = smooth(img, mask: [UInt8](repeating: 255, count: 64), maskWidth: 8, maskHeight: 8, strength: 1, radius: 3)
+        _ = warp(img, ops: [WarpOp(c: SIMD2(4, 4), r: 3, kind: 0, m: SIMD2(1, 0), s: 0)])
+    }
+
     private func texture(_ img: RGBAImage) -> MTLTexture {
         let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: img.width, height: img.height, mipmapped: false)
         d.usage = [.shaderRead, .shaderWrite]
