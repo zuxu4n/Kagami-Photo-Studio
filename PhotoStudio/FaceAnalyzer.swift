@@ -27,7 +27,11 @@ struct FacePush: Equatable {
 /// The Face tab's slider values and Reshape pushes for one face. Each face keeps its own.
 struct FaceShape: Equatable {
     var slim: Float = 0       // -1...1, Jawline: slimmer or fuller (Apple Vision's outline)
-    var eyes: Float = 0
+    var eyes: Float = 0       // -1...1, Eyes › Size: smaller or bigger (Apple Vision's eyes)
+    var eyeWidth: Float = 0   // -1...1, shorter or longer from corner to corner
+    var eyeHeight: Float = 0  // -1...1, less or more open
+    var eyeTilt: Float = 0    // -1...1, outer corners down or up
+    var eyeDistance: Float = 0   // -1...1, closer together or further apart
     var nose: Float = 0       // 0...1, Nose › Narrow: a slimmer bridge
     var noseSize: Float = 0   // -1...1, smaller or bigger nose
     var noseWidth: Float = 0  // -1...1, narrower or wider nostrils and wings
@@ -50,11 +54,12 @@ struct FaceShape: Equatable {
     var pushes: [FacePush] = []   // in the order they were made; applied after the sliders
     var meshOff: Bool {
         abs(size) <= 0.001 && abs(width) <= 0.001 && abs(perspective) <= 0.001 && abs(positionX) <= 0.001 && abs(positionY) <= 0.001
+            && abs(eyeWidth) <= 0.001 && abs(eyeHeight) <= 0.001 && abs(eyeTilt) <= 0.001 && abs(eyeDistance) <= 0.001
             && nose <= 0.001 && abs(noseSize) <= 0.001 && abs(noseWidth) <= 0.001 && abs(noseLift) <= 0.001 && abs(noseTip) <= 0.001
             && abs(jaw) <= 0.001 && abs(chin) <= 0.001 && abs(jawSize) <= 0.001 && define <= 0.001 && abs(jawLength) <= 0.001
             && abs(lips) <= 0.001 && smile <= 0.001 && abs(smirk) <= 0.001 && abs(forehead) <= 0.001
     }
-    var isOff: Bool { abs(slim) <= 0.001 && eyes <= 0.001 && meshOff && pushes.isEmpty }
+    var isOff: Bool { abs(slim) <= 0.001 && abs(eyes) <= 0.001 && meshOff && pushes.isEmpty }
 }
 
 /// Matches the Metal `WarpOp` struct (32 bytes).
@@ -72,7 +77,8 @@ struct WarpOp {
 enum TranslateGroup {
     static let jawline: Float = 1, nose: Float = 2, jaw: Float = 3, chin: Float = 4, lips: Float = 5, mouth: Float = 6,
                forehead: Float = 7, jawSize: Float = 8, define: Float = 9, jawLength: Float = 10, noseSize: Float = 11,
-               noseWidth: Float = 12, noseLift: Float = 13
+               noseWidth: Float = 12, noseLift: Float = 13, eyeWidth: Float = 14, eyeHeight: Float = 15, eyeTilt: Float = 16,
+               eyeDistance: Float = 17
 }
 
 enum FaceAnalyzer {
@@ -186,7 +192,7 @@ enum FaceAnalyzer {
                     ops.append(WarpOp(c: c, r: 0.25 * faceW, kind: 0, m: SIMD2(dir * amount * faceW, 0), s: TranslateGroup.jawline))
                 }
             }
-            if eyes > 0.001 {
+            if abs(eyes) > 0.001 {   // Eyes › Size: a bulge on each eye, or a pinch for smaller
                 for eye in [f.leftEye, f.rightEye] where eye.count > 2 {
                     let xs = eye.map { Float($0.x) * W }
                     let eyeW = (xs.max() ?? 0) - (xs.min() ?? 0)
@@ -211,6 +217,13 @@ enum FaceAnalyzer {
 
     /// Most slider handles kept across all faces. Biggest faces come first, so background faces are dropped first.
     static let maxSliderOps = 160
+
+    /// One eye in MediaPipe's mesh: its corners, the upper and lower lid from the outer corner in, and the iris centre.
+    struct MeshEye { let outer: Int, inner: Int, upper: [Int], lower: [Int], iris: Int }
+    static let meshEyes = [
+        MeshEye(outer: 33, inner: 133, upper: [246, 161, 160, 159, 158, 157, 173], lower: [7, 163, 144, 145, 153, 154, 155], iris: 468),
+        MeshEye(outer: 263, inner: 362, upper: [466, 388, 387, 386, 385, 384, 398], lower: [249, 390, 373, 374, 380, 381, 382], iris: 473),
+    ]
 
     /// The lower part of the outline, from beside one ear round the chin (index 10) to beside the other.
     static let lowerOutline = [234, 93, 132, 58, 172, 136, 150, 149, 176, 148, 152, 377, 400, 378, 379, 365, 397, 288, 361, 323, 454]
@@ -307,6 +320,65 @@ enum FaceAnalyzer {
             move([152, 148, 377], r: 0.3 * faceW) { _ in down * s.chin * 0.05 * faceW }
             hold([17, 84, 314], r: 0.12 * faceW)
         }
+        // Eyes tab, each eye on its own: its centre, its corner-to-corner width and the direction of its outer corner.
+        // Each slider adds both eyes' handles together, so they blend as one group.
+        let eyes = meshEyes.map { e -> (e: MeshEye, contour: [Int], c: SIMD2<Float>, w: Float, out: SIMD2<Float>) in
+            let contour = [e.outer] + e.upper + [e.inner] + e.lower
+            let c = contour.map { m[$0] }.reduce(SIMD2<Float>(0, 0), +) / Float(contour.count)
+            return (e, contour, c, simd_length(m[e.outer] - m[e.inner]), simd_normalize(m[e.outer] - m[e.inner]))
+        }
+        // Lid points count less towards the corners (the first and last of each lid are next to a corner).
+        func taper(_ i: Int, _ n: Int) -> Float { 1 - 0.5 * abs(Float(i) - Float(n - 1) / 2) / (Float(n - 1) / 2) }
+        if abs(s.eyeWidth) > 0.001 {
+            // Longer (positive) or shorter from corner to corner: the outer corner moves along the eye's own line,
+            // the inner corner half as far (so the eyes don't crowd the nose). The iris keeps its shape.
+            group = TranslateGroup.eyeWidth
+            for (e, _, _, eyeW, out) in eyes {
+                let d = out * s.eyeWidth * 0.12 * eyeW
+                move([e.outer], r: 0.45 * eyeW) { _ in d }
+                move([e.upper[0], e.lower[0]], r: 0.35 * eyeW) { _ in d * 0.6 }
+                move([e.inner], r: 0.35 * eyeW) { _ in -d * 0.5 }
+                move([e.upper[e.upper.count - 1], e.lower[e.lower.count - 1]], r: 0.3 * eyeW) { _ in -d * 0.3 }
+                hold([e.iris], r: 0.2 * eyeW)
+            }
+        }
+        if abs(s.eyeHeight) > 0.001 {
+            // More open (positive) or less: the upper lid moves up and the lower lid down half as far, most in the
+            // middle. The corners stay.
+            group = TranslateGroup.eyeHeight
+            for (e, _, _, eyeW, _) in eyes {
+                for (i, k) in e.upper.enumerated() {
+                    move([k], r: 0.3 * eyeW) { _ in -down * s.eyeHeight * 0.08 * eyeW * taper(i, e.upper.count) }
+                }
+                for (i, k) in e.lower.enumerated() {
+                    move([k], r: 0.3 * eyeW) { _ in down * s.eyeHeight * 0.04 * eyeW * taper(i, e.lower.count) }
+                }
+                hold([e.outer, e.inner], r: 0.2 * eyeW)
+            }
+        }
+        if abs(s.eyeTilt) > 0.001 {
+            // Each eye turns about its centre so its outer corner goes up (positive) or down, up to 7 degrees.
+            group = TranslateGroup.eyeTilt
+            for (e, contour, c, eyeW, out) in eyes {
+                let angle = s.eyeTilt * 0.12 * (simd_dot(out, across) < 0 ? 1 : -1)
+                let (co, si) = (cos(angle), sin(angle))
+                move(contour + [e.iris], r: 0.4 * eyeW) { p in
+                    let d = p - c
+                    return SIMD2(d.x * co - d.y * si, d.x * si + d.y * co) - d
+                }
+            }
+        }
+        if abs(s.eyeDistance) > 0.001 {
+            // Each whole eye towards the middle of the face (closer, negative) or away from it. The bridge of the
+            // nose stays.
+            group = TranslateGroup.eyeDistance
+            for (e, contour, c, eyeW, _) in eyes {
+                let away = simd_dot(c - mid, across) < 0 ? -across : across
+                move(contour + [e.iris], r: 0.45 * eyeW) { _ in away * s.eyeDistance * 0.15 * eyeW }
+            }
+            hold([168, 6, 197], r: 0.08 * faceW)
+        }
+
         // Nose tab. The nose's own axis runs from between the eyes (168) to the tip (1); its width is wing to wing.
         let noseAxis = simd_normalize(m[1] - m[168])
         let noseW = simd_length(m[327] - m[98])
