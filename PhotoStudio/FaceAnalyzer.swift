@@ -159,7 +159,7 @@ enum FaceAnalyzer {
         // the chin (the outline gets flatter than 45 degrees). The chin stays open.
         // Where they end is set by the size of the head: both sides stop at the same level, 88% of the way from
         // the eyes down to the chin. That distance shrinks when the photo is taken from above, so those guides
-        // come out shorter too.
+        // come out shorter too. On a turned face the side facing the camera runs further down (up to 103%).
         let cx = pts.map(\.x).reduce(0, +) / CGFloat(n), cy = pts.map(\.y).reduce(0, +) / CGFloat(n)
         let gap = max(f.box.width * W * 0.1, minGap)   // minGap (pixels) keeps small, distant faces readable
         let eyePts = (f.leftEye + f.rightEye).map { CGPoint(x: $0.x * W, y: $0.y * H) }
@@ -169,7 +169,15 @@ enum FaceAnalyzer {
         let down = CGVector(dx: chin.x - eyes.x, dy: chin.y - eyes.y)          // eyes -> chin, follows head tilt
         let dd = max(down.dx * down.dx + down.dy * down.dy, 1)
         func level(_ p: CGPoint) -> CGFloat { ((p.x - eyes.x) * down.dx + (p.y - eyes.y) * down.dy) / dd }   // 0 at the eyes, 1 at the chin
-        func side(_ s: [CGPoint]) -> [CGPoint] {
+        // How far the face is turned: the nose sits closer to the far side's end of the outline. Small
+        // differences on front-on faces are ignored.
+        let nose = f.nose.isEmpty ? eyes : CGPoint(x: f.nose.map(\.x).reduce(0, +) / CGFloat(f.nose.count) * W,
+                                                   y: f.nose.map(\.y).reduce(0, +) / CGFloat(f.nose.count) * H)
+        let dFirst = hypot(nose.x - pts[0].x, nose.y - pts[0].y), dLast = hypot(nose.x - pts[n - 1].x, nose.y - pts[n - 1].y)
+        let turn = (dLast - dFirst) / max(dLast + dFirst, 1) * 2        // > 0: turned so the `last` side faces the camera
+        let turnAmount = min(1, max(0, abs(turn) - 0.3) / 0.7)
+        let nearCut = 0.88 + 0.15 * turnAmount
+        func side(_ s: [CGPoint], cut: CGFloat) -> [CGPoint] {
             func tangent(_ i: Int) -> CGVector {
                 let a = s[max(i - 1, 0)], b = s[min(i + 1, s.count - 1)]
                 let len = max(hypot(b.x - a.x, b.y - a.y), 1e-6)
@@ -183,10 +191,11 @@ enum FaceAnalyzer {
                 if nx * (s[i].x - cx) + ny * (s[i].y - cy) < 0 { nx = -nx; ny = -ny }   // point away from the face
                 return CGPoint(x: s[i].x + nx * gap, y: s[i].y + ny * gap)
             }
-            return trim(curve, atLevel: 0.88, level).map { CGPoint(x: $0.x / W, y: $0.y / H) }
+            return trim(curve, atLevel: cut, level).map { CGPoint(x: $0.x / W, y: $0.y / H) }
         }
         let m = n / 2 + 1   // top point on each side through to the one beside the chin
-        return [side(Array(pts.prefix(m))), side(Array(pts.suffix(m).reversed()))].map(smoothed)
+        return [side(Array(pts.prefix(m)), cut: turn < 0 ? nearCut : 0.88),
+                side(Array(pts.suffix(m).reversed()), cut: turn > 0 ? nearCut : 0.88)].map(smoothed)
     }
 
     // MARK: Geometry helpers
