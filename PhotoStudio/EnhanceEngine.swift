@@ -10,6 +10,7 @@ final class EnhanceEngine {
     let overlap = 32
     let scale = 4
     private var model: MLModel?
+    private var neuralEngineModel: MLModel?, gpuModel: MLModel?  // for sharing tiles; loaded on first use
     private let lock = NSLock()  // the launch warm-up and a tap can both ask for the model
 
     func loadIfNeeded() throws -> MLModel {
@@ -30,6 +31,38 @@ final class EnhanceEngine {
         let blank = try MLTensors.rgbTensor(from: RGBAImage(width: tile, height: tile), x0: 0, y0: 0, size: tile)
         _ = try m.prediction(from: MLDictionaryFeatureProvider(dictionary: ["input": blank]))
         return ((t1 - t0) * 1000, (CFAbsoluteTimeGetCurrent() - t1) * 1000)
+    }
+
+    /// One copy of the model on the Neural Engine and one on the GPU, so runTiles can share the tiles between them.
+    func splitModels() throws -> [MLModel] {
+        lock.lock()
+        defer { lock.unlock() }
+        func make(_ units: MLComputeUnits) throws -> MLModel {
+            let cfg = MLModelConfiguration()
+            cfg.computeUnits = units
+            guard let url = Bundle.main.url(forResource: "RealESRGANGeneralX4", withExtension: "mlmodelc") else {
+                throw EngineError.missingModel("RealESRGANGeneralX4")
+            }
+            return try MLModel(contentsOf: url, configuration: cfg)
+        }
+        if neuralEngineModel == nil { neuralEngineModel = try make(.cpuAndNeuralEngine) }
+        if gpuModel == nil { gpuModel = try make(.cpuAndGPU) }
+        return [neuralEngineModel!, gpuModel!]
+    }
+
+    /// Time spent in each step of runTiles, summed over tiles, in milliseconds. With several models the steps of
+    /// different tiles overlap, so the sums can exceed the wall-clock time.
+    final class TileStats {
+        private(set) var prepare = 0.0, predict = 0.0, toPixels = 0.0, resize = 0.0, paste = 0.0, tiles = 0
+        private let lock = NSLock()
+        func add(prepare a: Double, predict b: Double, toPixels c: Double, resize d: Double, paste e: Double) {
+            lock.lock()
+            prepare += a; predict += b; toPixels += c; resize += d; paste += e; tiles += 1
+            lock.unlock()
+        }
+        var dictionary: [String: Double] {
+            ["prepare_ms": prepare, "predict_ms": predict, "to_pixels_ms": toPixels, "resize_ms": resize, "paste_ms": paste, "tiles": Double(tiles)]
+        }
     }
 
     private func load() throws -> MLModel {
@@ -72,23 +105,26 @@ final class EnhanceEngine {
         return Plan(inputDivisor: d, outputScale: max(1, min(s, 4 / d)))
     }
 
-    /// Enhances `photo` as `plan` says, then blends each face area back toward the original by `faceProtection`
-    /// (1 = faces exactly as they were, only resized). Enhance must not change faces; restoring faces is a separate tool.
-    func enhance(_ photo: RGBAImage, plan: Plan, faces: [FaceGeometry] = [], faceProtection: Float = 1,
-                 progress: ((Double) -> Void)? = nil) throws -> RGBAImage {
+    /// Enhances `photo` as `plan` says, then gives face areas `faceTreatment` of the original face instead of the
+    /// model's result (Enhance must not redraw faces; restoring faces is a separate tool), and finally a light sharpen
+    /// when the model ran below its native 4x.
+    func enhance(_ photo: RGBAImage, plan: Plan, faces: [FaceGeometry] = [], faceTreatment: FaceTreatment = .smallChanges(limit: 0),
+                 sharpen: Float = 0.6, progress: ((Double) -> Void)? = nil) throws -> RGBAImage {
         let model = try loadIfNeeded()
         let d = plan.inputDivisor
         let src = d == 1 ? photo : RGBAImage(cgImage: photo.cgImage(), exactWidth: (photo.width + d - 1) / d,
                                              exactHeight: (photo.height + d - 1) / d)
         var out = try runTiles(src, perPixel: plan.outputScale * d, models: [model], progress: progress)
-        EnhanceEngine.protectFaces(&out, original: photo, faces: faces, amount: faceProtection)
+        EnhanceEngine.treatFaces(&out, original: photo, faces: faces, treatment: faceTreatment)
+        if plan.outputScale * d < scale { EnhanceEngine.sharpen(&out, amount: sharpen) }
         return out
     }
 
     /// Runs the model over `src` in overlapping tiles and stitches the results at the overlap midpoints, with `g` result
     /// pixels per input pixel (1...4). Several models (for example one on the Neural Engine and one on the GPU) share
     /// the tiles between them; each writes only its own tiles' areas of the result.
-    func runTiles(_ src: RGBAImage, perPixel g: Int, models: [MLModel], progress: ((Double) -> Void)? = nil) throws -> RGBAImage {
+    func runTiles(_ src: RGBAImage, perPixel g: Int, models: [MLModel], stats: TileStats? = nil,
+                  progress: ((Double) -> Void)? = nil) throws -> RGBAImage {
         precondition((1...scale).contains(g) && !models.isEmpty)
         let w = src.width, h = src.height
         let padded = src.paddedByReplication(minWidth: tile, minHeight: tile)
@@ -121,21 +157,32 @@ final class EnhanceEngine {
                     if stop || j >= jobs.count { return }
                     let t = jobs[j]
                     do {
-                        let inArr = try MLTensors.rgbTensor(from: padded, x0: t.x0, y0: t.y0, size: tile)
-                        let res = try models[worker].prediction(from: MLDictionaryFeatureProvider(dictionary: ["input": inArr]))
-                        guard let outArr = res.featureValue(for: "output")?.multiArrayValue else { throw EngineError.badOutput }
-                        MLTensors.copyRGB(from: outArr, tx0: 0, ty0: 0, width: tile * scale, height: tile * scale,
-                                          into: &full, dx0: 0, dy0: 0)
-                        let part = g == scale ? full : full.scaled(toWidth: side, height: side)
-                        // Copy this tile's share of the result.
-                        let cx0 = (t.vx0 - t.x0) * g, cy0 = (t.vy0 - t.y0) * g
-                        let cw = (t.vx1 - t.vx0) * g, ch = (t.vy1 - t.vy0) * g
-                        part.pixels.withUnsafeBufferPointer { sp in
-                            for row in 0..<ch {
-                                let si = ((cy0 + row) * side + cx0) * 4
-                                let di = ((t.vy0 * g + row) * outW + t.vx0 * g) * 4
-                                (dst.baseAddress! + di).update(from: sp.baseAddress! + si, count: cw * 4)
+                        // Core ML hands back autoreleased buffers (25 MB per tile); drain them every tile.
+                        try autoreleasepool {
+                            let c0 = CFAbsoluteTimeGetCurrent()
+                            let inArr = try MLTensors.rgbTensor(from: padded, x0: t.x0, y0: t.y0, size: tile)
+                            let c1 = CFAbsoluteTimeGetCurrent()
+                            let res = try models[worker].prediction(from: MLDictionaryFeatureProvider(dictionary: ["input": inArr]))
+                            guard let outArr = res.featureValue(for: "output")?.multiArrayValue else { throw EngineError.badOutput }
+                            let c2 = CFAbsoluteTimeGetCurrent()
+                            MLTensors.copyRGB(from: outArr, tx0: 0, ty0: 0, width: tile * scale, height: tile * scale,
+                                              into: &full, dx0: 0, dy0: 0)
+                            let c3 = CFAbsoluteTimeGetCurrent()
+                            let part = g == scale ? full : full.scaled(toWidth: side, height: side)
+                            let c4 = CFAbsoluteTimeGetCurrent()
+                            // Copy this tile's share of the result.
+                            let cx0 = (t.vx0 - t.x0) * g, cy0 = (t.vy0 - t.y0) * g
+                            let cw = (t.vx1 - t.vx0) * g, ch = (t.vy1 - t.vy0) * g
+                            part.pixels.withUnsafeBufferPointer { sp in
+                                for row in 0..<ch {
+                                    let si = ((cy0 + row) * side + cx0) * 4
+                                    let di = ((t.vy0 * g + row) * outW + t.vx0 * g) * 4
+                                    (dst.baseAddress! + di).update(from: sp.baseAddress! + si, count: cw * 4)
+                                }
                             }
+                            let ms = { (a: CFAbsoluteTime, b: CFAbsoluteTime) in (b - a) * 1000 }
+                            stats?.add(prepare: ms(c0, c1), predict: ms(c1, c2), toPixels: ms(c2, c3), resize: ms(c3, c4),
+                                       paste: ms(c4, CFAbsoluteTimeGetCurrent()))
                         }
                     } catch {
                         queueLock.lock()

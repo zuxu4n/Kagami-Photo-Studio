@@ -67,6 +67,18 @@ final class EditorModel: ObservableObject {
         }
     }
 
+    /// Test builds: times the Enhance options on this phone (see EnhanceBench), keeping the screen awake meanwhile.
+    func runEnhanceBench() async {
+        busy = "Timing Enhance options… keep the app open"
+        UIApplication.shared.isIdleTimerDisabled = true
+        defer {
+            busy = nil
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
+        let ok = await Task.detached(priority: .userInitiated) { EnhanceBench.runAndSave() }.value
+        info = ok ? "Enhance timing done" : "Enhance timing failed"
+    }
+
     func noteMemoryWarning() {
         record("Memory warning", 0)
     }

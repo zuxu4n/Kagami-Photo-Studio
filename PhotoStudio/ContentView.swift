@@ -43,7 +43,10 @@ struct ContentView: View {
             } message: {
                 Text(model.error ?? "")
             }
-            .task { await model.warmUp() }
+            .task {
+                await model.warmUp()
+                if EnhanceBench.requested { await model.runEnhanceBench() }
+            }
             .onChange(of: model.tool) { _, t in model.toolShown(t) }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
                 model.noteMemoryWarning()
