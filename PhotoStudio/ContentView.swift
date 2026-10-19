@@ -73,7 +73,7 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
                 }
                 if model.tool == .face, model.display != nil {
-                    FaceGuides(curves: model.faceGuides(minGap:), imageSize: model.previewSize)
+                    FaceGuides(model: model)
                         .opacity(sliding || touching || comparing || model.busy != nil ? 0.3 : 1)  // dim, don't hide, while adjusting
                         .animation(.easeInOut(duration: sliding || touching ? 0.15 : 0.35), value: sliding || touching || comparing)
                         .allowsHitTesting(false)
@@ -149,7 +149,7 @@ struct ContentView: View {
                 sliderRow("Slim face", value: $model.slim)
                 sliderRow("Bigger eyes", value: $model.eyes)
                 sliderRow("Slim nose", value: $model.nose)
-                HStack { Text(model.faceCount == 0 ? "No face found" : model.faceCount == 1 ? "Apple Vision landmarks" : "Tap a face to edit it; each face keeps its own settings").font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
+                HStack { Text(model.faceCount == 0 ? "No face found" : model.faceCount == 1 ? "Apple Vision landmarks" : "Editing face \((model.selectedFace ?? 0) + 1) of \(model.faceCount) · tap another face to switch").font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             }
             Text(model.info).font(.caption2).foregroundStyle(.secondary)
         }
@@ -191,15 +191,16 @@ struct ContentView: View {
 
 /// Two thin curves bracketing each face, drawn over the aspect-fit photo: cyan on the selected face, white on the others.
 private struct FaceGuides: View {
-    let curves: (CGFloat) -> [(curves: [[CGPoint]], selected: Bool)]   // normalised, top-left origin; takes the minimum gap in image pixels
-    let imageSize: CGSize
+    // Observed directly (not passed in as a closure) so the guides redraw whenever the picked face or a slider changes.
+    @ObservedObject var model: EditorModel
 
     var body: some View {
+        let imageSize = model.previewSize
         GeometryReader { geo in
             let s = min(geo.size.width / max(imageSize.width, 1), geo.size.height / max(imageSize.height, 1))
             let fw = imageSize.width * s, fh = imageSize.height * s
             let ox = (geo.size.width - fw) / 2, oy = (geo.size.height - fh) / 2
-            let faces = self.curves(14 / max(s, 0.001))   // never closer than 14 points on screen
+            let faces = model.faceGuides(minGap: 14 / max(s, 0.001))   // never closer than 14 points on screen
             let style = StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round)
             ZStack {
                 Self.path(faces.filter { !$0.selected }.flatMap(\.curves), ox, oy, fw, fh).stroke(Color.white, style: style)
