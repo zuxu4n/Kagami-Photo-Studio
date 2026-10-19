@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var pinchStart: (zoom: CGFloat, pan: CGSize)?
     @State private var dragStart: CGSize?      // pan when a one-finger drag began
     @State private var brushRing = false       // show the Heal brush size while its slider moves
+    @State private var reshapeDrag: Bool?      // Reshape on: nil until the finger moves, then true (pushing a face) or false (panning)
     private let maxZoom: CGFloat = 8
 
     var body: some View {
@@ -125,18 +126,38 @@ struct ContentView: View {
             }
             .onLongPressGesture(minimumDuration: 0.15, maximumDistance: 30, pressing: { pressing in
                 // While zoomed a one-finger drag pans, so holding the photo doesn't compare (the Compare button still does).
-                if model.tool != .heal { comparing = pressing && zoom <= 1.01 && pinchStart == nil }
+                // With Reshape on, holding a face is the start of a push, so only the Compare button compares.
+                if model.tool != .heal, !reshapeOn { comparing = pressing && zoom <= 1.01 && pinchStart == nil }
             }, perform: {})
             .simultaneousGesture(DragGesture(minimumDistance: 0)
                 .onChanged { v in
                     if !touching { touching = true }
+                    if reshapeOn {
+                        if pinchStart != nil {
+                            // A second finger came down: this is a pinch, not a push.
+                            if reshapeDrag == true { model.cancelReshape() }
+                            reshapeDrag = false
+                        } else if reshapeDrag == nil {
+                            // Wait for a little movement so the first finger of a pinch doesn't push.
+                            guard hypot(v.translation.width, v.translation.height) > 6 else { return }
+                            reshapeDrag = imagePoint(v.startLocation, in: geo.size).map { model.beginReshape(at: $0) } ?? false
+                        }
+                        if reshapeDrag == true {
+                            model.moveReshape(to: imagePoint(v.location, in: geo.size, clamp: false)!)
+                            return
+                        }
+                    }
                     guard zoom > 1.01, pinchStart == nil else { dragStart = nil; return }
                     // Starts from where the photo is now, so lifting one finger after a pinch doesn't jump.
                     let start = dragStart ?? CGSize(width: pan.width - v.translation.width, height: pan.height - v.translation.height)
                     dragStart = start
                     pan = clampedPan(CGSize(width: start.width + v.translation.width, height: start.height + v.translation.height), zoom: zoom, view: geo.size)
                 }
-                .onEnded { _ in touching = false; dragStart = nil })
+                .onEnded { _ in
+                    touching = false; dragStart = nil
+                    if reshapeDrag == true { model.endReshape() }
+                    reshapeDrag = nil
+                })
             .simultaneousGesture(MagnifyGesture()
                 .onChanged { v in
                     guard model.hasImage else { return }
@@ -175,8 +196,11 @@ struct ContentView: View {
         return CGSize(width: min(mx, max(-mx, p.width)), height: min(my, max(-my, p.height)))
     }
 
+    private var reshapeOn: Bool { model.tool == .face && model.reshaping }
+
     /// Maps a tap in the view to preview pixel coordinates, undoing the zoom and pan first (the image is aspect-fit).
-    private func imagePoint(_ tap: CGPoint, in view: CGSize) -> CGPoint? {
+    /// Points off the photo are nil unless `clamp` is false (a drag that runs past the edge).
+    private func imagePoint(_ tap: CGPoint, in view: CGSize, clamp: Bool = true) -> CGPoint? {
         let img = model.previewSize
         guard img.width > 0, img.height > 0 else { return nil }
         // The photo layer is scaled about the canvas centre, then moved by `pan`.
@@ -185,7 +209,7 @@ struct ContentView: View {
         let s = min(view.width / img.width, view.height / img.height)
         let ox = (view.width - img.width * s) / 2, oy = (view.height - img.height * s) / 2
         let x = (p.x - ox) / s, y = (p.y - oy) / s
-        guard x >= 0, y >= 0, x < img.width, y < img.height else { return nil }
+        guard !clamp || (x >= 0 && y >= 0 && x < img.width && y < img.height) else { return nil }
         return CGPoint(x: x, y: y)
     }
 
@@ -222,9 +246,24 @@ struct ContentView: View {
                 sliderRow("Brush", value: $model.brush, range: 0.004...0.08, undoable: false)
                 Text("Tap a spot to remove it (LaMa, on device). Pinch to zoom in on small spots.").font(.caption).foregroundStyle(.secondary)
             case .face:
-                sliderRow("Slim face", value: $model.slim)
-                sliderRow("Bigger eyes", value: $model.eyes)
-                sliderRow("Slim nose", value: $model.nose)
+                Picker("Face mode", selection: $model.reshaping) {
+                    Text("Sliders").tag(false)
+                    Text("Reshape").tag(true)
+                }
+                .pickerStyle(.segmented)
+                if model.reshaping {
+                    HStack {
+                        Text("Drag on a face to push it. Pinch to zoom; drag off the face to move around.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Reset face") { model.resetReshape() }
+                            .font(.caption.bold()).disabled(!model.selectedHasPushes || model.busy != nil)
+                    }
+                } else {
+                    sliderRow("Slim face", value: $model.slim)
+                    sliderRow("Bigger eyes", value: $model.eyes)
+                    sliderRow("Slim nose", value: $model.nose)
+                }
                 HStack { Text(model.faceCount == 0 ? "No face found" : model.faceCount == 1 ? "Apple Vision landmarks" : "Editing face \((model.selectedFace ?? 0) + 1) of \(model.faceCount) · tap another face to switch").font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             }
             Text(model.info).font(.caption2).foregroundStyle(.secondary)

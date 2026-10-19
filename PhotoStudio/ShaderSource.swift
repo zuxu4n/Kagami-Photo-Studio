@@ -55,7 +55,7 @@ kernel void smoothSkin(texture2d<float, access::sample> src [[texture(0)]],
 struct WarpOp {
     float2 c;      // centre, pixels
     float r;       // radius, pixels
-    float kind;    // 0 = translate, 1 = bulge
+    float kind;    // 0 = translate, 1 = bulge, 2 = Reshape push
     float2 m;      // translate displacement, pixels
     float s;       // bulge strength
     float pad;
@@ -63,7 +63,8 @@ struct WarpOp {
 
 // Inverse-mapped local warps: each output pixel looks up where its content comes from.
 // Translate handles are blended (weighted average, not summed), so overlapping jaw handles can't pile up and
-// tear the image. Bulges (eyes) are applied afterwards.
+// tear the image. Bulges (eyes) are applied afterwards. Reshape pushes were made on top of the slider warp, one
+// after another, so they are undone first, newest first. Each push is under 0.65 of its radius, so none folds.
 kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
                      texture2d<float, access::write> dst [[texture(1)]],
                      constant WarpOp *ops [[buffer(0)]],
@@ -74,11 +75,21 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
     if (gid.x >= w || gid.y >= h) return;
     constexpr sampler sp(coord::pixel, address::clamp_to_edge, filter::linear);
     float2 p = float2(gid) + 0.5;
+    for (int k = int(count) - 1; k >= 0; k--) {
+        WarpOp op = ops[k];
+        if (op.kind < 1.5) continue;
+        float2 d = p - op.c;
+        float dd = dot(d, d);
+        float rr = op.r * op.r;
+        if (dd >= rr) continue;
+        float x2 = dd / rr;
+        p -= op.m * (1.0 - x2) * (1.0 - x2);
+    }
     float2 dsum = 0.0;
     float wsum = 0.0;
     for (uint k = 0; k < count; k++) {
         WarpOp op = ops[k];
-        if (op.kind > 0.5) continue;
+        if (op.kind > 0.5) continue;  // translate only
         float2 d = p - op.c;
         float dd = dot(d, d);
         float rr = op.r * op.r;
@@ -91,7 +102,7 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
     float2 q = p - dsum / max(1.0, wsum);
     for (uint k = 0; k < count; k++) {
         WarpOp op = ops[k];
-        if (op.kind < 0.5) continue;
+        if (op.kind < 0.5 || op.kind > 1.5) continue;  // bulge only
         float2 d = q - op.c;
         float dd = dot(d, d);
         float rr = op.r * op.r;

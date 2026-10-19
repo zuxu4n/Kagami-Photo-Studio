@@ -14,19 +14,28 @@ struct FaceGeometry {
     var nose: [CGPoint]
 }
 
-/// The Face tab's slider values for one face. Each face keeps its own.
+/// One step of a Reshape drag: the pixels around (x, y) pushed by (dx, dy). x and y are normalised (0...1);
+/// r, dx and dy are fractions of the image width, so a push keeps its shape at any resolution.
+struct FacePush: Equatable {
+    var x: Float, y: Float
+    var r: Float
+    var dx: Float, dy: Float
+}
+
+/// The Face tab's slider values and Reshape pushes for one face. Each face keeps its own.
 struct FaceShape: Equatable {
     var slim: Float = 0
     var eyes: Float = 0
     var nose: Float = 0
-    var isOff: Bool { slim <= 0.001 && eyes <= 0.001 && nose <= 0.001 }
+    var pushes: [FacePush] = []   // in the order they were made; applied after the sliders
+    var isOff: Bool { slim <= 0.001 && eyes <= 0.001 && nose <= 0.001 && pushes.isEmpty }
 }
 
 /// Matches the Metal `WarpOp` struct (32 bytes).
 struct WarpOp {
     var c: SIMD2<Float>      // centre (pixels)
     var r: Float             // radius (pixels)
-    var kind: Float          // 0 = translate, 1 = bulge
+    var kind: Float          // 0 = translate, 1 = bulge, 2 = Reshape push
     var m: SIMD2<Float>      // translate: displacement (pixels)
     var s: Float             // bulge: strength
     var pad: Float = 0
@@ -99,8 +108,11 @@ enum FaceAnalyzer {
 
     // MARK: Warp handles for Face shape
 
-    /// Local warps (Gustafsson-style translate and bulge) for the slim, eyes and nose sliders, in pixels of a w x h image.
-    /// `shapes[i]` holds the slider values for `faces[i]`.
+    /// Most Reshape pushes kept across all faces (each one is checked by every pixel, so this bounds render time).
+    static let maxPushes = 256
+
+    /// Local warps (Gustafsson-style translate and bulge) for the slim, eyes and nose sliders, in pixels of a w x h image,
+    /// followed by every face's Reshape pushes. `shapes[i]` holds the values for `faces[i]`.
     static func warpOps(faces: [FaceGeometry], shapes: [FaceShape], width w: Int, height h: Int) -> [WarpOp] {
         var ops: [WarpOp] = []
         let W = Float(w), H = Float(h)
@@ -138,14 +150,37 @@ enum FaceAnalyzer {
                 ops.append(WarpOp(c: SIMD2(nmax, c.y), r: 0.8 * nw, kind: 0, m: SIMD2(-amt, 0), s: 0))
             }
         }
-        return Array(ops.prefix(64))
+        ops = Array(ops.prefix(64))
+        // Pushes are applied one after another on top of the slider warp. The shader looks each one up at the
+        // point it moved content to (c + m), so content under the finger follows the finger.
+        for shape in shapes {
+            for p in shape.pushes {
+                let m = SIMD2(p.dx * W, p.dy * W)
+                ops.append(WarpOp(c: SIMD2(p.x * W, p.y * H) + m, r: p.r * W, kind: 2, m: m, s: 0))
+            }
+        }
+        return Array(ops.prefix(64 + maxPushes))
+    }
+
+    /// Moves a point (pixels of a w x h image) the way the Reshape pushes move the pixels under it.
+    static func pushed(_ p: CGPoint, by pushes: [FacePush], width w: Int, height h: Int) -> CGPoint {
+        let W = CGFloat(w), H = CGFloat(h)
+        var q = p
+        for u in pushes {
+            let dx = q.x - CGFloat(u.x) * W, dy = q.y - CGFloat(u.y) * H, r = CGFloat(u.r) * W
+            let x2 = (dx * dx + dy * dy) / (r * r)
+            guard x2 < 1 else { continue }
+            let wgt = (1 - x2) * (1 - x2)
+            q.x += wgt * CGFloat(u.dx) * W; q.y += wgt * CGFloat(u.dy) * W
+        }
+        return q
     }
 
     // MARK: Outline guides for the Face tab
 
     /// Two curves bracketing the face's left and right sides, temple to jaw (chin left open), in normalised
     /// top-left coordinates. They sit just outside the jaw line and follow the slim warp, so they track the face as it changes.
-    static func guideCurves(for f: FaceGeometry, width w: Int, height h: Int, slim: Float, minGap: CGFloat = 0) -> [[CGPoint]] {
+    static func guideCurves(for f: FaceGeometry, width w: Int, height h: Int, slim: Float, pushes: [FacePush] = [], minGap: CGFloat = 0) -> [[CGPoint]] {
         let n = f.contour.count
         guard n > 6 else { return [] }
         let W = CGFloat(w), H = CGFloat(h)
@@ -162,7 +197,7 @@ enum FaceAnalyzer {
                 d.dx += wgt * CGFloat(op.m.x); d.dy += wgt * CGFloat(op.m.y); ws += wgt
             }
             let k = max(1, ws)
-            return CGPoint(x: p.x + d.dx / k, y: p.y + d.dy / k)
+            return pushed(CGPoint(x: p.x + d.dx / k, y: p.y + d.dy / k), by: pushes, width: w, height: h)
         }
         // Both the shape and the ends come from the detected outline: each side is the outline itself, moved
         // outward by a fixed gap along its own normal, from its top point down to where the jaw turns towards

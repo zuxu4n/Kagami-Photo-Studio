@@ -21,6 +21,7 @@ final class EditorModel: ObservableObject {
     @Published var nose: Float = 0
     @Published var brush: Float = 0.025      // heal brush radius as a fraction of the image width
     @Published var faceCount = 0
+    @Published var reshaping = false          // Face tab: a one-finger drag on a face pushes it (Reshape)
     @Published var timings: [(String, Double)] = []
     @Published var info: String = ""
 
@@ -38,6 +39,7 @@ final class EditorModel: ObservableObject {
     @Published private(set) var canUndo = false
     @Published private(set) var canRedo = false
     private var sliderStart: UndoStep?  // the state when a slider drag began
+    private var reshape: (start: UndoStep, face: Int, base: [FacePush], anchor: CGPoint, r: CGFloat, added: [FacePush])?  // the Reshape drag under way
 
     let maxWorkingSide = 4032
     let previewSide = 1600
@@ -51,7 +53,8 @@ final class EditorModel: ObservableObject {
         guard let prev = preview else { return [] }
         return faces.indices.map { i in
             let s = i == selectedFace ? slim : (i < shapes.count ? shapes[i].slim : 0)
-            return (FaceAnalyzer.guideCurves(for: faces[i], width: prev.width, height: prev.height, slim: s, minGap: minGap), i == selectedFace)
+            let pushes = i < shapes.count ? shapes[i].pushes : []
+            return (FaceAnalyzer.guideCurves(for: faces[i], width: prev.width, height: prev.height, slim: s, pushes: pushes, minGap: minGap), i == selectedFace)
         }
     }
 
@@ -60,10 +63,7 @@ final class EditorModel: ObservableObject {
     /// Selects the face whose area holds `point` (preview pixels) and shows its own slider values.
     /// Where face areas overlap, the face whose centre is nearest wins. A tap outside every face changes nothing.
     func selectFace(at point: CGPoint) {
-        guard let prev = preview else { return }
-        let p = CGPoint(x: point.x / CGFloat(prev.width), y: point.y / CGFloat(prev.height))
-        let hits = faces.indices.filter { faces[$0].box.insetBy(dx: -faces[$0].box.width * 0.15, dy: -faces[$0].box.height * 0.15).contains(p) }
-        guard let i = hits.min(by: { centreDistance(faces[$0], p) < centreDistance(faces[$1], p) }), i != selectedFace else { return }
+        guard let i = faceIndex(at: point), i != selectedFace else { return }
         storeShape()
         selectedFace = i
         let v = shapes[i]
@@ -71,12 +71,20 @@ final class EditorModel: ObservableObject {
         renderPreview()
     }
 
+    /// The face whose area holds `point` (preview pixels), nearest centre first where areas overlap.
+    private func faceIndex(at point: CGPoint) -> Int? {
+        guard let prev = preview else { return nil }
+        let p = CGPoint(x: point.x / CGFloat(prev.width), y: point.y / CGFloat(prev.height))
+        let hits = faces.indices.filter { faces[$0].box.insetBy(dx: -faces[$0].box.width * 0.15, dy: -faces[$0].box.height * 0.15).contains(p) }
+        return hits.min(by: { centreDistance(faces[$0], p) < centreDistance(faces[$1], p) })
+    }
+
     private func centreDistance(_ f: FaceGeometry, _ p: CGPoint) -> CGFloat { hypot(f.box.midX - p.x, f.box.midY - p.y) }
 
     /// Keeps the sliders' values as the selected face's own.
     private func storeShape() {
         guard let i = selectedFace, i < shapes.count else { return }
-        shapes[i] = FaceShape(slim: slim, eyes: eyes, nose: nose)
+        shapes[i].slim = slim; shapes[i].eyes = eyes; shapes[i].nose = nose
     }
 
     /// Starts the Face tab on the biggest face, with every face's sliders at zero.
@@ -104,6 +112,75 @@ final class EditorModel: ObservableObject {
         let v = selectedFace.map { shapes[$0] } ?? FaceShape()
         slim = v.slim; eyes = v.eyes; nose = v.nose
     }
+
+    // MARK: Reshape (drag a face to push it)
+
+    /// Starts a Reshape drag at `point` (preview pixels) on the face under it, selecting that face first.
+    /// Returns false when the finger isn't on a face, so the drag can pan instead.
+    func beginReshape(at point: CGPoint) -> Bool {
+        guard busy == nil, reshape == nil, let i = faceIndex(at: point), let prev = preview else { return false }
+        if i != selectedFace {
+            storeShape()
+            selectedFace = i
+            let v = shapes[i]
+            slim = v.slim; eyes = v.eyes; nose = v.nose
+        }
+        // The push area is a fifth of the face's width across (radius), so a drag moves a cheek or the jaw, not the whole head.
+        let r = faces[i].box.width * 0.22 * CGFloat(prev.width)
+        reshape = (undoStep(.unchanged), i, shapes[i].pushes, point, r, [])
+        return true
+    }
+
+    /// Follows the finger (preview pixels). The path is cut into steps of under half the push radius, each pushing
+    /// the content from the previous step to the next, so a long or curved drag carries the face along without folding.
+    func moveReshape(to point: CGPoint) {
+        guard var d = reshape, let prev = preview, d.face < shapes.count else { return }
+        let W = CGFloat(prev.width), H = CGFloat(prev.height)
+        let step = d.r * 0.45
+        // Pushes this drag may add: the overall limit less every other push (on all faces, and this face's earlier drags).
+        let room = FaceAnalyzer.maxPushes - shapes.reduce(0) { $0 + $1.pushes.count } + (shapes[d.face].pushes.count - d.base.count)
+        func push(_ a: CGPoint, _ b: CGPoint) -> FacePush {
+            FacePush(x: Float(a.x / W), y: Float(a.y / H), r: Float(d.r / W), dx: Float((b.x - a.x) / W), dy: Float((b.y - a.y) / W))
+        }
+        while hypot(point.x - d.anchor.x, point.y - d.anchor.y) > step, d.added.count < room - 1 {
+            let len = hypot(point.x - d.anchor.x, point.y - d.anchor.y)
+            let next = CGPoint(x: d.anchor.x + (point.x - d.anchor.x) * step / len, y: d.anchor.y + (point.y - d.anchor.y) * step / len)
+            d.added.append(push(d.anchor, next))
+            d.anchor = next
+        }
+        if d.added.count >= room - 1 { info = "Reshape limit reached · undo or reset a face to push more" }
+        // The rest of the way to the finger, redone on every move until it's a full step.
+        let tail = hypot(point.x - d.anchor.x, point.y - d.anchor.y) > 0.5 && d.added.count < room ? [push(d.anchor, point)] : []
+        reshape = d
+        shapes[d.face].pushes = d.base + d.added + tail
+        renderPreview()
+    }
+
+    /// Ends the drag as one undo step.
+    func endReshape() {
+        guard let d = reshape else { return }
+        reshape = nil
+        storeShape()
+        if d.start.shapes != shapes || d.start.selectedFace != selectedFace { pushUndo(d.start) }
+    }
+
+    /// Drops the drag under way (a second finger turned it into a pinch).
+    func cancelReshape() {
+        guard let d = reshape else { return }
+        reshape = nil
+        if d.face < shapes.count { shapes[d.face].pushes = d.base }
+        renderPreview()
+    }
+
+    /// Removes the selected face's Reshape pushes (one undo step).
+    func resetReshape() {
+        guard let i = selectedFace, i < shapes.count, !shapes[i].pushes.isEmpty else { return }
+        pushUndo(undoStep(.unchanged))
+        shapes[i].pushes = []
+        renderPreview()
+    }
+
+    var selectedHasPushes: Bool { selectedFace.map { $0 < shapes.count && !shapes[$0].pushes.isEmpty } ?? false }
 
     // MARK: Warm-up at launch, so the first tap on each tool isn't slow
 

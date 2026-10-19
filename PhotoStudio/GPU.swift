@@ -89,19 +89,20 @@ final class GPU {
         return readBack(dst)
     }
 
-    /// Face-shape warp with up to 64 local operations.
+    /// Face-shape warp: up to 64 slider operations plus the Reshape pushes.
     func warp(_ img: RGBAImage, ops: [WarpOp]) -> RGBAImage {
         guard !ops.isEmpty else { return img }
         let src = texture(img)
         let dst = outputTexture(width: img.width, height: img.height)
-        var list = ops
+        // A buffer rather than setBytes, which is limited to 4 KB (128 operations).
+        let list = ops.withUnsafeBytes { device.makeBuffer(bytes: $0.baseAddress!, length: $0.count, options: .storageModeShared)! }
         var count = UInt32(ops.count)
         let cb = queue.makeCommandBuffer()!
         let enc = cb.makeComputeCommandEncoder()!
         enc.setComputePipelineState(warpPSO)
         enc.setTexture(src, index: 0)
         enc.setTexture(dst, index: 1)
-        enc.setBytes(&list, length: MemoryLayout<WarpOp>.stride * list.count, index: 0)
+        enc.setBuffer(list, offset: 0, index: 0)
         enc.setBytes(&count, length: 4, index: 1)
         dispatch(enc, warpPSO, width: img.width, height: img.height)
         enc.endEncoding()
