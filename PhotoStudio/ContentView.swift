@@ -7,6 +7,12 @@ struct ContentView: View {
     @State private var comparing = false
     @State private var sliding = false     // a slider is being dragged
     @State private var touching = false    // a finger is on the photo
+    @State private var zoom: CGFloat = 1       // 1 = whole photo fits
+    @State private var pan: CGSize = .zero     // offset of the zoomed photo from the centre, in points
+    @State private var pinchStart: (zoom: CGFloat, pan: CGSize)?
+    @State private var dragStart: CGSize?      // pan when a one-finger drag began
+    @State private var brushRing = false       // show the Heal brush size while its slider moves
+    private let maxZoom: CGFloat = 8
 
     var body: some View {
         NavigationStack {
@@ -29,13 +35,16 @@ struct ContentView: View {
                         Label("Photo", systemImage: "photo.on.rectangle")
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { Task { await model.undo() } } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
+                        .disabled(!model.canUndo || model.busy != nil)
                     Button("Save") { Task { await model.save() } }
                         .disabled(!model.hasImage || model.busy != nil)
                 }
             }
             .onChange(of: pickerItem) { _, item in
                 guard let item else { return }
+                zoom = 1; pan = .zero
                 Task {
                     if let data = try? await item.loadTransferable(type: Data.self) { await model.load(data: data) }
                 }
@@ -56,14 +65,24 @@ struct ContentView: View {
         }
     }
 
-    // MARK: Canvas with hold-to-compare and tap-to-heal
+    // MARK: Canvas with pinch zoom, pan, hold-to-compare and tap-to-heal
 
     private var canvas: some View {
         GeometryReader { geo in
             ZStack {
                 Color.black
                 if let img = comparing ? model.original : model.display {
-                    Image(uiImage: img).resizable().scaledToFit()
+                    ZStack {
+                        Image(uiImage: img).resizable().scaledToFit()
+                        if model.tool == .face, model.display != nil {
+                            FaceGuides(model: model, zoom: zoom)
+                                .opacity(sliding || touching || comparing || model.busy != nil ? 0.3 : 1)  // dim, don't hide, while adjusting
+                                .animation(.easeInOut(duration: sliding || touching ? 0.15 : 0.35), value: sliding || touching || comparing)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .scaleEffect(zoom)
+                    .offset(pan)
                 } else {
                     VStack(spacing: 8) {
                         Image(systemName: "photo").font(.largeTitle)
@@ -72,11 +91,21 @@ struct ContentView: View {
                     }
                     .foregroundStyle(.secondary)
                 }
-                if model.tool == .face, model.display != nil {
-                    FaceGuides(model: model)
-                        .opacity(sliding || touching || comparing || model.busy != nil ? 0.3 : 1)  // dim, don't hide, while adjusting
-                        .animation(.easeInOut(duration: sliding || touching ? 0.15 : 0.35), value: sliding || touching || comparing)
-                        .allowsHitTesting(false)
+                if brushRing, model.tool == .heal {
+                    // The brush as it will land on the photo at this zoom.
+                    let d = CGFloat(model.brush) * 2 * fittedSize(geo.size).width * zoom
+                    Circle().stroke(Color.white, lineWidth: 1.5).frame(width: d, height: d)
+                        .shadow(color: .black.opacity(0.6), radius: 1).allowsHitTesting(false)
+                }
+                if zoom > 1.01 {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { zoom = 1; pan = .zero }
+                    } label: {
+                        Text(String(format: "%.1f× · Fit", zoom)).font(.caption.bold()).monospacedDigit()
+                            .padding(.horizontal, 10).padding(.vertical, 6).background(.ultraThinMaterial, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing).padding(8)
                 }
                 if let b = model.busy {
                     ProgressView(b).padding(14).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -93,19 +122,64 @@ struct ContentView: View {
                 }
             }
             .onLongPressGesture(minimumDuration: 0.15, maximumDistance: 30, pressing: { pressing in
-                if model.tool != .heal { comparing = pressing }
+                // While zoomed a one-finger drag pans, so holding the photo doesn't compare (the Compare button still does).
+                if model.tool != .heal { comparing = pressing && zoom <= 1.01 && pinchStart == nil }
             }, perform: {})
             .simultaneousGesture(DragGesture(minimumDistance: 0)
-                .onChanged { _ in if !touching { touching = true } }
-                .onEnded { _ in touching = false })
+                .onChanged { v in
+                    if !touching { touching = true }
+                    guard zoom > 1.01, pinchStart == nil else { dragStart = nil; return }
+                    // Starts from where the photo is now, so lifting one finger after a pinch doesn't jump.
+                    let start = dragStart ?? CGSize(width: pan.width - v.translation.width, height: pan.height - v.translation.height)
+                    dragStart = start
+                    pan = clampedPan(CGSize(width: start.width + v.translation.width, height: start.height + v.translation.height), zoom: zoom, view: geo.size)
+                }
+                .onEnded { _ in touching = false; dragStart = nil })
+            .simultaneousGesture(MagnifyGesture()
+                .onChanged { v in
+                    guard model.hasImage else { return }
+                    comparing = false
+                    let start = pinchStart ?? (zoom, pan)
+                    pinchStart = start
+                    let z = min(maxZoom, max(1, start.zoom * v.magnification))
+                    // Keep the photo point under the pinch where it was.
+                    let a = CGPoint(x: v.startLocation.x - geo.size.width / 2, y: v.startLocation.y - geo.size.height / 2)
+                    let k = z / start.zoom
+                    let p = CGSize(width: a.x - (a.x - start.pan.width) * k, height: a.y - (a.y - start.pan.height) * k)
+                    zoom = z
+                    pan = clampedPan(p, zoom: z, view: geo.size)
+                }
+                .onEnded { _ in
+                    pinchStart = nil
+                    dragStart = nil
+                    if zoom < 1.05 { withAnimation(.easeOut(duration: 0.15)) { zoom = 1; pan = .zero } }
+                })
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    /// Maps a tap in the view to preview pixel coordinates (the image is aspect-fit).
-    private func imagePoint(_ p: CGPoint, in view: CGSize) -> CGPoint? {
+    /// The photo's aspect-fit size in the canvas at zoom 1.
+    private func fittedSize(_ view: CGSize) -> CGSize {
+        let img = model.previewSize
+        guard img.width > 0, img.height > 0 else { return view }
+        let s = min(view.width / img.width, view.height / img.height)
+        return CGSize(width: img.width * s, height: img.height * s)
+    }
+
+    /// Stops the zoomed photo being dragged past its edges (a dimension smaller than the canvas stays centred).
+    private func clampedPan(_ p: CGSize, zoom z: CGFloat, view: CGSize) -> CGSize {
+        let f = fittedSize(view)
+        let mx = max(0, (f.width * z - view.width) / 2), my = max(0, (f.height * z - view.height) / 2)
+        return CGSize(width: min(mx, max(-mx, p.width)), height: min(my, max(-my, p.height)))
+    }
+
+    /// Maps a tap in the view to preview pixel coordinates, undoing the zoom and pan first (the image is aspect-fit).
+    private func imagePoint(_ tap: CGPoint, in view: CGSize) -> CGPoint? {
         let img = model.previewSize
         guard img.width > 0, img.height > 0 else { return nil }
+        // The photo layer is scaled about the canvas centre, then moved by `pan`.
+        let p = CGPoint(x: view.width / 2 + (tap.x - view.width / 2 - pan.width) / zoom,
+                        y: view.height / 2 + (tap.y - view.height / 2 - pan.height) / zoom)
         let s = min(view.width / img.width, view.height / img.height)
         let ox = (view.width - img.width * s) / 2, oy = (view.height - img.height * s) / 2
         let x = (p.x - ox) / s, y = (p.y - oy) / s
@@ -143,8 +217,8 @@ struct ContentView: View {
                 sliderRow("Smooth skin", value: $model.smooth)
                 HStack { Text(model.faceCount == 0 ? "No face found" : "Edges, eyes and lips stay sharp").font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             case .heal:
-                sliderRow("Brush", value: $model.brush, range: 0.01...0.08)
-                Text("Tap a spot to remove it (LaMa, on device).").font(.caption).foregroundStyle(.secondary)
+                sliderRow("Brush", value: $model.brush, range: 0.004...0.08, undoable: false)
+                Text("Tap a spot to remove it (LaMa, on device). Pinch to zoom in on small spots.").font(.caption).foregroundStyle(.secondary)
             case .face:
                 sliderRow("Slim face", value: $model.slim)
                 sliderRow("Bigger eyes", value: $model.eyes)
@@ -167,10 +241,13 @@ struct ContentView: View {
             .onLongPressGesture(minimumDuration: 0, maximumDistance: 60, pressing: { comparing = $0 }, perform: {})
     }
 
-    private func sliderRow(_ title: String, value: Binding<Float>, range: ClosedRange<Float> = 0...1) -> some View {
+    private func sliderRow(_ title: String, value: Binding<Float>, range: ClosedRange<Float> = 0...1, undoable: Bool = true) -> some View {
         HStack {
             Text(title).font(.subheadline).frame(width: 96, alignment: .leading)
-            Slider(value: value, in: range) { sliding = $0 }
+            Slider(value: value, in: range) { editing in
+                sliding = editing
+                if undoable { model.sliderEditing(editing) } else { brushRing = editing }
+            }
         }
     }
 
@@ -193,6 +270,7 @@ struct ContentView: View {
 private struct FaceGuides: View {
     // Observed directly (not passed in as a closure) so the guides redraw whenever the picked face or a slider changes.
     @ObservedObject var model: EditorModel
+    var zoom: CGFloat = 1   // the canvas zoom, so lines stay the same width on screen
 
     var body: some View {
         let imageSize = model.previewSize
@@ -200,8 +278,8 @@ private struct FaceGuides: View {
             let s = min(geo.size.width / max(imageSize.width, 1), geo.size.height / max(imageSize.height, 1))
             let fw = imageSize.width * s, fh = imageSize.height * s
             let ox = (geo.size.width - fw) / 2, oy = (geo.size.height - fh) / 2
-            let faces = model.faceGuides(minGap: 14 / max(s, 0.001))   // never closer than 14 points on screen
-            let style = StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round)
+            let faces = model.faceGuides(minGap: 14 / max(s * zoom, 0.001))   // never closer than 14 points on screen
+            let style = StrokeStyle(lineWidth: 1.75 / zoom, lineCap: .round, lineJoin: .round)
             ZStack {
                 Self.path(faces.filter { !$0.selected }.flatMap(\.curves), ox, oy, fw, fh).stroke(Color.white, style: style)
                 Self.path(faces.filter(\.selected).flatMap(\.curves), ox, oy, fw, fh).stroke(Color(red: 0.2, green: 0.85, blue: 0.95), style: style)

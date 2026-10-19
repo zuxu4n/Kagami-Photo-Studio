@@ -34,6 +34,9 @@ final class EditorModel: ObservableObject {
     private var unenhanced: RGBAImage?  // the photo as it was before Enhance, kept while Enhance is on
     private var healsSinceEnhance: [(center: CGPoint, brush: Double)] = []  // replayed on `unenhanced` when Enhance goes off
     private var warmedUp = false
+    private var history = UndoHistory()
+    @Published private(set) var canUndo = false
+    private var sliderStart: UndoStep?  // the state when a slider drag began
 
     let maxWorkingSide = 4032
     let previewSide = 1600
@@ -180,6 +183,8 @@ final class EditorModel: ObservableObject {
         enhanceOn = false
         unenhanced = nil
         healsSinceEnhance = []
+        history.clear()
+        canUndo = false
         toolShown(tool)
         info = "\(full.width)×\(full.height) · \(found.count) face(s)"
         record("Open + face landmarks", ms, peakMB: meter.stop(), extra: ["decode_ms": decodeMs])
@@ -210,6 +215,7 @@ final class EditorModel: ObservableObject {
         guard let src = working else { return }
         busy = "Enhancing…"
         defer { busy = nil }
+        let before = undoStep(.whole(src))
         let faces = self.faces
         do {
             let (out, ms, peak) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double, Double) in
@@ -220,6 +226,7 @@ final class EditorModel: ObservableObject {
                 return (out, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
             record("Enhance (\(out.width)×\(out.height))", ms, peakMB: peak)
+            pushUndo(before)
             unenhanced = src
             healsSinceEnhance = []
             enhanceOn = true
@@ -236,6 +243,7 @@ final class EditorModel: ObservableObject {
         }
         busy = "Turning Enhance off…"
         defer { busy = nil }
+        let before = working.map { undoStep(.whole($0)) }
         let heals = healsSinceEnhance
         do {
             let (out, ms, peak) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double, Double) in
@@ -245,6 +253,7 @@ final class EditorModel: ObservableObject {
                 return (base, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
             record("Enhance off (\(heals.count) heal(s) redone)", ms, peakMB: peak)
+            if let before { pushUndo(before) }
             unenhanced = nil
             healsSinceEnhance = []
             enhanceOn = false
@@ -263,14 +272,20 @@ final class EditorModel: ObservableObject {
         defer { busy = nil }
         let center = CGPoint(x: point.x / CGFloat(prev.width), y: point.y / CGFloat(prev.height))
         let brushFraction = Double(brush)
+        var before = undoStep(.unchanged)
         do {
-            let (out, radius, ms, peak) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Int, Double, Double) in
+            let (out, radius, undo, ms, peak) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Int, PixelUndo, Double, Double) in
                 let meter = MemoryMeter()
                 let t0 = CFAbsoluteTimeGetCurrent()
+                let old = img
                 let radius = try EditorModel.healSpot(&img, center: center, brush: brushFraction)
-                return (img, radius, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
+                // Keep only the pixels the heal changed, for undo.
+                let undo = img.changedRect(from: old).map { PixelUndo.patch(x: Int($0.minX), y: Int($0.minY), old.crop($0)) } ?? .unchanged
+                return (img, radius, undo, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
             record("Heal spot r=\(radius)px", ms, peakMB: peak)
+            before.pixels = undo
+            pushUndo(before)
             if enhanceOn { healsSinceEnhance.append((center, brushFraction)) }
             await setWorking(out, redetectFaces: false)
         } catch {
@@ -311,6 +326,61 @@ final class EditorModel: ObservableObject {
         }
         info = "\(img.width)×\(img.height) · \(faceCount) face(s)"
         renderPreview()
+    }
+
+    // MARK: Undo
+
+    private func undoStep(_ pixels: PixelUndo) -> UndoStep {
+        storeShape()
+        return UndoStep(pixels: pixels, enhanceOn: enhanceOn, unenhanced: unenhanced, healsSinceEnhance: healsSinceEnhance,
+                        faces: faces, shapes: shapes, selectedFace: selectedFace, smooth: smooth)
+    }
+
+    private func pushUndo(_ step: UndoStep) {
+        history.push(step)
+        canUndo = history.canUndo
+    }
+
+    /// A slider drag is one undo step: the values from when the finger went down.
+    func sliderEditing(_ editing: Bool) {
+        if editing {
+            sliderStart = undoStep(.unchanged)
+        } else if let start = sliderStart {
+            sliderStart = nil
+            storeShape()
+            if start.smooth != smooth || start.shapes != shapes { pushUndo(start) }
+        }
+    }
+
+    /// Puts back the photo, the Enhance switch and the slider values from before the last change.
+    func undo() async {
+        guard busy == nil, var img = working, let step = history.pop() else { return }
+        canUndo = history.canUndo
+        let t0 = CFAbsoluteTimeGetCurrent()
+        enhanceOn = step.enhanceOn
+        unenhanced = step.unenhanced
+        healsSinceEnhance = step.healsSinceEnhance
+        faces = step.faces
+        faceCount = step.faces.count
+        shapes = step.shapes
+        selectedFace = step.selectedFace
+        let v = step.selectedFace.map { shapes[$0] } ?? FaceShape()
+        slim = v.slim; eyes = v.eyes; nose = v.nose
+        smooth = step.smooth
+        switch step.pixels {
+        case .unchanged:
+            renderPreview()
+        case .whole(let old):
+            busy = "Undoing…"
+            defer { busy = nil }
+            await setWorking(old, redetectFaces: false)
+        case .patch(let x, let y, let old):
+            busy = "Undoing…"
+            defer { busy = nil }
+            img.paste(old, x: x, y: y)
+            await setWorking(img, redetectFaces: false)
+        }
+        record("Undo", (CFAbsoluteTimeGetCurrent() - t0) * 1000)
     }
 
     // MARK: Live sliders (Smooth, Face shape)
