@@ -44,6 +44,7 @@ struct ContentView: View {
                 Text(model.error ?? "")
             }
             .task { await model.warmUp() }
+            .onChange(of: model.tool) { _, t in model.toolShown(t) }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
                 model.noteMemoryWarning()
             }
