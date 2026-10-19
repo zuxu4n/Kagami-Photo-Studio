@@ -416,12 +416,15 @@ struct ContentView: View {
     }
 
     /// A labelled slider with a reset button that puts it back to `reset` (greyed out while it's already there).
+    /// Two-way sliders (ranges below zero) snap to 0 when released within 4% of it.
     /// For undoable sliders the reset is one undo step, like a drag.
     private func sliderRow(_ title: String, value: Binding<Float>, range: ClosedRange<Float> = 0...1, reset: Float = 0, undoable: Bool = true) -> some View {
         HStack {
             Text(title).font(.subheadline).frame(width: 96, alignment: .leading)
             Slider(value: value, in: range) { editing in
                 sliding = editing
+                // Two-way sliders snap back to the middle when let go close to it, so "off" is easy to hit.
+                if !editing, range.lowerBound < 0, abs(value.wrappedValue) < 0.04 { value.wrappedValue = 0 }
                 if undoable { model.sliderEditing(editing) } else { brushRing = editing }
             }
             Button {

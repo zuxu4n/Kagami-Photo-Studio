@@ -55,7 +55,8 @@ kernel void smoothSkin(texture2d<float, access::sample> src [[texture(0)]],
 struct WarpOp {
     float2 c;      // centre, pixels
     float r;       // radius, pixels
-    float kind;    // 0 = translate, 1 = bulge, 2 = Reshape push, 3 = squeeze (Width), 4 = scale (Size), 5 = Perspective translate
+    float kind;    // 0 = translate, 1 = bulge, 2 = Reshape push, 3 = squeeze (Width), 4 = scale (Size), 5 = Perspective translate,
+                   // 6 = skip marker: the next `pad` handles all lie within r of c
     float2 m;      // translate displacement, pixels; squeeze and scale: the unit axis r is measured along
     float s;       // bulge, squeeze or scale strength; translate: its slider's group
     float pad;     // squeeze and scale: reach along the other axis, pixels (r is the reach along m)
@@ -81,7 +82,7 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
     float2 p = float2(gid) + 0.5;
     for (int k = int(count) - 1; k >= 0; k--) {
         WarpOp op = ops[k];
-        if (op.kind < 1.5 || op.kind > 2.5) continue;   // Reshape pushes only
+        if (op.kind < 1.5 || op.kind > 2.5) break;   // Reshape pushes only; they are last in the list
         float2 d = p - op.c;
         float dd = dot(d, d);
         float rr = op.r * op.r;
@@ -93,6 +94,7 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
     // its shape and the hair and background around it bend smoothly. At up to 10% they can't fold.
     for (uint k = 0; k < count; k++) {
         WarpOp op = ops[k];
+        if (op.kind > 5.5) { k += uint(op.pad); continue; }   // a run of translates: not needed here
         if (op.kind < 3.5 || op.kind > 4.5) continue;
         float2 d = p - op.c;
         float a = dot(d, op.m);
@@ -106,6 +108,13 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
     float runW = 0.0, runGroup = -1.0;
     for (uint k = 0; k < count; k++) {
         WarpOp op = ops[k];
+        if (op.kind > 5.5) {                   // a run's skip marker: finish the run before, skip this one if too far
+            if (runW > 0.0) q -= run / max(1.0, runW);
+            run = 0.0; runW = 0.0; runGroup = -1.0;
+            float2 d = p - op.c;
+            if (dot(d, d) >= op.r * op.r) k += uint(op.pad);
+            continue;
+        }
         bool persp = op.kind > 4.5;
         if (op.kind > 0.5 && !persp) continue;  // translate and Perspective only
         float group = persp ? -2.0 : op.s;
@@ -127,6 +136,7 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
     // They come after the translates, so Width adds to Slim jawline instead of being averaged with it.
     for (uint k = 0; k < count; k++) {
         WarpOp op = ops[k];
+        if (op.kind > 5.5) { k += uint(op.pad); continue; }
         if (op.kind < 2.5 || op.kind > 3.5) continue;
         float2 d = q - op.c;
         float a = dot(d, op.m);
@@ -137,6 +147,7 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
     }
     for (uint k = 0; k < count; k++) {
         WarpOp op = ops[k];
+        if (op.kind > 5.5) { k += uint(op.pad); continue; }
         if (op.kind < 0.5 || op.kind > 1.5) continue;  // bulge only
         float2 d = q - op.c;
         float dd = dot(d, d);

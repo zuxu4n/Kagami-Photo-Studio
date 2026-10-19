@@ -75,7 +75,8 @@ struct FaceShape: Equatable {
 struct WarpOp {
     var c: SIMD2<Float>      // centre (pixels)
     var r: Float             // radius (pixels)
-    var kind: Float          // 0 = translate, 1 = bulge, 2 = Reshape push, 3 = squeeze, 4 = scale, 5 = Perspective translate
+    var kind: Float          // 0 = translate, 1 = bulge, 2 = Reshape push, 3 = squeeze, 4 = scale, 5 = Perspective translate,
+                             // 6 = skip marker (the next `pad` handles all lie within r of c)
     var m: SIMD2<Float>      // translate: displacement (pixels); squeeze and scale: the unit axis r is measured along
     var s: Float             // bulge, squeeze or scale: strength; translate: its slider's group (see TranslateGroup)
     var pad: Float = 0       // squeeze and scale: reach along the other axis (pixels; r is the reach along m)
@@ -213,7 +214,7 @@ enum FaceAnalyzer {
                 ops += meshOps(f.mesh.map(v), f.meshDepth.map { Float($0) * W }, shapes[i])
             }
         }
-        ops = Array(ops.prefix(maxSliderOps))
+        ops = withSkips(Array(ops.prefix(maxSliderOps)))
         // Pushes are applied one after another on top of the slider warp. The shader looks each one up at the
         // point it moved content to (c + m), so content under the finger follows the finger.
         for shape in shapes {
@@ -222,11 +223,36 @@ enum FaceAnalyzer {
                 ops.append(WarpOp(c: SIMD2(p.x * W, p.y * H) + m, r: p.r * W, kind: 2, m: m, s: 0))
             }
         }
-        return Array(ops.prefix(maxSliderOps + maxPushes))
+        return ops
     }
 
-    /// Most slider handles kept across all faces. Biggest faces come first, so background faces are dropped first.
-    static let maxSliderOps = 160
+    /// Most slider handles kept across all faces (every slider on one face makes about 700). Biggest faces come
+    /// first, so background faces are dropped first.
+    static let maxSliderOps = 2000
+
+    /// Puts a skip marker (kind 6) before each run of 4 or more translate or depth handles of one group: a circle
+    /// holding every handle's reach and move, and how many handles follow. The shader skips the whole run for pixels
+    /// outside it, so a frame costs about as much as the handles near each pixel rather than all of them.
+    static func withSkips(_ ops: [WarpOp]) -> [WarpOp] {
+        func key(_ op: WarpOp) -> Float? { op.kind < 0.5 ? op.s : (op.kind > 4.5 && op.kind < 5.5 ? -2 : nil) }
+        var out: [WarpOp] = []
+        out.reserveCapacity(ops.count + 64)
+        var i = 0
+        while i < ops.count {
+            guard let k = key(ops[i]) else { out.append(ops[i]); i += 1; continue }
+            var j = i
+            while j < ops.count, key(ops[j]) == k { j += 1 }
+            let run = ops[i..<j]
+            if run.count >= 4 {
+                let c = run.reduce(SIMD2<Float>(0, 0)) { $0 + $1.c } / Float(run.count)
+                let reach = run.map { simd_length($0.c - c) + $0.r + simd_length($0.m) }.max()! + 2
+                out.append(WarpOp(c: c, r: reach, kind: 6, m: .zero, s: 0, pad: Float(run.count)))
+            }
+            out.append(contentsOf: run)
+            i = j
+        }
+        return out
+    }
 
     /// One eye in MediaPipe's mesh: its corners, the upper and lower lid from the outer corner in, and the iris centre.
     struct MeshEye { let outer: Int, inner: Int, upper: [Int], lower: [Int], iris: Int }
