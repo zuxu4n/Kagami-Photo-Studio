@@ -33,6 +33,7 @@ struct UndoStep {
     var smooth: Float
     var blur: Float
     var personMatte: PersonMatte?   // the people found on this step's photo, so undoing a Heal needn't look again
+    var blurEdits: MatteEdits       // Blur's hand-painted fixes to them
 }
 
 /// Undo and redo steps, newest last. Old undo steps are dropped once the saved pixels pass `maxBytes`, so a long

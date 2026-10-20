@@ -8,13 +8,32 @@ import Accelerate
 /// Made once per photo (and again after Enhance or Heal change it), then reused for every Blur frame and the Save.
 struct PersonMatte {
     let width: Int, height: Int
-    let alpha: [UInt8]          // 255 on a person, refined along the edges with the photo as a guide (hair)
+    let base: [UInt8]           // 255 on a person as the cutout found them, refined along the edges with the photo as a guide (hair)
+    let alpha: [UInt8]          // `base` with the hand-painted fixes in `edits`
     let holeWidth: Int, holeHeight: Int
     let hole: [UInt8]           // the people grown a little and feathered: where the background is filled before blurring
     let fill: [UInt8]           // RGBA at hole size: the background around the people carried in over them
     let fgWidth: Int, fgHeight: Int
     let fg: [UInt8]             // RGBA: the people's own colours carried out past their edges, for half-covered pixels
     let hasPerson: Bool
+    var edits = MatteEdits.none
+}
+
+/// Hand-painted fixes to the people found, at any size (normalised): 255 keeps a pixel sharp as part of a person,
+/// 0 blurs it as background, 128 leaves the cutout's own answer.
+struct MatteEdits: Equatable {
+    var width: Int, height: Int
+    var values: [UInt8]
+    static let none = MatteEdits(width: 1, height: 1, values: [128])
+    var isEmpty: Bool { !values.contains { $0 != 128 } }
+
+    /// The same fixes at w x h (nearest pixel), so a photo that changed size keeps them in place.
+    func resized(_ w: Int, _ h: Int) -> MatteEdits {
+        if w == width && h == height { return self }
+        var out = [UInt8](repeating: 128, count: w * h)
+        for y in 0..<h { for x in 0..<w { out[y * w + x] = values[min(height - 1, y * height / h) * width + min(width - 1, x * width / w)] } }
+        return MatteEdits(width: w, height: h, values: out)
+    }
 }
 
 /// Background blur like a camera lens: the people stay sharp and everything behind them is blurred with a round
@@ -68,8 +87,26 @@ final class BackgroundBlur {
         }
         let on = raw.reduce(0) { $0 + ($1 > 128 ? 1 : 0) }
         let hasPerson = Double(on) > 0.002 * Double(raw.count)
-        let alpha = hasPerson ? refine(raw, mw, mh, guide: img.scaled(toWidth: mw, height: mh)) : [UInt8](repeating: 0, count: mw * mh)
+        let base = hasPerson ? refine(raw, mw, mh, guide: img.scaled(toWidth: mw, height: mh)) : [UInt8](repeating: 0, count: mw * mh)
+        return finish(base: base, alpha: base, mw, mh, img, edits: .none)
+    }
 
+    /// `m` with `edits` painted over the cutout's own answer, and its fill made again so the background behind a
+    /// pixel painted sharp doesn't hold its colours (and a part painted blurred is filled like background).
+    static func withEdits(_ m: PersonMatte, _ edits: MatteEdits, image img: RGBAImage) -> PersonMatte {
+        let e = edits.resized(m.width, m.height)
+        var alpha = m.base
+        for k in alpha.indices {
+            let v = e.values[k]
+            if v > 128 { alpha[k] = UInt8(Int(alpha[k]) + (255 - Int(alpha[k])) * (Int(v) - 128) / 127) }
+            else if v < 128 { alpha[k] = UInt8(Int(alpha[k]) * Int(v) / 128) }
+        }
+        return finish(base: m.base, alpha: alpha, m.width, m.height, img, edits: edits)
+    }
+
+    private static func finish(base: [UInt8], alpha: [UInt8], _ mw: Int, _ mh: Int, _ img: RGBAImage, edits: MatteEdits) -> PersonMatte {
+        let on = alpha.reduce(0) { $0 + ($1 > 128 ? 1 : 0) }
+        let hasPerson = Double(on) > 0.002 * Double(alpha.count)
         let hs = min(1.0, holeSide / Double(max(img.width, img.height)))
         let hw = max(1, Int(Double(img.width) * hs)), hh = max(1, Int(Double(img.height) * hs))
         let hole = hasPerson ? holeMask(alpha, mw, mh, hw, hh) : [UInt8](repeating: 0, count: hw * hh)
@@ -80,8 +117,8 @@ final class BackgroundBlur {
         let fs = min(1.0, fgSide / Double(max(img.width, img.height)))
         let fw = max(1, Int(Double(img.width) * fs)), fh = max(1, Int(Double(img.height) * fs))
         let fg = hasPerson ? pullPush(img.scaled(toWidth: fw, height: fh), weights: solid(alpha, mw, mh, fw, fh)) : [UInt8](repeating: 0, count: fw * fh * 4)
-        return PersonMatte(width: mw, height: mh, alpha: alpha, holeWidth: hw, holeHeight: hh, hole: hole, fill: fill,
-                           fgWidth: fw, fgHeight: fh, fg: fg, hasPerson: hasPerson)
+        return PersonMatte(width: mw, height: mh, base: base, alpha: alpha, holeWidth: hw, holeHeight: hh, hole: hole, fill: fill,
+                           fgWidth: fw, fgHeight: fh, fg: fg, hasPerson: hasPerson, edits: edits)
     }
 
     /// The cutout's edges lined up with the photo's own (a guided filter on brightness), so strands of hair the cutout
@@ -280,17 +317,18 @@ final class BackgroundBlur {
     // MARK: Blurring
 
     /// `img` with the background blurred by `strength` (0...1). The matte is normalised, so this runs at any size.
-    static func apply(_ img: RGBAImage, matte: PersonMatte, strength: Float) -> RGBAImage {
+    /// `edits`: fixes being painted that `matte` doesn't hold yet (a stroke under way), shown on the edge only.
+    static func apply(_ img: RGBAImage, matte: PersonMatte, strength: Float, edits: MatteEdits? = nil) -> RGBAImage {
         let rFull = Double(strength) * maxRadius * Double(max(img.width, img.height))
         guard rFull > 0.3 else { return img }
         let s = min(0.5, smallRadius / rFull)
         let sw = max(8, Int((Double(img.width) * s).rounded())), sh = max(8, Int((Double(img.height) * s).rounded()))
         let small = img.scaled(toWidth: sw, height: sh)
-        return shared.run(img, small: small, matte: matte, radius: Float(rFull * Double(sw) / Double(img.width)),
+        return shared.run(img, small: small, matte: matte, edits: edits ?? matte.edits, radius: Float(rFull * Double(sw) / Double(img.width)),
                           fade: Float(min(1, max(0, (rFull - 0.3) / 2.7))))
     }
 
-    private func run(_ img: RGBAImage, small: RGBAImage, matte: PersonMatte, radius: Float, fade: Float) -> RGBAImage {
+    private func run(_ img: RGBAImage, small: RGBAImage, matte: PersonMatte, edits: MatteEdits, radius: Float, fade: Float) -> RGBAImage {
         func tex(_ fmt: MTLPixelFormat, _ w: Int, _ h: Int, private p: Bool = false) -> MTLTexture {
             let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: fmt, width: w, height: h, mipmapped: false)
             d.usage = [.shaderRead, .shaderWrite]
@@ -306,6 +344,7 @@ final class BackgroundBlur {
         let fill = tex(.rgba8Unorm, matte.holeWidth, matte.holeHeight); upload(fill, matte.fill, 4)
         let alpha = tex(.r8Unorm, matte.width, matte.height); upload(alpha, matte.alpha, 1)
         let fg = tex(.rgba8Unorm, matte.fgWidth, matte.fgHeight); upload(fg, matte.fg, 4)
+        let ed = tex(.r8Unorm, edits.width, edits.height); upload(ed, edits.values, 1)
         let prepped = tex(.rgba16Float, small.width, small.height, private: true)
         let blurred = tex(.rgba16Float, small.width, small.height, private: true)
         let dst = tex(.rgba8Unorm, img.width, img.height)
@@ -324,7 +363,7 @@ final class BackgroundBlur {
         enc.setBytes(&r, length: 4, index: 0); enc.setBytes(&taps, length: 4, index: 1)
         dispatch(lensPSO, small.width, small.height)
         enc.setTexture(src, index: 0); enc.setTexture(blurred, index: 1); enc.setTexture(alpha, index: 2); enc.setTexture(dst, index: 3); enc.setTexture(fg, index: 4)
-        enc.setTexture(prepped, index: 5); enc.setTexture(hole, index: 6); enc.setTexture(fill, index: 7)
+        enc.setTexture(prepped, index: 5); enc.setTexture(hole, index: 6); enc.setTexture(fill, index: 7); enc.setTexture(ed, index: 8)
         enc.setBytes(&f, length: 4, index: 0)
         dispatch(compositePSO, img.width, img.height)
         enc.endEncoding()
@@ -340,7 +379,7 @@ final class BackgroundBlur {
     func warmUp() {
         let img = RGBAImage(width: 64, height: 64)
         let matte = (try? BackgroundBlur.personMatte(img))
-            ?? PersonMatte(width: 1, height: 1, alpha: [0], holeWidth: 1, holeHeight: 1, hole: [0], fill: [0, 0, 0, 255],
+            ?? PersonMatte(width: 1, height: 1, base: [0], alpha: [0], holeWidth: 1, holeHeight: 1, hole: [0], fill: [0, 0, 0, 255],
                            fgWidth: 1, fgHeight: 1, fg: [0, 0, 0, 255], hasPerson: false)
         _ = BackgroundBlur.apply(img, matte: matte, strength: 1)
     }
@@ -407,6 +446,7 @@ kernel void blurComposite(texture2d<float, access::read> src [[texture(0)]],
                           texture2d<float, access::sample> behind [[texture(5)]],
                           texture2d<float, access::sample> hole [[texture(6)]],
                           texture2d<float, access::sample> fill [[texture(7)]],
+                          texture2d<float, access::sample> edits [[texture(8)]],
                           constant float &fade [[buffer(0)]],
                           uint2 gid [[thread_position_in_grid]])
 {
@@ -436,6 +476,10 @@ kernel void blurComposite(texture2d<float, access::read> src [[texture(0)]],
             a = max(a, s);
         }
     }
+    // Painted fixes come last: they win over the cutout and the flyaway search.
+    float e = edits.sample(sn, uv).r;
+    if (e > 0.51) a = mix(a, 1.0, (e - 0.5) * 2.0);
+    else if (e < 0.49) a = mix(a, 0.0, (0.5 - e) * 2.0);
     // A half-covered pixel's own colour is part background; the person's colour from inside the edge stands in for
     // more of it the less the person covers it.
     float3 f = mix(fc, c, a * a);

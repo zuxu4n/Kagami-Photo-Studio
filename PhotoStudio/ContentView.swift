@@ -88,6 +88,9 @@ struct ContentView: View {
                         if model.selectionTint, !comparing, let sel = model.selectionOverlay {
                             Image(uiImage: sel).resizable().scaledToFit().allowsHitTesting(false)
                         }
+                        if model.blurTint, !comparing, let sel = model.blurOverlay {
+                            Image(uiImage: sel).resizable().scaledToFit().allowsHitTesting(false)
+                        }
                         if model.tool == .face || model.tool == .reshape || (model.tool == .retouch && model.faceCount > 1), model.display != nil {
                             FaceGuides(model: model, zoom: zoom)
                                 .opacity(sliding || touching || comparing || model.busy != nil ? 0.3 : 1)  // dim, don't hide, while adjusting
@@ -108,9 +111,9 @@ struct ContentView: View {
                     }
                     .foregroundStyle(.secondary)
                 }
-                if brushRing, model.tool == .heal || reshapeOn {
+                if brushRing, model.tool == .heal || model.tool == .blur || reshapeOn {
                     // The brush as it will land on the photo at this zoom (Reshape's is sized to the selected face).
-                    let r = model.tool == .heal ? CGFloat(model.brush) : model.reshapeRadiusFraction
+                    let r = model.tool == .heal ? CGFloat(model.brush) : model.tool == .blur ? CGFloat(model.blurBrush) : model.reshapeRadiusFraction
                     let d = r * 2 * fittedSize(geo.size).width * zoom
                     Circle().stroke(Color.white, lineWidth: 1.5).frame(width: d, height: d)
                         .shadow(color: .black.opacity(0.6), radius: 1).allowsHitTesting(false)
@@ -141,6 +144,7 @@ struct ContentView: View {
                     case .brush, .erase:
                         model.paint(to: p, erase: model.healMode == .erase, finished: true)
                     }
+                case .blur where model.blurMode.paints: model.paintBlur(to: p, finished: true)
                 case .face, .reshape, .retouch: model.selectFace(at: p)
                 default: break
                 }
@@ -149,7 +153,7 @@ struct ContentView: View {
                 // While zoomed a one-finger drag pans, so holding the photo doesn't compare (the Compare button still does).
                 // With Reshape on, holding a face is the start of a push, so only the Compare button compares.
                 // With Position shown, holding the photo is the start of moving the oval.
-                if model.tool != .heal, !reshapeOn, !positionOn { comparing = pressing && zoom <= 1.01 && pinchStart == nil }
+                if model.tool != .heal, !reshapeOn, !positionOn, !paintOn { comparing = pressing && zoom <= 1.01 && pinchStart == nil }
             }, perform: {})
             .simultaneousGesture(DragGesture(minimumDistance: 0)
                 .onChanged { v in
@@ -172,15 +176,15 @@ struct ContentView: View {
                     if paintOn {
                         if pinchStart != nil {
                             // A second finger came down: a pinch, so the stroke so far stays and painting stops.
-                            if paintDrag == true { model.endStroke() }
+                            if paintDrag == true { endPaint() }
                             paintDrag = false
                         } else if paintDrag == nil {
                             guard hypot(v.translation.width, v.translation.height) > 6 else { return }
                             paintDrag = true
-                            if let a = imagePoint(v.startLocation, in: geo.size, clamp: false) { model.paint(to: a, erase: model.healMode == .erase) }
+                            if let a = imagePoint(v.startLocation, in: geo.size, clamp: false) { paint(a) }
                         }
                         if paintDrag == true, let b = imagePoint(v.location, in: geo.size, clamp: false) {
-                            model.paint(to: b, erase: model.healMode == .erase)
+                            paint(b)
                             return
                         }
                     }
@@ -210,7 +214,7 @@ struct ContentView: View {
                     reshapeDrag = nil
                     if positionDrag == true { model.endPosition() }
                     positionDrag = nil
-                    if paintDrag == true { model.endStroke() }
+                    if paintDrag == true { endPaint() }
                     paintDrag = nil
                 })
             .simultaneousGesture(MagnifyGesture()
@@ -253,7 +257,16 @@ struct ContentView: View {
 
     private var reshapeOn: Bool { model.tool == .reshape }
     /// Heal › Brush or Erase: a one-finger drag paints the selection (two fingers pinch and move around).
-    private var paintOn: Bool { model.tool == .heal && (model.healMode == .brush || model.healMode == .erase) }
+    /// Blur › Brush or Erase works the same way on the people kept sharp.
+    private var paintOn: Bool { (model.tool == .heal && (model.healMode == .brush || model.healMode == .erase)) || model.blurTint }
+
+    private func paint(_ p: CGPoint) {
+        if model.tool == .blur { model.paintBlur(to: p) } else { model.paint(to: p, erase: model.healMode == .erase) }
+    }
+
+    private func endPaint() {
+        if model.tool == .blur { model.endBlurStroke() } else { model.endStroke() }
+    }
     /// The Face › Position oval is on the photo: a one-finger drag anywhere on the canvas moves it (instead of panning).
     private var positionOn: Bool { model.tool == .face && feature == .position && model.selectedHasMesh }
 
@@ -331,6 +344,18 @@ struct ContentView: View {
                 HStack { Text(retouchCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             case .blur:
                 sliderRow("Strength", value: $model.blur)
+                Picker("Blur", selection: $model.blurMode) {
+                    ForEach(BlurMode.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .disabled(model.personMatte == nil)
+                if model.blurMode.paints {
+                    HStack {
+                        sliderRow("Brush", value: $model.blurBrush, range: 0.005...0.15, reset: 0.04, undoable: false)
+                        Button("Reset") { model.resetBlurEdits() }
+                            .font(.caption.bold()).disabled(model.blurEdits.isEmpty || model.busy != nil)
+                    }
+                }
                 HStack { Text(blurCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             case .heal:
                 Picker("Heal", selection: $model.healMode) {
@@ -435,6 +460,7 @@ struct ContentView: View {
         .onChange(of: model.brightEyes) { _, _ in model.renderPreview() }
         .onChange(of: model.tone) { _, _ in model.renderPreview() }
         .onChange(of: model.blur) { _, _ in model.renderPreview() }
+        .onChange(of: model.blurMode) { _, _ in model.updateBlurOverlay() }
     }
 
     private var subtab: String { subtabs[area] ?? area.subtabs[0] }
@@ -522,6 +548,11 @@ struct ContentView: View {
     }
 
     private var blurCaption: String {
+        switch model.blurMode {
+        case .brush: return "Paint parts that should stay sharp"
+        case .erase: return "Paint parts that should be blurred"
+        case .view: break
+        }
         guard let m = model.personMatte else { return model.findingPeople ? "Finding people…" : "Blurs what's behind the people" }
         return m.hasPerson ? "Everyone found stays sharp" : "No person found, so the whole photo is blurred"
     }
