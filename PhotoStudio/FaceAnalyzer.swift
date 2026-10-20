@@ -59,6 +59,7 @@ struct FaceShape: Equatable {
     var smirk: Float = 0      // -1...1, lifts the mouth corner on the photo's left or right
     var forehead: Float = 0   // -1...1, lower or higher hairline
     var pushes: [FacePush] = []   // in the order they were made; applied after the sliders
+    var retouch = FaceRetouch()   // the Retouch tab's colour changes; not part of the warp (`isOff`)
     var meshOff: Bool {
         abs(slim) <= 0.001 && abs(eyes) <= 0.001 && abs(size) <= 0.001 && abs(width) <= 0.001 && abs(perspective) <= 0.001 && abs(positionX) <= 0.001 && abs(positionY) <= 0.001
             && abs(eyeWidth) <= 0.001 && abs(eyeHeight) <= 0.001 && abs(eyeTilt) <= 0.001 && abs(eyeDistance) <= 0.001

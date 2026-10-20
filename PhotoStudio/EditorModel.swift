@@ -2,7 +2,7 @@ import SwiftUI
 import Photos
 
 enum Tool: String, CaseIterable, Identifiable {
-    case enhance = "Enhance", smooth = "Smooth", heal = "Heal", face = "Face", reshape = "Reshape"
+    case enhance = "Enhance", smooth = "Smooth", retouch = "Retouch", heal = "Heal", face = "Face", reshape = "Reshape"
     var id: String { rawValue }
 }
 
@@ -48,6 +48,9 @@ final class EditorModel: ObservableObject {
     @Published var smile: Float = 0
     @Published var smirk: Float = 0
     @Published var forehead: Float = 0
+    @Published var teeth: Float = 0         // Retouch: whiten teeth, brighten eyes, even skin tone (the selected face's values)
+    @Published var brightEyes: Float = 0
+    @Published var tone: Float = 0
     @Published var brush: Float = 0.025      // heal brush radius as a fraction of the image width
     @Published var faceCount = 0
     var reshaping: Bool { tool == .reshape }  // the Reshape tab: a one-finger drag on a face pushes it
@@ -62,7 +65,7 @@ final class EditorModel: ObservableObject {
     private var sourceVersion = 0       // changes with the preview photo or the faces, so cached renders aren't reused
     @Published private(set) var selectedFace: Int?   // the face the Face and Reshape tabs edit
     private var shapes: [FaceShape] = []             // Face tab values for each face, same order as `faces`
-    private var smoothed: (version: Int, smooth: Float, image: RGBAImage)?  // the preview after Smooth, reused while only Face values move
+    private var smoothed: (version: Int, smooth: Float, retouch: [FaceRetouch], image: RGBAImage)?  // the preview after Smooth and Retouch, reused while only Face values move
     private var rendering = false       // a preview frame is being drawn
     private var renderAgain = false     // values changed while it was drawn
     private var lastPreviewLog: CFAbsoluteTime = 0
@@ -140,6 +143,7 @@ final class EditorModel: ObservableObject {
         v.size = size; v.width = width; v.perspective = perspective; v.positionX = positionX; v.positionY = positionY
         v.jaw = jaw; v.chin = chin; v.jawSize = jawSize; v.define = define; v.jawLength = jawLength; v.lips = lips; v.lipSize = lipSize; v.lipWidth = lipWidth;
         v.browThick = browThick; v.browLift = browLift; v.browShape = browShape; v.browTilt = browTilt; v.browRaise = browRaise; v.smile = smile; v.smirk = smirk; v.forehead = forehead
+        v.retouch = FaceRetouch(teeth: teeth, eyes: brightEyes, tone: tone)
         return v
     }
 
@@ -151,6 +155,7 @@ final class EditorModel: ObservableObject {
         size = v.size; width = v.width; perspective = v.perspective; positionX = v.positionX; positionY = v.positionY
         jaw = v.jaw; chin = v.chin; jawSize = v.jawSize; define = v.define; jawLength = v.jawLength; lips = v.lips; lipSize = v.lipSize; lipWidth = v.lipWidth;
         browThick = v.browThick; browLift = v.browLift; browShape = v.browShape; browTilt = v.browTilt; browRaise = v.browRaise; smile = v.smile; smirk = v.smirk; forehead = v.forehead
+        teeth = v.retouch.teeth; brightEyes = v.retouch.eyes; tone = v.retouch.tone
     }
 
     /// Starts the Face tab on the biggest face, with every face's sliders at zero.
@@ -346,6 +351,7 @@ final class EditorModel: ObservableObject {
             let meter = MemoryMeter()
             let t0 = CFAbsoluteTimeGetCurrent()
             GPU.shared.warmUp()
+            Retouch.shared.warmUp()
             return ((CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
         }.value
         record("Warm-up: slider GPU code", gpuMs, peakMB: gpuPeak)
@@ -731,19 +737,20 @@ final class EditorModel: ObservableObject {
         rendering = true
         renderAgain = false
         let smooth = self.smooth, shapes = self.shapes, faces = self.faces, version = sourceVersion
-        let cached = smoothed.flatMap { $0.version == version && $0.smooth == smooth ? $0.image : nil }
+        let retouch = shapes.map(\.retouch)
+        let cached = smoothed.flatMap { $0.version == version && $0.smooth == smooth && $0.retouch == retouch ? $0.image : nil }
         Task {
             let (base, img, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (RGBAImage, UIImage, Double, Double) in
                 let meter = MemoryMeter()
                 let t0 = CFAbsoluteTimeGetCurrent()
-                let base = cached ?? EditorModel.apply(prev, faces: faces, smooth: smooth, shapes: [])
-                let out = EditorModel.apply(base, faces: faces, smooth: 0, shapes: shapes)
+                let base = cached ?? EditorModel.apply(prev, faces: faces, smooth: smooth, shapes: shapes, warp: false)
+                let out = EditorModel.apply(base, faces: faces, smooth: 0, shapes: shapes, retouch: false)
                 let ui = out.uiImage()
                 return (base, ui, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
             rendering = false
             if version == sourceVersion {   // a new photo or new faces make this frame stale; the next one replaces it
-                smoothed = (version, smooth, base)
+                smoothed = (version, smooth, retouch, base)
                 display = img
                 dragFrames.count += 1
             }
@@ -757,8 +764,10 @@ final class EditorModel: ObservableObject {
         }
     }
 
-    /// Smooth then warp. Runs at any resolution because the face geometry is normalised.
-    nonisolated static func apply(_ img: RGBAImage, faces: [FaceGeometry], smooth: Float, shapes: [FaceShape]) -> RGBAImage {
+    /// Smooth, then Retouch, then warp. Runs at any resolution because the face geometry is normalised.
+    /// The preview does the first two once (`warp: false`) and reuses them while only the Face values move.
+    nonisolated static func apply(_ img: RGBAImage, faces: [FaceGeometry], smooth: Float, shapes: [FaceShape],
+                                  retouch: Bool = true, warp: Bool = true) -> RGBAImage {
         var out = img
         if smooth > 0.001, !faces.isEmpty {
             let s = min(1.0, 1024.0 / Double(max(img.width, img.height)))
@@ -767,7 +776,10 @@ final class EditorModel: ObservableObject {
             let faceW = Float((faces.map { $0.box.width }.max() ?? 0.2)) * Float(img.width)
             out = GPU.shared.smooth(out, mask: mask, maskWidth: mw, maskHeight: mh, strength: smooth, radius: max(3, faceW / 40))
         }
-        if shapes.contains(where: { !$0.isOff }) {
+        if retouch {
+            out = Retouch.apply(out, faces: faces, retouch: shapes.map(\.retouch))
+        }
+        if warp, shapes.contains(where: { !$0.isOff }) {
             let ops = FaceAnalyzer.warpOps(faces: faces, shapes: shapes, width: img.width, height: img.height)
             out = GPU.shared.warp(out, ops: ops)
         }
@@ -808,13 +820,19 @@ final class EditorModel: ObservableObject {
     }
 
     /// Whether any Face slider (Position included) is moved on the selected face.
-    var faceSlidersMoved: Bool { sliderShape(keeping: FaceShape()) != FaceShape() }
+    var faceSlidersMoved: Bool {
+        var v = sliderShape(keeping: FaceShape())
+        v.retouch = FaceRetouch()
+        return v != FaceShape()
+    }
 
-    /// Puts every Face slider on the selected face back to the middle (one undo step). Its Reshape pushes and
-    /// Smooth stay.
+    /// Puts every Face slider on the selected face back to the middle (one undo step). Its Reshape pushes,
+    /// Retouch values and Smooth stay.
     func resetFaceSliders() {
         sliderEditing(true)
-        showSliders(FaceShape())
+        var v = FaceShape()
+        v.retouch = sliderShape(keeping: v).retouch
+        showSliders(v)
         sliderEditing(false)
     }
 

@@ -79,7 +79,7 @@ struct ContentView: View {
                 if let img = comparing ? model.original : model.display {
                     ZStack {
                         Image(uiImage: img).resizable().scaledToFit()
-                        if model.tool == .face || model.tool == .reshape, model.display != nil {
+                        if model.tool == .face || model.tool == .reshape || (model.tool == .retouch && model.faceCount > 1), model.display != nil {
                             FaceGuides(model: model, zoom: zoom)
                                 .opacity(sliding || touching || comparing || model.busy != nil ? 0.3 : 1)  // dim, don't hide, while adjusting
                                 .animation(.easeInOut(duration: sliding || touching ? 0.15 : 0.35), value: sliding || touching || comparing)
@@ -126,7 +126,7 @@ struct ContentView: View {
                 guard model.busy == nil, let p = imagePoint(location, in: geo.size) else { return }
                 switch model.tool {
                 case .heal: Task { await model.heal(at: p) }
-                case .face, .reshape: model.selectFace(at: p)
+                case .face, .reshape, .retouch: model.selectFace(at: p)
                 default: break
                 }
             }
@@ -290,6 +290,11 @@ struct ContentView: View {
             case .smooth:
                 sliderRow("Smooth skin", value: $model.smooth)
                 HStack { Text(model.faceCount == 0 ? "No face found" : "Edges, eyes and lips stay sharp").font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
+            case .retouch:
+                sliderRow("Whiten teeth", value: $model.teeth)
+                sliderRow("Brighten eyes", value: $model.brightEyes)
+                sliderRow("Even tone", value: $model.tone)
+                HStack { Text(retouchCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             case .heal:
                 sliderRow("Brush", value: $model.brush, range: 0.004...0.08, reset: 0.025, undoable: false)
                 Text("Tap a spot to remove it (LaMa, on device). Pinch to zoom in on small spots.").font(.caption).foregroundStyle(.secondary)
@@ -368,6 +373,9 @@ struct ContentView: View {
         .onChange(of: model.browRaise) { _, _ in model.renderPreview() }
         .onChange(of: model.smile) { _, _ in model.renderPreview() }
         .onChange(of: model.forehead) { _, _ in model.renderPreview() }
+        .onChange(of: model.teeth) { _, _ in model.renderPreview() }
+        .onChange(of: model.brightEyes) { _, _ in model.renderPreview() }
+        .onChange(of: model.tone) { _, _ in model.renderPreview() }
     }
 
     private var subtab: String { subtabs[area] ?? area.subtabs[0] }
@@ -437,6 +445,12 @@ struct ContentView: View {
         if model.faceCount == 1 { return hint }
         let which = "Face \((model.selectedFace ?? 0) + 1) of \(model.faceCount) · tap another face to switch"
         return hint.isEmpty ? which : "\(hint) · \(which)"
+    }
+
+    private var retouchCaption: String {
+        if model.faceCount == 0 { return "No face found" }
+        if model.faceCount == 1 { return "Colour only; the face's shape stays" }
+        return "Face \((model.selectedFace ?? 0) + 1) of \(model.faceCount) · tap another face to switch"
     }
 
     private var compareButton: some View {
