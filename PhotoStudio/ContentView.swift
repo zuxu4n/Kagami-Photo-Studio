@@ -4,6 +4,7 @@ import PhotosUI
 struct ContentView: View {
     @StateObject private var model = EditorModel()
     @State private var pickerItem: PhotosPickerItem?
+    @State private var showCamera = false
     @State private var comparing = false
     @State private var sliding = false     // a slider is being dragged
     @State private var touching = false    // a finger is on the photo
@@ -38,8 +39,12 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    PhotosPicker(selection: $pickerItem, matching: .images) {
-                        Label("Photo", systemImage: "photo.on.rectangle")
+                    HStack {
+                        PhotosPicker(selection: $pickerItem, matching: .images) {
+                            Label("Photo", systemImage: "photo.on.rectangle")
+                        }
+                        Button { showCamera = true } label: { Label("Camera", systemImage: "camera") }
+                            .disabled(model.busy != nil)
                     }
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -58,6 +63,7 @@ struct ContentView: View {
                     if let data = try? await item.loadTransferable(type: Data.self) { await model.load(data: data) }
                 }
             }
+            .fullScreenCover(isPresented: $showCamera) { CameraView(initial: model.cameraLook()) }
             .alert("Something went wrong", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {

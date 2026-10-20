@@ -183,6 +183,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = PhotoStudio;
+				INFOPLIST_KEY_NSCameraUsageDescription = "PhotoStudio uses the camera to film with your face settings. Nothing leaves your phone.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "PhotoStudio records sound with your videos. Nothing leaves your phone.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "PhotoStudio saves your edited photo to your library. Nothing leaves your phone.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -212,6 +214,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = PhotoStudio;
+				INFOPLIST_KEY_NSCameraUsageDescription = "PhotoStudio uses the camera to film with your face settings. Nothing leaves your phone.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "PhotoStudio records sound with your videos. Nothing leaves your phone.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "PhotoStudio saves your edited photo to your library. Nothing leaves your phone.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

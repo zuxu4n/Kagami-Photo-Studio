@@ -950,6 +950,17 @@ final class EditorModel: ObservableObject {
         sliderEditing(false)
     }
 
+    // MARK: Camera
+
+    /// The open photo's look for the live camera: the picked face's Face and Retouch values and the Smooth strength.
+    /// Nil without a photo or a face.
+    func cameraLook() -> LiveLook? {
+        guard let i = selectedFace, i < shapes.count else { return nil }
+        var shape = sliderShape(keeping: shapes[i])
+        shape.pushes = []
+        return LiveLook(smooth: smooth, shape: shape)
+    }
+
     // MARK: Timings (also written to Documents/timings.json for collection over USB)
 
     private static let logQueue = DispatchQueue(label: "timings-log", qos: .utility)  // one file writer at a time

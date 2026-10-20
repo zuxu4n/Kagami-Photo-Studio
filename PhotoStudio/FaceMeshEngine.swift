@@ -49,6 +49,17 @@ final class FaceMeshEngine {
                              side: max(maxX - minX, maxY - minY) * 1.5, angle: level) ?? first
     }
 
+    /// The mesh for a face tracked from the last video frame: one pass on the crop that frame's mesh places (as
+    /// MediaPipe's own tracking does between detections), in pixels of `img`. Nil when the face has gone.
+    func track(in img: RGBAImage, previous m: [CGPoint]) throws -> (points: [CGPoint], depth: [CGFloat])? {
+        guard m.count >= 478 else { return nil }
+        let xs = m.map(\.x), ys = m.map(\.y)
+        let (minX, maxX, minY, maxY) = (xs.min()!, xs.max()!, ys.min()!, ys.max()!)
+        let level = atan2(m[263].y - m[33].y, m[263].x - m[33].x)
+        return try landmarks(in: img, center: CGPoint(x: (minX + maxX) / 2, y: (minY + maxY) / 2),
+                             side: max(maxX - minX, maxY - minY) * 1.5, angle: level)
+    }
+
     /// Runs the model on the square of `side` pixels centred on `center` and turned by `angle` (radians, y down),
     /// and maps its landmarks back to image pixels. The model's z is negative towards the camera, in crop pixels.
     private func landmarks(in img: RGBAImage, center: CGPoint, side: CGFloat, angle: CGFloat) throws -> (points: [CGPoint], depth: [CGFloat])? {
