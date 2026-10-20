@@ -7,7 +7,12 @@ final class HealEngine {
     static let shared = HealEngine()
 
     let size = 512
+    /// The working size of the package's second function, used for people and other large areas. One copy of the
+    /// weights serves both sizes (a Core ML multifunction package).
+    let largeSize = 1024
     private var model: MLModel?
+    private var largeModel: MLModel?
+    private var largeMissing = false   // an older single-size package: large areas fall back to 512
     private let lock = NSLock()  // the launch warm-up and a tap can both ask for the model
 
     func loadIfNeeded() throws -> MLModel {
@@ -29,6 +34,51 @@ final class HealEngine {
         let mask = try MLTensors.maskTensor(from: [UInt8](repeating: 0, count: size * size), size: size)
         _ = try m.prediction(from: MLDictionaryFeatureProvider(dictionary: ["image": image, "mask": mask]))
         return ((t1 - t0) * 1000, (CFAbsoluteTimeGetCurrent() - t1) * 1000)
+    }
+
+    /// The 1024 function, or nil if the bundled package only has 512. Loaded on first use (about as long as the 512 one).
+    func largeIfAvailable() -> MLModel? {
+        lock.lock()
+        defer { lock.unlock() }
+        if let largeModel { return largeModel }
+        if largeMissing { return nil }
+        guard let url = Bundle.main.url(forResource: "LamaInpaint", withExtension: "mlmodelc") else { return nil }
+        let cfg = MLModelConfiguration()
+        cfg.computeUnits = .cpuAndGPU
+        guard #available(iOS 18.0, macOS 15.0, *) else {
+            largeMissing = true
+            return nil
+        }
+        cfg.functionName = "lama\(largeSize)"
+        do {
+            largeModel = try MLModel(contentsOf: url, configuration: cfg)
+        } catch {
+            largeMissing = true
+        }
+        return largeModel
+    }
+
+    /// Loads the 1024 function and runs one blank pass (for the launch warm-up, after the other models).
+    /// Returns nil if it was already loaded or the package doesn't have it.
+    func warmUpLarge() throws -> (load: Double, run: Double)? {
+        guard largeModel == nil else { return nil }
+        let t0 = CFAbsoluteTimeGetCurrent()
+        guard let m = largeIfAvailable() else { return nil }
+        let t1 = CFAbsoluteTimeGetCurrent()
+        _ = try run(m, image: RGBAImage(width: largeSize, height: largeSize), mask: [UInt8](repeating: 0, count: largeSize * largeSize), n: largeSize)
+        return ((t1 - t0) * 1000, (CFAbsoluteTimeGetCurrent() - t1) * 1000)
+    }
+
+    /// Runs one `n` x `n` pass of `model` on `image` with `mask` (255 = fill) and returns the result.
+    func run(_ model: MLModel, image: RGBAImage, mask: [UInt8], n: Int) throws -> RGBAImage {
+        let imageArr = try MLTensors.rgbTensor(from: image, x0: 0, y0: 0, size: n)
+        let maskArr = try MLTensors.maskTensor(from: mask, size: n)
+        let res = try model.prediction(from: MLDictionaryFeatureProvider(dictionary: ["image": imageArr, "mask": maskArr]))
+        guard let outArr = res.featureValue(for: "output")?.multiArrayValue else { throw EngineError.badOutput }
+        var out = RGBAImage(width: n, height: n)
+        var planes = [UInt8]()
+        MLTensors.copyRGBFast(from: outArr, into: &out, planes: &planes)
+        return out
     }
 
     private func load() throws -> MLModel {
@@ -93,6 +143,22 @@ final class HealEngine {
                 }
             }
         }
+    }
+
+    static func healSpot(_ img: inout RGBAImage, center: CGPoint, brush: Double) throws -> Int {
+        let cx = min(img.width - 1, max(0, Int(center.x * CGFloat(img.width))))
+        let cy = min(img.height - 1, max(0, Int(center.y * CGFloat(img.height))))
+        let radius = max(4, Int(brush * Double(img.width)))
+        var mask = [UInt8](repeating: 0, count: img.width * img.height)
+        let r2 = radius * radius
+        for y in max(0, cy - radius)...min(img.height - 1, cy + radius) {
+            for x in max(0, cx - radius)...min(img.width - 1, cx + radius) {
+                let dx = x - cx, dy = y - cy
+                if dx * dx + dy * dy <= r2 { mask[y * img.width + x] = 255 }
+            }
+        }
+        try shared.heal(&img, mask: mask)
+        return radius
     }
 
     static func cropMask(_ mask: [UInt8], width w: Int, region: (Int, Int, Int)) -> [UInt8] {

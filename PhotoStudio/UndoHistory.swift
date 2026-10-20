@@ -26,7 +26,7 @@ struct UndoStep {
     var enhancedFull: RGBAImage?   // Enhance's own output and the photo before it at that size, for Strength
     var enhanceBase: RGBAImage?
     var enhanceStrength: Float
-    var healsSinceEnhance: [(center: CGPoint, brush: Double)]
+    var healsSinceEnhance: [HealRecord]
     var faces: [FaceGeometry]
     var shapes: [FaceShape]
     var selectedFace: Int?

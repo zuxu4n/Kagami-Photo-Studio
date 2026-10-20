@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var subtabs: [FaceArea: String] = [:]  // the subtab picked in each main tab
     @State private var reshapeDrag: Bool?      // Reshape on: nil until the finger moves, then true (pushing a face) or false (panning)
     @State private var positionDrag: Bool?     // Position shown: nil until the finger moves, then true (moving the oval) or false (panning)
+    @State private var paintDrag: Bool?        // Heal › Brush or Erase: nil until the finger moves, then true (painting) or false (panning)
     private let maxZoom: CGFloat = 8
 
     var body: some View {
@@ -63,7 +64,11 @@ struct ContentView: View {
                 await model.warmUp()
                 if EnhanceBench.requested { await model.runEnhanceBench() }
             }
-            .onChange(of: model.tool) { _, t in model.toolShown(t) }
+            .onChange(of: model.tool) { _, t in
+                model.toolShown(t)
+                if t == .heal, model.healMode.selects { model.preparePeople() }
+            }
+            .onChange(of: model.healMode) { _, m in if m.selects { model.preparePeople() } }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
                 model.noteMemoryWarning()
             }
@@ -79,6 +84,9 @@ struct ContentView: View {
                 if let img = comparing ? model.original : model.display {
                     ZStack {
                         Image(uiImage: img).resizable().scaledToFit()
+                        if model.selectionTint, !comparing, let sel = model.selectionOverlay {
+                            Image(uiImage: sel).resizable().scaledToFit().allowsHitTesting(false)
+                        }
                         if model.tool == .face || model.tool == .reshape || (model.tool == .retouch && model.faceCount > 1), model.display != nil {
                             FaceGuides(model: model, zoom: zoom)
                                 .opacity(sliding || touching || comparing || model.busy != nil ? 0.3 : 1)  // dim, don't hide, while adjusting
@@ -125,7 +133,13 @@ struct ContentView: View {
             .onTapGesture { location in
                 guard model.busy == nil, let p = imagePoint(location, in: geo.size) else { return }
                 switch model.tool {
-                case .heal: Task { await model.heal(at: p) }
+                case .heal:
+                    switch model.healMode {
+                    case .spot: Task { await model.heal(at: p) }
+                    case .people: Task { await model.peopleTap(at: p) }
+                    case .brush, .erase:
+                        model.paint(to: p, erase: model.healMode == .erase, finished: true)
+                    }
                 case .face, .reshape, .retouch: model.selectFace(at: p)
                 default: break
                 }
@@ -151,6 +165,21 @@ struct ContentView: View {
                         }
                         if reshapeDrag == true {
                             model.moveReshape(to: imagePoint(v.location, in: geo.size, clamp: false)!)
+                            return
+                        }
+                    }
+                    if paintOn {
+                        if pinchStart != nil {
+                            // A second finger came down: a pinch, so the stroke so far stays and painting stops.
+                            if paintDrag == true { model.endStroke() }
+                            paintDrag = false
+                        } else if paintDrag == nil {
+                            guard hypot(v.translation.width, v.translation.height) > 6 else { return }
+                            paintDrag = true
+                            if let a = imagePoint(v.startLocation, in: geo.size, clamp: false) { model.paint(to: a, erase: model.healMode == .erase) }
+                        }
+                        if paintDrag == true, let b = imagePoint(v.location, in: geo.size, clamp: false) {
+                            model.paint(to: b, erase: model.healMode == .erase)
                             return
                         }
                     }
@@ -180,6 +209,8 @@ struct ContentView: View {
                     reshapeDrag = nil
                     if positionDrag == true { model.endPosition() }
                     positionDrag = nil
+                    if paintDrag == true { model.endStroke() }
+                    paintDrag = nil
                 })
             .simultaneousGesture(MagnifyGesture()
                 .onChanged { v in
@@ -220,6 +251,8 @@ struct ContentView: View {
     }
 
     private var reshapeOn: Bool { model.tool == .reshape }
+    /// Heal › Brush or Erase: a one-finger drag paints the selection (two fingers pinch and move around).
+    private var paintOn: Bool { model.tool == .heal && (model.healMode == .brush || model.healMode == .erase) }
     /// The Face › Position oval is on the photo: a one-finger drag anywhere on the canvas moves it (instead of panning).
     private var positionOn: Bool { model.tool == .face && feature == .position && model.selectedHasMesh }
 
@@ -299,8 +332,29 @@ struct ContentView: View {
                 sliderRow("Strength", value: $model.blur)
                 HStack { Text(blurCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             case .heal:
-                sliderRow("Brush", value: $model.brush, range: 0.004...0.08, reset: 0.025, undoable: false)
-                Text("Tap a spot to remove it (LaMa, on device). Pinch to zoom in on small spots.").font(.caption).foregroundStyle(.secondary)
+                Picker("Heal", selection: $model.healMode) {
+                    ForEach(HealMode.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                if model.healMode != .people {
+                    sliderRow("Brush", value: $model.brush, range: 0.004...0.08, reset: 0.025, undoable: false)
+                }
+                if model.healMode.selects {
+                    HStack {
+                        Button("Add shadow") { Task { await model.addShadow() } }
+                        Button("Clear") { model.clearSelection() }
+                        Spacer()
+                        Button { Task { await model.removeSelection() } } label: { Label("Remove", systemImage: "wand.and.stars") }
+                            .buttonStyle(.borderedProminent)
+                    }
+                    .font(.subheadline)
+                    .disabled(!model.hasSelection || model.busy != nil)
+                }
+                HStack {
+                    Text(healCaption).font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    compareButton
+                }
             case .face:
                 areaTabs
                 subtabChips
@@ -449,6 +503,15 @@ struct ContentView: View {
         if model.faceCount == 1 { return hint }
         let which = "Face \((model.selectedFace ?? 0) + 1) of \(model.faceCount) · tap another face to switch"
         return hint.isEmpty ? which : "\(hint) · \(which)"
+    }
+
+    private var healCaption: String {
+        switch model.healMode {
+        case .spot: return "Tap a spot to remove it. Pinch to zoom in on small spots."
+        case .people: return model.hasSelection ? "Tap another person to add them, or tap the outline to remove" : "Tap a person to outline them; tap again to remove"
+        case .brush: return "Paint over anything to remove. Two fingers move and zoom."
+        case .erase: return "Paint to take parts out of the selection"
+        }
     }
 
     private var retouchCaption: String {

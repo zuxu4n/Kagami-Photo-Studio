@@ -61,10 +61,10 @@ final class EditorModel: ObservableObject {
     @Published var timings: [(String, Double)] = []
     @Published var info: String = ""
 
-    private var working: RGBAImage?     // full resolution, after Enhance/Heal
-    private var preview: RGBAImage? { didSet { sourceVersion &+= 1 } }   // long side <= previewSide, for live sliders
+    private(set) var working: RGBAImage?     // full resolution, after Enhance/Heal
+    private(set) var preview: RGBAImage? { didSet { sourceVersion &+= 1 } }   // long side <= previewSide, for live sliders
     @Published private(set) var faces: [FaceGeometry] = [] { didSet { sourceVersion &+= 1 } }
-    private var sourceVersion = 0       // changes with the preview photo or the faces, so cached renders aren't reused
+    private(set) var sourceVersion = 0       // changes with the preview photo or the faces, so cached renders aren't reused
     @Published private(set) var selectedFace: Int?   // the face the Face and Reshape tabs edit
     private var shapes: [FaceShape] = []             // Face tab values for each face, same order as `faces`
     private var smoothed: (version: Int, smooth: Float, retouch: [FaceRetouch], image: RGBAImage)?  // the preview after Smooth and Retouch, reused while Blur or Face values move
@@ -83,7 +83,16 @@ final class EditorModel: ObservableObject {
     @Published var enhanceStrength: Float = 0.7   // how much of Enhance's output is shown over the photo before it
     let enhanceStrengthDefault: Float = 0.7
     private var strengthDrag: (base: RGBAImage, enhanced: RGBAImage, start: Float)?  // preview-size copies while dragging
-    private var healsSinceEnhance: [(center: CGPoint, brush: Double)] = []  // replayed on `unenhanced` when Enhance goes off
+    var healsSinceEnhance: [HealRecord] = []  // replayed on `unenhanced` when Enhance goes off
+    // Heal › People, Brush and Erase: the area picked to remove, on the preview (see EditorModel+Remove.swift).
+    @Published var healMode: HealMode = .spot
+    @Published var selectionOverlay: UIImage?
+    @Published var hasSelection = false
+    var selection: [UInt8] = []
+    var people: (version: Int, masks: [[UInt8]])?   // the person cutouts on the current preview
+    var peopleTask: Task<[[UInt8]], Never>?
+    var brushStroke: CGPoint?                       // the last point of the brush stroke under way
+    var lastOverlay: CFAbsoluteTime = 0
     private var warmedUp = false
     private var history = UndoHistory()
     @Published private(set) var canUndo = false
@@ -372,6 +381,7 @@ final class EditorModel: ObservableObject {
         await warmModel("Heal") { try HealEngine.shared.warmUp() }  // biggest first-use cost (about 3.5 s), so first
         await warmModel("Enhance") { try EnhanceEngine.shared.warmUp() }
         await warmModel("Enhance Neural Engine + GPU") { try EnhanceEngine.shared.warmUpSplit() }  // for 12 MP photos
+        await warmModel("Remove (LaMa 1024)") { try HealEngine.shared.warmUpLarge() }  // people and large areas
     }
 
     private func warmModel(_ name: String, _ body: @escaping @Sendable () throws -> (load: Double, run: Double)?) async {
@@ -439,6 +449,7 @@ final class EditorModel: ObservableObject {
         enhancedFull = nil
         enhanceBase = nil
         healsSinceEnhance = []
+        clearSelection()
         history.clear()
         canUndo = false
         canRedo = false
@@ -511,7 +522,7 @@ final class EditorModel: ObservableObject {
             let (out, ms, peak) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double, Double) in
                 let meter = MemoryMeter()
                 let t0 = CFAbsoluteTimeGetCurrent()
-                for h in heals { _ = try EditorModel.healSpot(&base, center: h.center, brush: h.brush) }
+                for h in heals { try h.redo(on: &base) }
                 return (base, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
             record("Enhance off (\(heals.count) heal(s) redone)", ms, peakMB: peak)
@@ -535,7 +546,16 @@ final class EditorModel: ObservableObject {
         guard enhanceOn, strengthDrag == nil, let full = enhancedFull, let base = enhanceBase, let prev = preview else { return }
         var b = base.scaled(toWidth: prev.width, height: prev.height)
         var e = full.scaled(toWidth: prev.width, height: prev.height)
-        for h in healsSinceEnhance {
+        for case let .area(mask, mw, mh) in healsSinceEnhance {
+            // Removed areas: their pixels as healed now, on both ends.
+            let m = mw == prev.width && mh == prev.height ? mask : MaskOps.resize(mask, w: mw, h: mh, to: prev.width, prev.height)
+            let grown = MaskOps.dilate(m.map { $0 > 127 ? 255 : 0 }, w: prev.width, h: prev.height, r: 4)
+            for i in grown.indices where grown[i] > 0 {
+                for c in 0..<4 { b.pixels[i * 4 + c] = prev.pixels[i * 4 + c]; e.pixels[i * 4 + c] = prev.pixels[i * 4 + c] }
+            }
+        }
+        for case let .spot(center, brush) in healsSinceEnhance {
+            let h = (center: center, brush: brush)
             let r = Int(h.brush * Double(prev.width) * 1.5) + 2
             let cx = Int(h.center.x * CGFloat(prev.width)), cy = Int(h.center.y * CGFloat(prev.height))
             for y in max(0, cy - r)...min(prev.height - 1, cy + r) {
@@ -573,7 +593,7 @@ final class EditorModel: ObservableObject {
             let (out, ms) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double) in
                 let t0 = CFAbsoluteTimeGetCurrent()
                 var out = RGBAImage.blend(base, full, strength)
-                for h in heals { _ = try EditorModel.healSpot(&out, center: h.center, brush: h.brush) }
+                for h in heals { try h.redo(on: &out) }
                 return (out, (CFAbsoluteTimeGetCurrent() - t0) * 1000)
             }.value
             record("Enhance strength \(Int(strength * 100))% (\(heals.count) heal(s) redone)", ms)
@@ -607,7 +627,7 @@ final class EditorModel: ObservableObject {
             record("Heal spot r=\(radius)px", ms, peakMB: peak)
             before.pixels = undo
             pushUndo(before)
-            if enhanceOn { healsSinceEnhance.append((center, brushFraction)) }
+            if enhanceOn { healsSinceEnhance.append(.spot(center: center, brush: brushFraction)) }
             await setWorking(out, redetectFaces: false)
         } catch {
             self.error = error.localizedDescription
@@ -617,23 +637,11 @@ final class EditorModel: ObservableObject {
     /// Heals one round spot. `center` is normalised (0...1) and `brush` is the radius as a fraction of the image width,
     /// so the same tap can be redone on another version of the photo. Returns the radius in pixels.
     nonisolated static func healSpot(_ img: inout RGBAImage, center: CGPoint, brush: Double) throws -> Int {
-        let cx = min(img.width - 1, max(0, Int(center.x * CGFloat(img.width))))
-        let cy = min(img.height - 1, max(0, Int(center.y * CGFloat(img.height))))
-        let radius = max(4, Int(brush * Double(img.width)))
-        var mask = [UInt8](repeating: 0, count: img.width * img.height)
-        let r2 = radius * radius
-        for y in max(0, cy - radius)...min(img.height - 1, cy + radius) {
-            for x in max(0, cx - radius)...min(img.width - 1, cx + radius) {
-                let dx = x - cx, dy = y - cy
-                if dx * dx + dy * dy <= r2 { mask[y * img.width + x] = 255 }
-            }
-        }
-        try HealEngine.shared.heal(&img, mask: mask)
-        return radius
+        try HealEngine.healSpot(&img, center: center, brush: brush)
     }
 
     /// `matte`: the people already found on `img` (Undo and Redo), so the cutout isn't made again.
-    private func setWorking(_ img: RGBAImage, redetectFaces: Bool = true, matte: PersonMatte? = nil) async {
+    func setWorking(_ img: RGBAImage, redetectFaces: Bool = true, matte: PersonMatte? = nil) async {
         let prevSide = previewSide
         let detect = redetectFaces
         let (prev, found) = await Task.detached(priority: .userInitiated) { () -> (RGBAImage, [FaceGeometry]?) in
@@ -655,14 +663,14 @@ final class EditorModel: ObservableObject {
 
     // MARK: Undo
 
-    private func undoStep(_ pixels: PixelUndo) -> UndoStep {
+    func undoStep(_ pixels: PixelUndo) -> UndoStep {
         storeShape()
         return UndoStep(pixels: pixels, enhanceOn: enhanceOn, unenhanced: unenhanced, enhancedFull: enhancedFull, enhanceBase: enhanceBase,
                         enhanceStrength: enhanceStrength, healsSinceEnhance: healsSinceEnhance,
                         faces: faces, shapes: shapes, selectedFace: selectedFace, smooth: smooth, blur: blur, personMatte: personMatte)
     }
 
-    private func pushUndo(_ step: UndoStep) {
+    func pushUndo(_ step: UndoStep) {
         history.push(step)
         canUndo = history.canUndo
         canRedo = history.canRedo
@@ -905,7 +913,7 @@ final class EditorModel: ObservableObject {
 
     /// Logs a timing with this app's memory: mem_mb now, peak_mb during the tool, avail_mb left before iOS would
     /// close the app, and the working photo's size.
-    private func record(_ label: String, _ ms: Double, peakMB: Double? = nil, extra: [String: Double] = [:]) {
+    func record(_ label: String, _ ms: Double, peakMB: Double? = nil, extra: [String: Double] = [:]) {
         timings.removeAll { $0.0 == label }
         timings.insert((label, ms), at: 0)
         if timings.count > 8 { timings.removeLast() }
