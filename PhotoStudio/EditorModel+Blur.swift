@@ -7,12 +7,52 @@ enum BlurMode: String, CaseIterable, Identifiable {
     var paints: Bool { self != .view }
 }
 
+/// The Blur tab's two parts: blur the background, or take it away.
+enum BlurPanel: String, CaseIterable, Identifiable {
+    case blur = "Blur", remove = "Remove background"
+    var id: String { rawValue }
+}
+
+/// What Remove background puts behind the people. Off leaves the background (and Blur) as they are.
+enum BackgroundChoice: String, CaseIterable, Identifiable {
+    case off = "Off", clear = "Clear", white = "White", black = "Black"
+    var id: String { rawValue }
+
+    /// How the preview shows it (see-through is drawn as grey squares).
+    var previewMode: CutMode? {
+        switch self {
+        case .off: return nil
+        case .clear: return .checker
+        case .white: return .color(SIMD3(1, 1, 1))
+        case .black: return .color(SIMD3(0, 0, 0))
+        }
+    }
+}
+
 /// Blur › Brush and Erase: fix the people the cutout found by hand. Brush paints parts that should stay sharp (a
 /// missed arm, a hat, a bag), Erase paints parts that should be blurred (background the cutout took for a person).
 /// The fixes are kept at preview size and normalised, so they stay in place at full size, after Enhance or Heal
 /// (when the cutout is made again) and on Save.
 extension EditorModel {
     var blurTint: Bool { tool == .blur && blurMode.paints }
+
+    /// Shows a part of the Blur tab. Remove background starts see-through the first time it's opened on a photo.
+    func showBlurPanel(_ p: BlurPanel) {
+        blurPanel = p
+        if p == .remove, !removeOpened {
+            removeOpened = true
+            if background == .off { setBackground(.clear) }
+        }
+        findPeople()
+    }
+
+    /// Changes what's behind the people (one undo step).
+    func setBackground(_ b: BackgroundChoice) {
+        guard b != background else { return }
+        pushUndo(undoStep(.unchanged))
+        background = b
+        renderPreview()
+    }
 
     /// Paints a round dab from the last point of the stroke to `point` (preview pixels). The first dab of a stroke
     /// starts its undo step.

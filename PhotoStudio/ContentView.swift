@@ -343,7 +343,20 @@ struct ContentView: View {
                 sliderRow("Even tone", value: $model.tone)
                 HStack { Text(retouchCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             case .blur:
-                sliderRow("Strength", value: $model.blur)
+                Picker("Blur part", selection: Binding(get: { model.blurPanel }, set: { model.showBlurPanel($0) })) {
+                    ForEach(BlurPanel.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                if model.blurPanel == .blur {
+                    sliderRow("Strength", value: $model.blur)
+                        .disabled(model.background != .off)
+                } else {
+                    Picker("Background", selection: Binding(get: { model.background }, set: { model.setBackground($0) })) {
+                        ForEach(BackgroundChoice.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(model.busy != nil)
+                }
                 Picker("Blur", selection: $model.blurMode) {
                     ForEach(BlurMode.allCases) { Text($0.rawValue).tag($0) }
                 }
@@ -553,6 +566,9 @@ struct ContentView: View {
         case .erase: return "Paint parts that should be blurred"
         case .view: break
         }
+        if model.blurPanel == .blur, model.background != .off { return "Remove background is on; set it to Off to blur instead" }
+        if model.blurPanel == .remove, model.personMatte?.hasPerson == false { return "No person found. Use Brush to paint what to keep" }
+        if model.blurPanel == .remove, model.background == .clear { return "Saves as a see-through PNG" }
         guard let m = model.personMatte else { return model.findingPeople ? "Finding people…" : "Blurs what's behind the people" }
         return m.hasPerson ? "Everyone found stays sharp" : "No person found, so the whole photo is blurred"
     }

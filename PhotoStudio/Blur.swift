@@ -19,6 +19,18 @@ struct PersonMatte {
     var edits = MatteEdits.none
 }
 
+/// What Remove background puts behind the people.
+enum CutMode {
+    case color(SIMD3<Float>)   // a solid colour (sRGB, 0...1)
+    case checker               // the usual grey squares for "see-through", for the preview
+    case foreground            // the people's colours, carried out past their edges (for a see-through Save)
+    case mask                  // the people's coverage as grey (for a see-through Save's alpha)
+
+    var code: UInt32 {
+        switch self { case .color: return 1; case .checker: return 2; case .foreground: return 4; case .mask: return 3 }
+    }
+}
+
 /// Hand-painted fixes to the people found, at any size (normalised): 255 keeps a pixel sharp as part of a person,
 /// 0 blurs it as background, 128 leaves the cutout's own answer.
 struct MatteEdits: Equatable {
@@ -324,11 +336,23 @@ final class BackgroundBlur {
         let s = min(0.5, smallRadius / rFull)
         let sw = max(8, Int((Double(img.width) * s).rounded())), sh = max(8, Int((Double(img.height) * s).rounded()))
         let small = img.scaled(toWidth: sw, height: sh)
-        return shared.run(img, small: small, matte: matte, edits: edits ?? matte.edits, radius: Float(rFull * Double(sw) / Double(img.width)),
+        return shared.run(img, small: small, matte: matte, edits: edits ?? matte.edits, mode: 0, color: .zero, radius: Float(rFull * Double(sw) / Double(img.width)),
                           fade: Float(min(1, max(0, (rFull - 0.3) / 2.7))))
     }
 
-    private func run(_ img: RGBAImage, small: RGBAImage, matte: PersonMatte, edits: MatteEdits, radius: Float, fade: Float) -> RGBAImage {
+    /// Remove background: `img` with everything but the people replaced as `mode` says. Same edges as the blur
+    /// (the person's own colour on half-covered pixels, flyaway hair, painted fixes).
+    static func cutOut(_ img: RGBAImage, matte: PersonMatte, mode: CutMode, edits: MatteEdits? = nil) -> RGBAImage {
+        let s = min(0.5, smallRadius / (maxRadius * Double(max(img.width, img.height))))
+        let sw = max(8, Int((Double(img.width) * s).rounded())), sh = max(8, Int((Double(img.height) * s).rounded()))
+        var color = SIMD3<Float>.zero
+        if case .color(let c) = mode { color = c }
+        return shared.run(img, small: img.scaled(toWidth: sw, height: sh), matte: matte, edits: edits ?? matte.edits,
+                          mode: mode.code, color: color, radius: 0, fade: 1)
+    }
+
+    private func run(_ img: RGBAImage, small: RGBAImage, matte: PersonMatte, edits: MatteEdits, mode: UInt32, color: SIMD3<Float>,
+                     radius: Float, fade: Float) -> RGBAImage {
         func tex(_ fmt: MTLPixelFormat, _ w: Int, _ h: Int, private p: Bool = false) -> MTLTexture {
             let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: fmt, width: w, height: h, mipmapped: false)
             d.usage = [.shaderRead, .shaderWrite]
@@ -359,10 +383,14 @@ final class BackgroundBlur {
         }
         enc.setTexture(sm, index: 0); enc.setTexture(hole, index: 1); enc.setTexture(fill, index: 2); enc.setTexture(prepped, index: 3)
         dispatch(prepPSO, small.width, small.height)
-        enc.setTexture(prepped, index: 0); enc.setTexture(blurred, index: 1)
-        enc.setBytes(&r, length: 4, index: 0); enc.setBytes(&taps, length: 4, index: 1)
-        dispatch(lensPSO, small.width, small.height)
-        enc.setTexture(src, index: 0); enc.setTexture(blurred, index: 1); enc.setTexture(alpha, index: 2); enc.setTexture(dst, index: 3); enc.setTexture(fg, index: 4)
+        if mode == 0 {
+            enc.setTexture(prepped, index: 0); enc.setTexture(blurred, index: 1)
+            enc.setBytes(&r, length: 4, index: 0); enc.setBytes(&taps, length: 4, index: 1)
+            dispatch(lensPSO, small.width, small.height)
+        }
+        var md = mode, col = SIMD4<Float>(color, 1)
+        enc.setBytes(&md, length: 4, index: 1); enc.setBytes(&col, length: 16, index: 2)
+        enc.setTexture(src, index: 0); enc.setTexture(mode == 0 ? blurred : prepped, index: 1); enc.setTexture(alpha, index: 2); enc.setTexture(dst, index: 3); enc.setTexture(fg, index: 4)
         enc.setTexture(prepped, index: 5); enc.setTexture(hole, index: 6); enc.setTexture(fill, index: 7); enc.setTexture(ed, index: 8)
         enc.setBytes(&f, length: 4, index: 0)
         dispatch(compositePSO, img.width, img.height)
@@ -448,6 +476,8 @@ kernel void blurComposite(texture2d<float, access::read> src [[texture(0)]],
                           texture2d<float, access::sample> fill [[texture(7)]],
                           texture2d<float, access::sample> edits [[texture(8)]],
                           constant float &fade [[buffer(0)]],
+                          constant uint &mode [[buffer(1)]],
+                          constant float4 &color [[buffer(2)]],
                           uint2 gid [[thread_position_in_grid]])
 {
     uint w = dst.get_width(), h = dst.get_height();
@@ -483,6 +513,19 @@ kernel void blurComposite(texture2d<float, access::read> src [[texture(0)]],
     // A half-covered pixel's own colour is part background; the person's colour from inside the edge stands in for
     // more of it the less the person covers it.
     float3 f = mix(fc, c, a * a);
+    if (mode != 0) {   // Remove background
+        float3 o;
+        if (mode == 1) o = mix(color.rgb, f, a);
+        else if (mode == 2) {
+            uint cell = max(8u, max(w, h) / 64u);
+            float k = ((gid.x / cell + gid.y / cell) & 1u) ? 0.78 : 0.94;
+            o = mix(float3(k), f, a);
+        }
+        else if (mode == 3) o = float3(a);
+        else o = a > 0.004 ? f : fc;
+        dst.write(float4(o, 1.0), gid);
+        return;
+    }
     float3 sharp = mix(c, f, fade);
     dst.write(float4(mix(bg, sharp, a) * fade + c * (1.0 - fade), 1.0), gid);
 }
