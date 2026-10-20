@@ -91,6 +91,7 @@ final class EditorModel: ObservableObject {
     var selection: [UInt8] = []
     var people: (version: Int, masks: [[UInt8]])?   // the person cutouts on the current preview
     var peopleTask: Task<[[UInt8]], Never>?
+    var largeWarmed = false                         // LaMa 1024 loads the first time People, Brush or Erase opens
     var brushStroke: CGPoint?                       // the last point of the brush stroke under way
     var lastOverlay: CFAbsoluteTime = 0
     private var warmedUp = false
@@ -381,7 +382,6 @@ final class EditorModel: ObservableObject {
         await warmModel("Heal") { try HealEngine.shared.warmUp() }  // biggest first-use cost (about 3.5 s), so first
         await warmModel("Enhance") { try EnhanceEngine.shared.warmUp() }
         await warmModel("Enhance Neural Engine + GPU") { try EnhanceEngine.shared.warmUpSplit() }  // for 12 MP photos
-        await warmModel("Remove (LaMa 1024)") { try HealEngine.shared.warmUpLarge() }  // people and large areas
     }
 
     private func warmModel(_ name: String, _ body: @escaping @Sendable () throws -> (load: Double, run: Double)?) async {

@@ -20,8 +20,18 @@ extension EditorModel {
         brushStroke = nil
     }
 
-    /// Starts finding the people on the current preview, so the first tap doesn't wait for it.
+    /// Starts finding the people on the current preview, so the first tap doesn't wait for it. The first time, also
+    /// loads LaMa's 1024 function (about 4 s and 500 MB on an iPhone 14 Pro), only once removal is actually in use.
     func preparePeople() {
+        if !largeWarmed {
+            largeWarmed = true
+            Task.detached(priority: .utility) { [weak self] in
+                let meter = MemoryMeter()
+                guard let t = try? HealEngine.shared.warmUpLarge() else { return }
+                let peak = meter.stop()
+                await self?.record("Warm-up: Remove (LaMa 1024) model", t.load + t.run, peakMB: peak, extra: ["load_ms": t.load, "first_run_ms": t.run])
+            }
+        }
         guard let prev = preview, people?.version != sourceVersion, peopleTask == nil else { return }
         let version = sourceVersion
         let task = Task.detached(priority: .userInitiated) { () -> [[UInt8]] in PersonCutout.people(in: prev) }
