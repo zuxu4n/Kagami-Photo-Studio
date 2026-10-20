@@ -295,6 +295,9 @@ struct ContentView: View {
                 sliderRow("Brighten eyes", value: $model.brightEyes)
                 sliderRow("Even tone", value: $model.tone)
                 HStack { Text(retouchCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
+            case .blur:
+                sliderRow("Strength", value: $model.blur)
+                HStack { Text(blurCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             case .heal:
                 sliderRow("Brush", value: $model.brush, range: 0.004...0.08, reset: 0.025, undoable: false)
                 Text("Tap a spot to remove it (LaMa, on device). Pinch to zoom in on small spots.").font(.caption).foregroundStyle(.secondary)
@@ -376,6 +379,7 @@ struct ContentView: View {
         .onChange(of: model.teeth) { _, _ in model.renderPreview() }
         .onChange(of: model.brightEyes) { _, _ in model.renderPreview() }
         .onChange(of: model.tone) { _, _ in model.renderPreview() }
+        .onChange(of: model.blur) { _, _ in model.renderPreview() }
     }
 
     private var subtab: String { subtabs[area] ?? area.subtabs[0] }
@@ -451,6 +455,11 @@ struct ContentView: View {
         if model.faceCount == 0 { return "No face found" }
         if model.faceCount == 1 { return "Colour only; the face's shape stays" }
         return "Face \((model.selectedFace ?? 0) + 1) of \(model.faceCount) · tap another face to switch"
+    }
+
+    private var blurCaption: String {
+        guard let m = model.personMatte else { return model.findingPeople ? "Finding people…" : "Blurs what's behind the people" }
+        return m.hasPerson ? "Everyone found stays sharp" : "No person found, so the whole photo is blurred"
     }
 
     private var compareButton: some View {

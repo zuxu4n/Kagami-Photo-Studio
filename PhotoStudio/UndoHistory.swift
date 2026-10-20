@@ -31,6 +31,8 @@ struct UndoStep {
     var shapes: [FaceShape]
     var selectedFace: Int?
     var smooth: Float
+    var blur: Float
+    var personMatte: PersonMatte?   // the people found on this step's photo, so undoing a Heal needn't look again
 }
 
 /// Undo and redo steps, newest last. Old undo steps are dropped once the saved pixels pass `maxBytes`, so a long

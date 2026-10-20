@@ -2,7 +2,7 @@ import SwiftUI
 import Photos
 
 enum Tool: String, CaseIterable, Identifiable {
-    case enhance = "Enhance", smooth = "Smooth", retouch = "Retouch", heal = "Heal", face = "Face", reshape = "Reshape"
+    case enhance = "Enhance", smooth = "Smooth", retouch = "Retouch", blur = "Blur", heal = "Heal", face = "Face", reshape = "Reshape"
     var id: String { rawValue }
 }
 
@@ -51,6 +51,8 @@ final class EditorModel: ObservableObject {
     @Published var teeth: Float = 0         // Retouch: whiten teeth, brighten eyes, even skin tone (the selected face's values)
     @Published var brightEyes: Float = 0
     @Published var tone: Float = 0
+    @Published var blur: Float = 0          // Blur: background blur strength, 0...1
+    @Published private(set) var findingPeople = false
     @Published var brush: Float = 0.025      // heal brush radius as a fraction of the image width
     @Published var faceCount = 0
     var reshaping: Bool { tool == .reshape }  // the Reshape tab: a one-finger drag on a face pushes it
@@ -65,7 +67,11 @@ final class EditorModel: ObservableObject {
     private var sourceVersion = 0       // changes with the preview photo or the faces, so cached renders aren't reused
     @Published private(set) var selectedFace: Int?   // the face the Face and Reshape tabs edit
     private var shapes: [FaceShape] = []             // Face tab values for each face, same order as `faces`
-    private var smoothed: (version: Int, smooth: Float, retouch: [FaceRetouch], image: RGBAImage)?  // the preview after Smooth and Retouch, reused while only Face values move
+    private var smoothed: (version: Int, smooth: Float, retouch: [FaceRetouch], image: RGBAImage)?  // the preview after Smooth and Retouch, reused while Blur or Face values move
+    private var blurred: (version: Int, smooth: Float, retouch: [FaceRetouch], blur: Float, image: RGBAImage)?  // and after Blur, reused while only Face values move
+    /// The people on the working photo, found when Blur is first needed and again only after Enhance or Heal change it.
+    @Published private(set) var personMatte: PersonMatte? { didSet { sourceVersion &+= 1 } }
+    private var workingVersion = 0      // changes with the working photo, so a cutout found for an older one is dropped
     private var rendering = false       // a preview frame is being drawn
     private var renderAgain = false     // values changed while it was drawn
     private var lastPreviewLog: CFAbsoluteTime = 0
@@ -356,6 +362,13 @@ final class EditorModel: ObservableObject {
         }.value
         record("Warm-up: slider GPU code", gpuMs, peakMB: gpuPeak)
         await warmModel("Face mesh") { try FaceMeshEngine.shared.warmUp() }  // small, and needed as each photo opens
+        let (cutMs, cutPeak) = await Task.detached(priority: .userInitiated) { () -> (Double, Double) in
+            let meter = MemoryMeter()
+            let t0 = CFAbsoluteTimeGetCurrent()
+            BackgroundBlur.shared.warmUp()   // the person cutout's model load is the slow part
+            return ((CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
+        }.value
+        record("Warm-up: Blur and person cutout", cutMs, peakMB: cutPeak)
         await warmModel("Heal") { try HealEngine.shared.warmUp() }  // biggest first-use cost (about 3.5 s), so first
         await warmModel("Enhance") { try EnhanceEngine.shared.warmUp() }
         await warmModel("Enhance Neural Engine + GPU") { try EnhanceEngine.shared.warmUpSplit() }  // for 12 MP photos
@@ -410,6 +423,9 @@ final class EditorModel: ObservableObject {
             return (full, prev, found, (CFAbsoluteTimeGetCurrent() - t0) * 1000)
         }.value
         working = full
+        workingVersion &+= 1
+        personMatte = nil
+        blur = 0
         preview = prev
         faces = found
         faceCount = found.count
@@ -439,6 +455,7 @@ final class EditorModel: ObservableObject {
     private var smoothOpened = false
 
     func toolShown(_ t: Tool) {
+        if t == .blur { findPeople() }
         guard t == .smooth, !smoothOpened, hasImage else { return }
         smoothOpened = true
         if smooth < 0.001 { smooth = smoothStart }
@@ -615,7 +632,8 @@ final class EditorModel: ObservableObject {
         return radius
     }
 
-    private func setWorking(_ img: RGBAImage, redetectFaces: Bool = true) async {
+    /// `matte`: the people already found on `img` (Undo and Redo), so the cutout isn't made again.
+    private func setWorking(_ img: RGBAImage, redetectFaces: Bool = true, matte: PersonMatte? = nil) async {
         let prevSide = previewSide
         let detect = redetectFaces
         let (prev, found) = await Task.detached(priority: .userInitiated) { () -> (RGBAImage, [FaceGeometry]?) in
@@ -623,6 +641,9 @@ final class EditorModel: ObservableObject {
             return (prev, detect ? FaceAnalyzer.detect(prev.cgImage()) : nil)
         }.value
         working = img
+        workingVersion &+= 1
+        personMatte = matte   // Enhance and Heal change the pixels; the cutout is made again when Blur needs it
+        findPeopleIfNeeded()
         preview = prev
         if let found {
             carryShapes(to: found)
@@ -638,7 +659,7 @@ final class EditorModel: ObservableObject {
         storeShape()
         return UndoStep(pixels: pixels, enhanceOn: enhanceOn, unenhanced: unenhanced, enhancedFull: enhancedFull, enhanceBase: enhanceBase,
                         enhanceStrength: enhanceStrength, healsSinceEnhance: healsSinceEnhance,
-                        faces: faces, shapes: shapes, selectedFace: selectedFace, smooth: smooth)
+                        faces: faces, shapes: shapes, selectedFace: selectedFace, smooth: smooth, blur: blur, personMatte: personMatte)
     }
 
     private func pushUndo(_ step: UndoStep) {
@@ -659,7 +680,7 @@ final class EditorModel: ObservableObject {
                 record("Slider drag: \(dragFrames.count) frames, \(Int(Double(dragFrames.count) / secs)) per second", secs * 1000)
             }
             storeShape()
-            if start.smooth != smooth || start.shapes != shapes { pushUndo(start) }
+            if start.smooth != smooth || start.blur != blur || start.shapes != shapes { pushUndo(start) }
         }
     }
 
@@ -704,19 +725,20 @@ final class EditorModel: ObservableObject {
         selectedFace = step.selectedFace
         showSliders(step.selectedFace.map { shapes[$0] } ?? FaceShape())
         smooth = step.smooth
+        blur = step.blur
         switch step.pixels {
         case .unchanged:
             renderPreview()
         case .whole(let old):
             busy = label == "Undo" ? "Undoing…" : "Redoing…"
             defer { busy = nil }
-            await setWorking(old, redetectFaces: false)
+            await setWorking(old, redetectFaces: false, matte: step.personMatte)
         case .patch(let x, let y, let old):
             busy = label == "Undo" ? "Undoing…" : "Redoing…"
             defer { busy = nil }
             var img = current
             img.paste(old, x: x, y: y)
-            await setWorking(img, redetectFaces: false)
+            await setWorking(img, redetectFaces: false, matte: step.personMatte)
         }
         record(label, (CFAbsoluteTimeGetCurrent() - t0) * 1000)
         return back
@@ -738,19 +760,25 @@ final class EditorModel: ObservableObject {
         renderAgain = false
         let smooth = self.smooth, shapes = self.shapes, faces = self.faces, version = sourceVersion
         let retouch = shapes.map(\.retouch)
+        if blur > 0.001, personMatte == nil { findPeople() }   // blurs once the people are found
+        let matte = personMatte, blur = matte == nil ? 0 : self.blur
         let cached = smoothed.flatMap { $0.version == version && $0.smooth == smooth && $0.retouch == retouch ? $0.image : nil }
+        let cachedBlur = blurred.flatMap { $0.version == version && $0.smooth == smooth && $0.retouch == retouch && $0.blur == blur ? $0.image : nil }
         Task {
-            let (base, img, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (RGBAImage, UIImage, Double, Double) in
+            let (base, withBlur, img, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (RGBAImage, RGBAImage, UIImage, Double, Double) in
                 let meter = MemoryMeter()
                 let t0 = CFAbsoluteTimeGetCurrent()
                 let base = cached ?? EditorModel.apply(prev, faces: faces, smooth: smooth, shapes: shapes, warp: false)
-                let out = EditorModel.apply(base, faces: faces, smooth: 0, shapes: shapes, retouch: false)
+                let withBlur = cachedBlur ?? EditorModel.apply(base, faces: faces, smooth: 0, shapes: shapes, retouch: false,
+                                                               blur: blur, matte: matte, warp: false)
+                let out = EditorModel.apply(withBlur, faces: faces, smooth: 0, shapes: shapes, retouch: false)
                 let ui = out.uiImage()
-                return (base, ui, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
+                return (base, withBlur, ui, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
             rendering = false
             if version == sourceVersion {   // a new photo or new faces make this frame stale; the next one replaces it
                 smoothed = (version, smooth, retouch, base)
+                blurred = (version, smooth, retouch, blur, withBlur)
                 display = img
                 dragFrames.count += 1
             }
@@ -758,16 +786,19 @@ final class EditorModel: ObservableObject {
             let now = CFAbsoluteTimeGetCurrent()
             if now - lastPreviewLog > 0.5 {
                 lastPreviewLog = now
-                record("Preview render \(prev.width)×\(prev.height)\(cached == nil ? "" : " (Smooth reused)")", ms, peakMB: peak)
+                let reused = cachedBlur != nil ? " (Smooth + Blur reused)" : cached != nil ? " (Smooth reused)" : ""
+                record("Preview render \(prev.width)×\(prev.height)\(blur > 0.001 ? " blur" : "")\(reused)", ms, peakMB: peak)
             }
             if renderAgain || version != sourceVersion { renderPreview() }
         }
     }
 
-    /// Smooth, then Retouch, then warp. Runs at any resolution because the face geometry is normalised.
-    /// The preview does the first two once (`warp: false`) and reuses them while only the Face values move.
+    /// Smooth, then Retouch, then Blur, then warp. Runs at any resolution because the face geometry and the people's
+    /// matte are normalised. The preview does the first three once (`warp: false`) and reuses them while only the
+    /// Face values move. Blur comes before the warp, on the photo's own layout where the cutout was made, so the warp
+    /// then moves the sharp person and the blurred background together and they can't come apart.
     nonisolated static func apply(_ img: RGBAImage, faces: [FaceGeometry], smooth: Float, shapes: [FaceShape],
-                                  retouch: Bool = true, warp: Bool = true) -> RGBAImage {
+                                  retouch: Bool = true, blur: Float = 0, matte: PersonMatte? = nil, warp: Bool = true) -> RGBAImage {
         var out = img
         if smooth > 0.001, !faces.isEmpty {
             let s = min(1.0, 1024.0 / Double(max(img.width, img.height)))
@@ -779,11 +810,42 @@ final class EditorModel: ObservableObject {
         if retouch {
             out = Retouch.apply(out, faces: faces, retouch: shapes.map(\.retouch))
         }
+        if blur > 0.001, let matte {
+            out = BackgroundBlur.apply(out, matte: matte, strength: blur)
+        }
         if warp, shapes.contains(where: { !$0.isOff }) {
             let ops = FaceAnalyzer.warpOps(faces: faces, shapes: shapes, width: img.width, height: img.height)
             out = GPU.shared.warp(out, ops: ops)
         }
         return out
+    }
+
+    // MARK: Blur (find the people once per photo)
+
+    /// Runs the person cutout on the working photo in the background, unless it's done or under way. The preview
+    /// redraws with the blur when it's ready.
+    func findPeople() {
+        guard personMatte == nil, !findingPeople, let img = working else { return }
+        findingPeople = true
+        let version = workingVersion
+        Task {
+            let (matte, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (PersonMatte?, Double, Double) in
+                let meter = MemoryMeter()
+                let t0 = CFAbsoluteTimeGetCurrent()
+                let m = try? BackgroundBlur.personMatte(img)
+                return (m, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
+            }.value
+            findingPeople = false
+            guard version == workingVersion else { findPeopleIfNeeded(); return }   // the photo changed meanwhile
+            guard let matte else { error = "Couldn't find the people in this photo."; return }
+            record("Person cutout (\(matte.hasPerson ? "found" : "none"))", ms, peakMB: peak)
+            personMatte = matte
+            renderPreview()
+        }
+    }
+
+    private func findPeopleIfNeeded() {
+        if tool == .blur || blur > 0.001 { findPeople() }
     }
 
     // MARK: Save
@@ -798,12 +860,13 @@ final class EditorModel: ObservableObject {
             return
         }
         storeShape()
-        let smooth = self.smooth, shapes = self.shapes
-        let faces = self.faces
+        let smooth = self.smooth, shapes = self.shapes, blur = self.blur
+        let faces = self.faces, matte = self.personMatte
         let (data, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (Data?, Double, Double) in
             let meter = MemoryMeter()
             let t0 = CFAbsoluteTimeGetCurrent()
-            let out = EditorModel.apply(img, faces: faces, smooth: smooth, shapes: shapes)
+            let m = blur > 0.001 ? (matte ?? (try? BackgroundBlur.personMatte(img))) : nil
+            let out = EditorModel.apply(img, faces: faces, smooth: smooth, shapes: shapes, blur: blur, matte: m)
             let data = out.uiImage().jpegData(compressionQuality: 0.95)
             return (data, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
         }.value
