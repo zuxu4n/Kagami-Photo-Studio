@@ -621,6 +621,43 @@ enum FaceAnalyzer {
         return ops
     }
 
+    /// Where the slider warp (`ops`, without pushes) takes the content shown at `p`, the same steps as the shader: the
+    /// point on the photo (as already pushed) that the sliders put at p. Used to place a new push under the sliders.
+    static func sliderSource(_ p: SIMD2<Float>, _ ops: [WarpOp]) -> SIMD2<Float> {
+        var p = p
+        for op in ops where op.kind > 3.5 && op.kind < 4.5 {
+            let d = p - op.c
+            let a = simd_dot(d, op.m), b = simd_dot(d, SIMD2(-op.m.y, op.m.x))
+            let x2 = a * a / (op.r * op.r) + b * b / (op.pad * op.pad)
+            guard x2 < 1 else { continue }
+            let t = min(1, max(0, (sqrt(x2) - 0.6) / 0.4))
+            p = op.c + d * (1 - op.s * (1 - t * t * (3 - 2 * t)))
+        }
+        var q = p, run = SIMD2<Float>(0, 0), runW: Float = 0, runGroup: Float = -1
+        func flush() { if runW > 0 { q -= run / max(1, runW) }; run = .zero; runW = 0 }
+        for op in ops where op.kind < 0.5 || op.kind > 4.5 {
+            if op.kind > 5.5 { flush(); runGroup = -1; continue }
+            let group: Float = op.kind > 4.5 ? -2 : op.s
+            if group != runGroup { flush(); runGroup = group }
+            let d = p - op.c, x2 = simd_dot(d, d) / (op.r * op.r)
+            guard x2 < 1 else { continue }
+            let wgt = (1 - x2) * (1 - x2)
+            run += wgt * op.m; runW += wgt
+        }
+        flush()
+        for op in ops where op.kind > 2.5 && op.kind < 3.5 {
+            let d = q - op.c
+            let a = simd_dot(d, op.m), b = simd_dot(d, SIMD2(-op.m.y, op.m.x))
+            let x2 = a * a / (op.r * op.r) + b * b / (op.pad * op.pad)
+            if x2 < 1 { q += op.m * a * op.s * (1 - x2) * (1 - x2) }
+        }
+        for op in ops where op.kind > 0.5 && op.kind < 1.5 {
+            let d = q - op.c, x2 = simd_dot(d, d) / (op.r * op.r)
+            if x2 < 1 { q = op.c + d * (1 - op.s * (1 - x2) * (1 - x2)) }
+        }
+        return q
+    }
+
     /// Moves a point (pixels of a w x h image) the way the Reshape pushes move the pixels under it.
     static func pushed(_ p: CGPoint, by pushes: [FacePush], width w: Int, height h: Int) -> CGPoint {
         let W = CGFloat(w), H = CGFloat(h)
@@ -650,7 +687,9 @@ enum FaceAnalyzer {
                                 positionX: shape.positionX, positionY: shape.positionY, jaw: shape.jaw, chin: shape.chin,
                                 jawSize: shape.jawSize, define: shape.define, jawLength: shape.jawLength)
         let ops = warpOps(faces: [f], shapes: [outline], width: w, height: h)
-        pts = pts.map { p in
+        // Pushes move the photo first, then the sliders move the result.
+        pts = pts.map { p0 in
+            let p = pushed(p0, by: shape.pushes, width: w, height: h)
             // Translates (each slider's group on its own) and Perspective handles, blended and added as the shader does.
             func blended(_ kind: Float) -> CGVector {
                 var groups: [Int: (d: CGVector, ws: CGFloat)] = [:]
@@ -689,7 +728,7 @@ enum FaceAnalyzer {
                 let k = 1 / (1 - CGFloat(op.s) * wgt)
                 q = CGPoint(x: CGFloat(op.c.x) + dx * k, y: CGFloat(op.c.y) + dy * k)
             }
-            return pushed(q, by: shape.pushes, width: w, height: h)
+            return q
         }
         // Both the shape and the ends come from the detected outline: each side is the outline itself, moved
         // outward by a fixed gap along its own normal, from its top point down to where the jaw turns towards

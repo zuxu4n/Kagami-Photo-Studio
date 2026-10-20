@@ -75,7 +75,8 @@ final class EditorModel: ObservableObject {
     @Published private(set) var canUndo = false
     @Published private(set) var canRedo = false
     private var sliderStart: UndoStep?  // the state when a slider drag began
-    private var reshape: (start: UndoStep, face: Int, base: [FacePush], anchor: CGPoint, r: CGFloat, strength: CGFloat, added: [FacePush])?  // the Reshape drag under way
+    private var reshape: (start: UndoStep, face: Int, base: [FacePush], anchor: CGPoint, r: CGFloat, strength: CGFloat, added: [FacePush],
+                          sliders: [WarpOp])?  // the Reshape drag under way, with the slider warp it's made under
 
     let maxWorkingSide = 4032
     let previewSide = 1600
@@ -185,7 +186,10 @@ final class EditorModel: ObservableObject {
         }
         // Size and strength are read once, so moving them mid-drag can't change a push already under way.
         let r = faces[i].box.width * CGFloat(reshapeSize) * CGFloat(prev.width)
-        reshape = (undoStep(.unchanged), i, shapes[i].pushes, point, r, CGFloat(reshapeStrength), [])
+        // Pushes go under the sliders, so a slider moved later carries them along. The slider warp is read once here.
+        let noPushes = shapes.map { var s = $0; s.pushes = []; return s }
+        let sliders = FaceAnalyzer.warpOps(faces: faces, shapes: noPushes, width: prev.width, height: prev.height)
+        reshape = (undoStep(.unchanged), i, shapes[i].pushes, point, r, CGFloat(reshapeStrength), [], sliders)
         return true
     }
 
@@ -197,9 +201,13 @@ final class EditorModel: ObservableObject {
         let step = d.r * 0.45
         // Pushes this drag may add: the overall limit less every other push (on all faces, and this face's earlier drags).
         let room = FaceAnalyzer.maxPushes - shapes.reduce(0) { $0 + $1.pushes.count } + (shapes[d.face].pushes.count - d.base.count)
+        // The finger moves over the photo as the sliders show it; each push is placed where that content sits
+        // before the sliders.
         func push(_ a: CGPoint, _ b: CGPoint) -> FacePush {
-            FacePush(x: Float(a.x / W), y: Float(a.y / H), r: Float(d.r / W),
-                     dx: Float((b.x - a.x) * d.strength / W), dy: Float((b.y - a.y) * d.strength / W))
+            let sa = FaceAnalyzer.sliderSource(SIMD2(Float(a.x), Float(a.y)), d.sliders)
+            let sb = FaceAnalyzer.sliderSource(SIMD2(Float(b.x), Float(b.y)), d.sliders)
+            return FacePush(x: sa.x / Float(W), y: sa.y / Float(H), r: Float(d.r / W),
+                            dx: (sb.x - sa.x) * Float(d.strength / W), dy: (sb.y - sa.y) * Float(d.strength / W))
         }
         while hypot(point.x - d.anchor.x, point.y - d.anchor.y) > step, d.added.count < room - 1 {
             let len = hypot(point.x - d.anchor.x, point.y - d.anchor.y)

@@ -67,9 +67,9 @@ struct WarpOp {
 // can't pile up and tear the image, and the groups' results are added, so one slider never weakens another.
 // A group's handles sit next to each other in the list, so each run of one group is blended on its own. Perspective
 // handles are blended the same way as one more group.
-// Bulges (eyes) are applied afterwards. Reshape pushes were made on top of the slider warp, one after another,
-// so they are undone first, newest first. Each push is under 0.65 of its radius, so none folds. Size comes next:
-// it scales the whole head, so the handles after it line up with the photo's own landmarks.
+// Bulges (eyes) are applied afterwards. Size comes first: it scales the whole head, so the handles after it line
+// up with the photo's own landmarks. Reshape pushes come last, newest first; each is under 0.65 of its radius, so
+// none folds.
 kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
                      texture2d<float, access::write> dst [[texture(1)]],
                      constant WarpOp *ops [[buffer(0)]],
@@ -80,16 +80,6 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
     if (gid.x >= w || gid.y >= h) return;
     constexpr sampler sp(coord::pixel, address::clamp_to_edge, filter::linear);
     float2 p = float2(gid) + 0.5;
-    for (int k = int(count) - 1; k >= 0; k--) {
-        WarpOp op = ops[k];
-        if (op.kind < 1.5 || op.kind > 2.5) break;   // Reshape pushes only; they are last in the list
-        float2 d = p - op.c;
-        float dd = dot(d, d);
-        float rr = op.r * op.r;
-        if (dd >= rr) continue;
-        float x2 = dd / rr;
-        p -= op.m * (1.0 - x2) * (1.0 - x2);
-    }
     // Scales are even over the inner 60% of an oval and fade to nothing at its edge (smoothstep), so the face keeps
     // its shape and the hair and background around it bend smoothly. At up to 10% they can't fold.
     for (uint k = 0; k < count; k++) {
@@ -155,6 +145,18 @@ kernel void faceWarp(texture2d<float, access::sample> src [[texture(0)]],
         if (dd >= rr) continue;
         float x2 = dd / rr;
         q = op.c + d * (1.0 - op.s * (1.0 - x2) * (1.0 - x2));
+    }
+    // Reshape pushes are made on the face before the sliders, so a slider moved later carries the pushed face
+    // with it. They come last here (the first thing done to the photo), newest first.
+    for (int k = int(count) - 1; k >= 0; k--) {
+        WarpOp op = ops[k];
+        if (op.kind < 1.5 || op.kind > 2.5) break;   // Reshape pushes only; they are last in the list
+        float2 d = q - op.c;
+        float dd = dot(d, d);
+        float rr = op.r * op.r;
+        if (dd >= rr) continue;
+        float x2 = dd / rr;
+        q -= op.m * (1.0 - x2) * (1.0 - x2);
     }
     dst.write(float4(src.sample(sp, q).rgb, 1.0), gid);
 }
