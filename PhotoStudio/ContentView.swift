@@ -312,11 +312,32 @@ struct ContentView: View {
 
     // MARK: Tools
 
+    /// The tools as a row that scrolls sideways (eight don't fit across a phone), styled like a segmented control.
+    /// The picked tool scrolls into view.
     private var toolPicker: some View {
-        Picker("Tool", selection: $model.tool) {
-            ForEach(Tool.allCases) { Text($0.rawValue).tag($0) }
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 2) {
+                    ForEach(Tool.allCases) { t in
+                        Button {
+                            model.tool = t
+                        } label: {
+                            Text(t.rawValue).font(.subheadline.weight(t == model.tool ? .semibold : .regular)).lineLimit(1).fixedSize()
+                                .padding(.horizontal, 12).padding(.vertical, 6)
+                                .foregroundStyle(Color.primary)
+                                .background(t == model.tool ? Color(.systemBackground) : .clear, in: Capsule())
+                                .shadow(color: .black.opacity(t == model.tool ? 0.12 : 0), radius: 2, y: 1)
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .id(t)
+                    }
+                }
+                .padding(2)
+            }
+            .background(Color.secondary.opacity(0.14), in: Capsule())
+            .onChange(of: model.tool) { _, t in withAnimation { proxy.scrollTo(t, anchor: .center) } }
         }
-        .pickerStyle(.segmented)
     }
 
     @ViewBuilder private var toolPanel: some View {

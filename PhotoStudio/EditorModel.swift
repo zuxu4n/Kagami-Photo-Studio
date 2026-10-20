@@ -2,7 +2,7 @@ import SwiftUI
 import Photos
 
 enum Tool: String, CaseIterable, Identifiable {
-    case enhance = "Enhance", smooth = "Smooth", retouch = "Retouch", blur = "Blur", heal = "Heal", face = "Face", reshape = "Reshape"
+    case enhance = "Enhance", smooth = "Smooth", retouch = "Retouch", blur = "Background", heal = "Heal", face = "Face", reshape = "Reshape"
     var id: String { rawValue }
 }
 
