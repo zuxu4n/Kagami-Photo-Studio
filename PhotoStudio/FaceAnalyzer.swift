@@ -60,7 +60,7 @@ struct FaceShape: Equatable {
     var forehead: Float = 0   // -1...1, lower or higher hairline
     var pushes: [FacePush] = []   // in the order they were made; applied after the sliders
     var meshOff: Bool {
-        abs(size) <= 0.001 && abs(width) <= 0.001 && abs(perspective) <= 0.001 && abs(positionX) <= 0.001 && abs(positionY) <= 0.001
+        abs(slim) <= 0.001 && abs(size) <= 0.001 && abs(width) <= 0.001 && abs(perspective) <= 0.001 && abs(positionX) <= 0.001 && abs(positionY) <= 0.001
             && abs(eyeWidth) <= 0.001 && abs(eyeHeight) <= 0.001 && abs(eyeTilt) <= 0.001 && abs(eyeDistance) <= 0.001
             && nose <= 0.001 && abs(noseSize) <= 0.001 && abs(noseWidth) <= 0.001 && abs(noseLift) <= 0.001 && abs(noseTip) <= 0.001
             && abs(jaw) <= 0.001 && abs(chin) <= 0.001 && abs(jawSize) <= 0.001 && define <= 0.001 && abs(jawLength) <= 0.001
@@ -193,8 +193,8 @@ enum FaceAnalyzer {
             let f = faces[i], (slim, eyes) = (shapes[i].slim, shapes[i].eyes)
             let faceW = Float(f.box.width) * W
             let mid = f.nose.isEmpty ? v(CGPoint(x: f.box.midX, y: f.box.midY)) : centroid(f.nose)
-            if abs(slim) > 0.001, f.contour.count > 6 {
-                // Jawline: pull the jaw line (not the temples) towards the face's vertical centre line (slimmer is
+            if abs(slim) > 0.001, f.mesh.count != 478, f.contour.count > 6 {
+                // Jawline without the mesh (meshOps does it otherwise): pull the jaw line (not the temples) towards the face's vertical centre line (slimmer is
                 // negative), or push it out (fuller, at most 5% of the face's width, as more looks swollen).
                 let amount = slim < 0 ? -slim * 0.07 : -slim * 0.05
                 for p in f.contour.dropFirst(2).dropLast(2) {
@@ -537,6 +537,19 @@ enum FaceAnalyzer {
         // How far along the lower outline a point is: 0 beside the ears, 1 at the chin.
         func level(_ i: Int) -> Float { 1 - Float(abs(i - 10)) / 10 }
         func ease(_ a: Float, _ b: Float, _ x: Float) -> Float { let t = min(1, max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t) }
+        if abs(s.slim) > 0.001 {
+            // Jawline: the outline from the cheeks round the chin towards the face's centre line (slimmer is
+            // negative) or away from it (fuller, at most 6% of the face's width, as more looks swollen), along the
+            // face's own across direction so a tilted head slims the same way. Points near the chin move less, as
+            // they're already near the line.
+            group = TranslateGroup.jawline
+            let amount = s.slim < 0 ? -s.slim * 0.09 : -s.slim * 0.06
+            for k in lowerOutline.dropFirst(2).dropLast(2) {
+                let off = simd_dot(m[k] - centre, across)
+                let side = min(1, max(-1, off / (0.3 * faceW)))
+                move([k], r: 0.25 * faceW) { _ in -across * side * amount * faceW }
+            }
+        }
         if abs(s.jawSize) > 0.001 {
             // The jaw's outline away from the middle of the mouth (bigger is positive) or towards it: the chin and
             // jaw corners fully, fading out up the cheeks towards the ears. The mouth stays.
