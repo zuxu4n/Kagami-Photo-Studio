@@ -14,6 +14,7 @@ final class HealEngine {
     private var largeModel: MLModel?
     private var largeMissing = false   // an older single-size package: large areas fall back to 512
     private let lock = NSLock()  // the launch warm-up and a tap can both ask for the model
+    private let runLock = NSLock()   // one large pass at a time: the 1024 warm-up and a Remove mustn't overlap (memory)
 
     func loadIfNeeded() throws -> MLModel {
         lock.lock()
@@ -73,6 +74,8 @@ final class HealEngine {
     func run(_ model: MLModel, image: RGBAImage, mask: [UInt8], n: Int) throws -> RGBAImage {
         let imageArr = try MLTensors.rgbTensor(from: image, x0: 0, y0: 0, size: n)
         let maskArr = try MLTensors.maskTensor(from: mask, size: n)
+        runLock.lock()
+        defer { runLock.unlock() }
         let res = try model.prediction(from: MLDictionaryFeatureProvider(dictionary: ["image": imageArr, "mask": maskArr]))
         guard let outArr = res.featureValue(for: "output")?.multiArrayValue else { throw EngineError.badOutput }
         var out = RGBAImage(width: n, height: n)
