@@ -62,6 +62,21 @@ struct RGBAImage {
         return RGBAImage(cgImage: src, exactWidth: w, exactHeight: h)
     }
 
+    /// `a` faded towards `b` by `t` (0 gives a, 1 gives b). Both must be the same size.
+    static func blend(_ a: RGBAImage, _ b: RGBAImage, _ t: Float) -> RGBAImage {
+        var out = a
+        let k = Int32((max(0, min(1, t)) * 256).rounded())
+        out.pixels.withUnsafeMutableBufferPointer { o in
+            b.pixels.withUnsafeBufferPointer { bp in
+                for i in 0..<min(o.count, bp.count) {
+                    let av = Int32(o[i])
+                    o[i] = UInt8(av + ((Int32(bp[i]) - av) * k) >> 8)
+                }
+            }
+        }
+        return out
+    }
+
     /// Resized to exactly `w` x `h` with vImage's high-quality (Lanczos) filter.
     func scaled(toWidth w: Int, height h: Int) -> RGBAImage {
         var out = RGBAImage(width: w, height: h)

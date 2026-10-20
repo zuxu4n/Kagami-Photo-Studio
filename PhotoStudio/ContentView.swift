@@ -263,7 +263,30 @@ struct ContentView: View {
                     Spacer()
                     compareButton
                 }
-                Text("Real-ESRGAN on device, from the photo's own pixels. Never smaller than the original (up to 4x for small photos); faces stay as they are. Tap again to undo.").font(.caption).foregroundStyle(.secondary)
+                if model.enhanceOn {
+                    HStack {
+                        Text("Strength").font(.subheadline).frame(width: 96, alignment: .leading)
+                        Slider(value: $model.enhanceStrength, in: 0...1) { editing in
+                            sliding = editing
+                            if editing { model.beginEnhanceStrength() } else { Task { await model.applyEnhanceStrength() } }
+                        }
+                        Button {
+                            model.beginEnhanceStrength()
+                            model.enhanceStrength = model.enhanceStrengthDefault
+                            Task { await model.applyEnhanceStrength() }
+                        } label: {
+                            Image(systemName: "arrow.counterclockwise").font(.footnote.bold())
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(abs(model.enhanceStrength - model.enhanceStrengthDefault) < 0.001)
+                        .accessibilityLabel("Reset Strength")
+                    }
+                    .disabled(model.busy != nil)
+                }
+                Text(model.enhanceOn
+                     ? "Strength fades between your photo and the enhanced one. Faces stay as they are. Tap Enhance again to undo."
+                     : "Real-ESRGAN on device, from the photo's own pixels. Never smaller than the original (up to 4x for small photos); faces stay as they are.")
+                    .font(.caption).foregroundStyle(.secondary)
             case .smooth:
                 sliderRow("Smooth skin", value: $model.smooth)
                 HStack { Text(model.faceCount == 0 ? "No face found" : "Edges, eyes and lips stay sharp").font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
@@ -312,6 +335,7 @@ struct ContentView: View {
             Text(model.info).font(.caption2).foregroundStyle(.secondary)
         }
         .onChange(of: model.smooth) { _, _ in model.renderPreview() }
+        .onChange(of: model.enhanceStrength) { _, _ in model.dragEnhanceStrength() }
         .onChange(of: model.slim) { _, _ in model.renderPreview() }
         .onChange(of: model.eyes) { _, _ in model.renderPreview() }
         .onChange(of: model.eyeWidth) { _, _ in model.renderPreview() }

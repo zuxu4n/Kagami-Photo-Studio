@@ -69,6 +69,11 @@ final class EditorModel: ObservableObject {
     private var dragFrames = (count: 0, start: CFAbsoluteTime(0))   // frames shown during the current slider drag
     @Published var enhanceOn = false
     private var unenhanced: RGBAImage?  // the photo as it was before Enhance, kept while Enhance is on
+    private var enhancedFull: RGBAImage?   // Enhance's own output, kept while Enhance is on, so Strength can blend again
+    private var enhanceBase: RGBAImage?    // `unenhanced` at the enhanced size: Strength 0
+    @Published var enhanceStrength: Float = 0.7   // how much of Enhance's output is shown over the photo before it
+    let enhanceStrengthDefault: Float = 0.7
+    private var strengthDrag: (base: RGBAImage, enhanced: RGBAImage, start: Float)?  // preview-size copies while dragging
     private var healsSinceEnhance: [(center: CGPoint, brush: Double)] = []  // replayed on `unenhanced` when Enhance goes off
     private var warmedUp = false
     private var history = UndoHistory()
@@ -409,6 +414,8 @@ final class EditorModel: ObservableObject {
         smoothOpened = false
         enhanceOn = false
         unenhanced = nil
+        enhancedFull = nil
+        enhanceBase = nil
         healsSinceEnhance = []
         history.clear()
         canUndo = false
@@ -444,21 +451,25 @@ final class EditorModel: ObservableObject {
         busy = "Enhancing…"
         defer { busy = nil }
         let before = undoStep(.whole(src))
-        let faces = self.faces
+        let faces = self.faces, strength = enhanceStrength
         do {
-            let (out, ms, peak) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double, Double) in
+            let (out, base, shown, ms, peak) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, RGBAImage, RGBAImage, Double, Double) in
                 let meter = MemoryMeter()
                 let t0 = CFAbsoluteTimeGetCurrent()
                 let engine = EnhanceEngine.shared
                 let out = try engine.enhance(src, plan: engine.plan(width: src.width, height: src.height), faces: faces)
-                return (out, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
+                let base = src.width == out.width && src.height == out.height ? src : src.scaled(toWidth: out.width, height: out.height)
+                let shown = RGBAImage.blend(base, out, strength)
+                return (out, base, shown, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
             record("Enhance (\(out.width)×\(out.height))", ms, peakMB: peak)
             pushUndo(before)
             unenhanced = src
+            enhancedFull = out
+            enhanceBase = base
             healsSinceEnhance = []
             enhanceOn = true
-            await setWorking(out)
+            await setWorking(shown)
         } catch {
             self.error = error.localizedDescription
         }
@@ -483,9 +494,68 @@ final class EditorModel: ObservableObject {
             record("Enhance off (\(heals.count) heal(s) redone)", ms, peakMB: peak)
             if let before { pushUndo(before) }
             unenhanced = nil
+            enhancedFull = nil
+            enhanceBase = nil
             healsSinceEnhance = []
             enhanceOn = false
             await setWorking(out)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    // MARK: Enhance strength (a blend of the photo before Enhance and Enhance's output)
+
+    /// The finger went down on the Strength slider: makes preview-size copies of both ends to blend live. Spots healed
+    /// since Enhance are copied into both from the current preview, so they stay healed while the slider moves.
+    func beginEnhanceStrength() {
+        guard enhanceOn, strengthDrag == nil, let full = enhancedFull, let base = enhanceBase, let prev = preview else { return }
+        var b = base.scaled(toWidth: prev.width, height: prev.height)
+        var e = full.scaled(toWidth: prev.width, height: prev.height)
+        for h in healsSinceEnhance {
+            let r = Int(h.brush * Double(prev.width) * 1.5) + 2
+            let cx = Int(h.center.x * CGFloat(prev.width)), cy = Int(h.center.y * CGFloat(prev.height))
+            for y in max(0, cy - r)...min(prev.height - 1, cy + r) {
+                for x in max(0, cx - r)...min(prev.width - 1, cx + r) where (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r {
+                    let o = (y * prev.width + x) * 4
+                    for c in 0..<4 { b.pixels[o + c] = prev.pixels[o + c]; e.pixels[o + c] = prev.pixels[o + c] }
+                }
+            }
+        }
+        strengthDrag = (b, e, enhanceStrength)
+    }
+
+    /// Shows the blend at the slider's value while it moves.
+    func dragEnhanceStrength() {
+        guard let d = strengthDrag else { return }
+        preview = RGBAImage.blend(d.base, d.enhanced, enhanceStrength)
+        renderPreview()
+    }
+
+    /// The finger lifted: blends the full-size photo at the new strength and heals again the spots healed since
+    /// Enhance (one undo step).
+    func applyEnhanceStrength() async {
+        guard let d = strengthDrag, let full = enhancedFull, let base = enhanceBase, let current = working else { return }
+        strengthDrag = nil
+        guard abs(enhanceStrength - d.start) > 0.001 else {
+            await setWorking(current, redetectFaces: false)
+            return
+        }
+        busy = "Applying strength…"
+        defer { busy = nil }
+        var before = undoStep(.whole(current))
+        before.enhanceStrength = d.start
+        let strength = enhanceStrength, heals = healsSinceEnhance
+        do {
+            let (out, ms) = try await Task.detached(priority: .userInitiated) { () -> (RGBAImage, Double) in
+                let t0 = CFAbsoluteTimeGetCurrent()
+                var out = RGBAImage.blend(base, full, strength)
+                for h in heals { _ = try EditorModel.healSpot(&out, center: h.center, brush: h.brush) }
+                return (out, (CFAbsoluteTimeGetCurrent() - t0) * 1000)
+            }.value
+            record("Enhance strength \(Int(strength * 100))% (\(heals.count) heal(s) redone)", ms)
+            pushUndo(before)
+            await setWorking(out, redetectFaces: false)
         } catch {
             self.error = error.localizedDescription
         }
@@ -560,7 +630,8 @@ final class EditorModel: ObservableObject {
 
     private func undoStep(_ pixels: PixelUndo) -> UndoStep {
         storeShape()
-        return UndoStep(pixels: pixels, enhanceOn: enhanceOn, unenhanced: unenhanced, healsSinceEnhance: healsSinceEnhance,
+        return UndoStep(pixels: pixels, enhanceOn: enhanceOn, unenhanced: unenhanced, enhancedFull: enhancedFull, enhanceBase: enhanceBase,
+                        enhanceStrength: enhanceStrength, healsSinceEnhance: healsSinceEnhance,
                         faces: faces, shapes: shapes, selectedFace: selectedFace, smooth: smooth)
     }
 
@@ -617,6 +688,9 @@ final class EditorModel: ObservableObject {
         let back = undoStep(reverse)
         enhanceOn = step.enhanceOn
         unenhanced = step.unenhanced
+        enhancedFull = step.enhancedFull
+        enhanceBase = step.enhanceBase
+        enhanceStrength = step.enhanceStrength
         healsSinceEnhance = step.healsSinceEnhance
         faces = step.faces
         faceCount = step.faces.count
