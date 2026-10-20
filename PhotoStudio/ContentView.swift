@@ -626,7 +626,7 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         }
     }
 
-    var needsMesh: Bool { ![.slim, .eyes].contains(self) }
+    var needsMesh: Bool { ![.slim, .eyes].contains(self) }   // these two fall back to Apple Vision's landmarks
 }
 
 /// Face › Position: the oval to drag, on the selected face, drawn over the aspect-fit photo. Its long radius is at least

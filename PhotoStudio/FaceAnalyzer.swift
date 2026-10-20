@@ -60,7 +60,7 @@ struct FaceShape: Equatable {
     var forehead: Float = 0   // -1...1, lower or higher hairline
     var pushes: [FacePush] = []   // in the order they were made; applied after the sliders
     var meshOff: Bool {
-        abs(slim) <= 0.001 && abs(size) <= 0.001 && abs(width) <= 0.001 && abs(perspective) <= 0.001 && abs(positionX) <= 0.001 && abs(positionY) <= 0.001
+        abs(slim) <= 0.001 && abs(eyes) <= 0.001 && abs(size) <= 0.001 && abs(width) <= 0.001 && abs(perspective) <= 0.001 && abs(positionX) <= 0.001 && abs(positionY) <= 0.001
             && abs(eyeWidth) <= 0.001 && abs(eyeHeight) <= 0.001 && abs(eyeTilt) <= 0.001 && abs(eyeDistance) <= 0.001
             && nose <= 0.001 && abs(noseSize) <= 0.001 && abs(noseWidth) <= 0.001 && abs(noseLift) <= 0.001 && abs(noseTip) <= 0.001
             && abs(jaw) <= 0.001 && abs(chin) <= 0.001 && abs(jawSize) <= 0.001 && define <= 0.001 && abs(jawLength) <= 0.001
@@ -88,7 +88,7 @@ enum TranslateGroup {
     static let jawline: Float = 1, nose: Float = 2, jaw: Float = 3, chin: Float = 4, lips: Float = 5, mouth: Float = 6,
                forehead: Float = 7, jawSize: Float = 8, define: Float = 9, jawLength: Float = 10, noseSize: Float = 11,
                noseWidth: Float = 12, noseLift: Float = 13, eyeWidth: Float = 14, eyeHeight: Float = 15, eyeTilt: Float = 16,
-               eyeDistance: Float = 17, lipSize: Float = 18, lipWidth: Float = 19, browRaise: Float = 20, browLift: Float = 21,
+               eyeDistance: Float = 17, eyeSize: Float = 24, lipSize: Float = 18, lipWidth: Float = 19, browRaise: Float = 20, browLift: Float = 21,
                browShape: Float = 22, browTilt: Float = 23
 }
 
@@ -203,7 +203,7 @@ enum FaceAnalyzer {
                     ops.append(WarpOp(c: c, r: 0.25 * faceW, kind: 0, m: SIMD2(dir * amount * faceW, 0), s: TranslateGroup.jawline))
                 }
             }
-            if abs(eyes) > 0.001 {   // Eyes › Size: a bulge on each eye, or a pinch for smaller
+            if abs(eyes) > 0.001, f.mesh.count != 478 {   // Eyes › Size without the mesh: a bulge on each eye, or a pinch
                 for eye in [f.leftEye, f.rightEye] where eye.count > 2 {
                     let xs = eye.map { Float($0.x) * W }
                     let eyeW = (xs.max() ?? 0) - (xs.min() ?? 0)
@@ -375,6 +375,15 @@ enum FaceAnalyzer {
         }
         // Lid points count less towards the corners (the first and last of each lid are next to a corner).
         func taper(_ i: Int, _ n: Int) -> Float { 1 - 0.5 * abs(Float(i) - Float(n - 1) / 2) / (Float(n - 1) / 2) }
+        if abs(s.eyes) > 0.001 {
+            // Eyes › Size: the eye's outline and iris away from its centre (bigger, positive) or towards it, so the
+            // eye and iris scale together. The brows and the bridge of the nose stay.
+            group = TranslateGroup.eyeSize
+            for (e, contour, c, eyeW, _) in eyes {
+                move(contour + (1...4).map { e.iris + $0 }, r: 0.45 * eyeW) { p in (p - c) * s.eyes * 0.4 }
+            }
+            hold([46, 53, 52, 65, 55, 276, 283, 282, 295, 285, 168, 6], r: 0.12 * faceW)
+        }
         if abs(s.eyeWidth) > 0.001 {
             // Longer (positive) or shorter from corner to corner: the outer corner moves along the eye's own line,
             // the inner corner half as far (so the eyes don't crowd the nose). The iris keeps its shape.
