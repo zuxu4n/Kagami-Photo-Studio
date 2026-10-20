@@ -174,3 +174,46 @@ extension RGBAImage {
         return UIImage(cgImage: cg)
     }
 }
+
+/// On-device timing of removal for test builds: launched with the argument RemoveBench, the app opens
+/// Documents/remove_bench.jpg (copied in over USB, never bundled), then runs the real Heal paths and logs each to
+/// timings.json as usual: person cutout, a tap on the person at the normalised point in Documents/remove_bench.txt
+/// ("x,y", default the middle), Remove, Undo, Remove again (warm), and one spot heal.
+enum RemoveBench {
+    static var requested: Bool {
+        let args = ProcessInfo.processInfo.arguments
+        return args.contains("-RemoveBench") || args.contains("RemoveBench")
+    }
+    static var docs: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0] }
+}
+
+extension EditorModel {
+    func runRemoveBench() async {
+        guard let data = try? Data(contentsOf: RemoveBench.docs.appendingPathComponent("remove_bench.jpg")) else {
+            info = "RemoveBench: no Documents/remove_bench.jpg"
+            return
+        }
+        UIApplication.shared.isIdleTimerDisabled = true
+        defer { UIApplication.shared.isIdleTimerDisabled = false }
+        let tap = (try? String(contentsOf: RemoveBench.docs.appendingPathComponent("remove_bench.txt"), encoding: .utf8))?
+            .trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ",").compactMap { Double($0) } ?? []
+        let nx = tap.count == 2 ? tap[0] : 0.5, ny = tap.count == 2 ? tap[1] : 0.5
+        record("RemoveBench start", 0)
+        await load(data: data)
+        tool = .heal
+        healMode = .people
+        preparePeople()
+        if let t = peopleTask { _ = await t.value }
+        guard let prev = preview else { return }
+        let p = CGPoint(x: nx * Double(prev.width), y: ny * Double(prev.height))
+        await peopleTap(at: p)
+        await removeSelection()
+        await undo()
+        await peopleTap(at: p)
+        await removeSelection()
+        healMode = .spot
+        await heal(at: CGPoint(x: Double(prev.width) * 0.1, y: Double(prev.height) * 0.9))
+        record("RemoveBench done", 0)
+        info = "Remove timing done"
+    }
+}

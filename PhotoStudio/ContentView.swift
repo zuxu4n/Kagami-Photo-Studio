@@ -63,6 +63,7 @@ struct ContentView: View {
             .task {
                 await model.warmUp()
                 if EnhanceBench.requested { await model.runEnhanceBench() }
+                if RemoveBench.requested { await model.runRemoveBench() }
             }
             .onChange(of: model.tool) { _, t in
                 model.toolShown(t)
