@@ -358,7 +358,7 @@ struct ContentView: View {
         }
     }
 
-    /// The six main Face tabs; a dot marks the ones with a slider moved on the selected face.
+    /// The main Face tabs; a dot marks the ones with a slider moved on the selected face.
     private var areaTabs: some View {
         HStack(spacing: 0) {
             ForEach(FaceArea.allCases) { a in
@@ -448,7 +448,7 @@ struct ContentView: View {
 
 /// The Face tab's main tabs and their subtabs. Subtabs without a FaceFeature are buttons only for now.
 private enum FaceArea: String, CaseIterable, Identifiable {
-    case face = "Face", jaw = "Jaw", nose = "Nose", eyes = "Eyes", lips = "Lips", eyebrows = "Eyebrows"
+    case face = "Face", jaw = "Jaw", nose = "Nose", eyes = "Eyes", lips = "Lips", eyebrows = "Eyebrows", forehead = "Forehead"
     var id: String { rawValue }
 
     var subtabs: [String] {
@@ -459,10 +459,11 @@ private enum FaceArea: String, CaseIterable, Identifiable {
         case .eyes: return ["Size", "Width", "Height", "Tilt", "Distance"]
         case .lips: return ["Size", "Height", "Width"]
         case .eyebrows: return ["Thick", "Lift", "Shape", "Tilt", "Raise"]
+        case .forehead: return ["Height"]
         }
     }
 
-    /// The slider each subtab drives. Forehead has no subtab yet, so it's hidden (it stays at its value).
+    /// The slider each subtab drives.
     func feature(_ sub: String) -> FaceFeature? {
         switch (self, sub) {
         case (.face, "Size"): return .size
@@ -495,6 +496,7 @@ private enum FaceArea: String, CaseIterable, Identifiable {
         case (.eyebrows, "Shape"): return .browShape
         case (.eyebrows, "Tilt"): return .browTilt
         case (.eyebrows, "Raise"): return .browRaise
+        case (.forehead, "Height"): return .forehead
         default: return nil
         }
     }
@@ -560,6 +562,7 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .browShape: return "Shape"
         case .browTilt: return "Tilt"
         case .browRaise: return "Raise"
+        case .forehead: return "Height"
         case .eyes: return "Size"
         case .eyeWidth: return "Width"
         case .eyeHeight: return "Height"
