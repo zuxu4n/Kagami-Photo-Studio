@@ -10,8 +10,9 @@ struct ContentView: View {
     @State private var zoom: CGFloat = 1       // 1 = whole photo fits
     @State private var pan: CGSize = .zero     // offset of the zoomed photo from the centre, in points
     @State private var pinchStart: (zoom: CGFloat, pan: CGSize)?
-    @State private var finger: CGPoint?            // where the first finger on the photo is now (the drag gesture follows it)
-    @State private var pinchFinger: CGPoint?       // that finger when the pinch began
+    @State private var pinchCentre: CGPoint?       // the two fingers' middle point when the current two-finger move began
+    @State private var pinchScale: (now: CGFloat, base: CGFloat) = (1, 1)   // the pinch's scale, and its value at that start
+    @State private var twoFingers: Set<Int> = []   // which of the pinch (0) and two-finger pan (1) are under way
     @State private var dragStart: CGSize?      // pan when a one-finger drag began
     @State private var brushRing = false       // show the Heal brush size while its slider moves
     @State private var area: FaceArea = .face          // the Face main tab shown
@@ -160,7 +161,6 @@ struct ContentView: View {
             .simultaneousGesture(DragGesture(minimumDistance: 0)
                 .onChanged { v in
                     if !touching { touching = true }
-                    finger = v.location
                     if reshapeOn {
                         if pinchStart != nil {
                             // A second finger came down: this is a pinch, not a push.
@@ -220,37 +220,49 @@ struct ContentView: View {
                     if paintDrag == true { endPaint() }
                     paintDrag = nil
                 })
-            .simultaneousGesture(MagnifyGesture()
-                .onChanged { v in
-                    guard model.hasImage else { return }
-                    comparing = false
-                    if pinchStart == nil { pinchFinger = finger }
-                    let start = pinchStart ?? (zoom, pan)
-                    pinchStart = start
-                    let z = min(maxZoom, max(1, start.zoom * v.magnification))
-                    // Keep the photo point under the pinch where it was.
-                    let a = CGPoint(x: v.startLocation.x - geo.size.width / 2, y: v.startLocation.y - geo.size.height / 2)
-                    let k = z / start.zoom
-                    var p = CGSize(width: a.x - (a.x - start.pan.width) * k, height: a.y - (a.y - start.pan.height) * k)
-                    // Two fingers moving together also move the photo. The pinch only reports where it began, so the
-                    // move is read from the first finger: how far it is from where a pure pinch about the start point
-                    // would have put it.
-                    if let f0 = pinchFinger, let f = finger {
-                        let c = v.startLocation, m = v.magnification
-                        p.width += f.x - (c.x + (f0.x - c.x) * m)
-                        p.height += f.y - (c.y + (f0.y - c.y) * m)
-                    }
-                    zoom = z
-                    pan = clampedPan(p, zoom: z, view: geo.size)
-                }
-                .onEnded { _ in
-                    pinchStart = nil
-                    pinchFinger = nil
-                    dragStart = nil
-                    if zoom < 1.05 { withAnimation(.easeOut(duration: 0.15)) { zoom = 1; pan = .zero } }
-                })
+            .gesture(PinchRecognizer { state, centre, scale in twoFingerEvent(0, state, centre, scale, view: geo.size) })
+            .gesture(TwoFingerPanRecognizer { state, centre, _ in twoFingerEvent(1, state, centre, nil, view: geo.size) })
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    /// Two fingers pinch and move the photo together: the photo point that was under the fingers' middle when they
+    /// came down stays under it, at the pinch's zoom. Either recognizer starting again (a finger lifted and came back)
+    /// starts from where the photo is now, so nothing jumps.
+    private func twoFingerEvent(_ kind: Int, _ state: UIGestureRecognizer.State, _ centre: CGPoint, _ scale: CGFloat?, view: CGSize) {
+        guard model.hasImage else { return }
+        switch state {
+        case .began, .changed:
+            twoFingers.insert(kind)
+            if state == .began, scale != nil { pinchScale = (1, 1) }
+            if let scale { pinchScale.now = scale }
+            if state == .began || pinchCentre == nil || pinchStart == nil {
+                pinchStart = (zoom, pan)
+                pinchCentre = centre
+                pinchScale.base = pinchScale.now
+            }
+            guard let start = pinchStart, let c0 = pinchCentre else { return }
+            comparing = false
+            let z = min(maxZoom, max(1, start.zoom * pinchScale.now / max(0.01, pinchScale.base)))
+            let k = z / start.zoom
+            let a = CGPoint(x: c0.x - view.width / 2, y: c0.y - view.height / 2)
+            let c = CGPoint(x: centre.x - view.width / 2, y: centre.y - view.height / 2)
+            zoom = z
+            // Past the photo's edges (always, at the fitted size) it follows the fingers a third as far, then springs
+            // back when they lift, so the move is visible but the photo can't be lost off screen.
+            let want = CGSize(width: c.x - (a.x - start.pan.width) * k, height: c.y - (a.y - start.pan.height) * k)
+            let fit = clampedPan(want, zoom: z, view: view)
+            pan = CGSize(width: fit.width + (want.width - fit.width) / 3, height: fit.height + (want.height - fit.height) / 3)
+        default:
+            twoFingers.remove(kind)
+            pinchCentre = nil   // the other one, if still going, starts again from here
+            guard twoFingers.isEmpty else { return }
+            pinchStart = nil
+            dragStart = nil
+            withAnimation(.easeOut(duration: 0.2)) {
+                if zoom < 1.05 { zoom = 1; pan = .zero } else { pan = clampedPan(pan, zoom: zoom, view: view) }
+            }
+        }
     }
 
     /// The photo's aspect-fit size in the canvas at zoom 1.
