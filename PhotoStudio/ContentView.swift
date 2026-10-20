@@ -360,24 +360,27 @@ struct ContentView: View {
 
     /// The main Face tabs; a dot marks the ones with a slider moved on the selected face.
     private var areaTabs: some View {
-        HStack(spacing: 0) {
-            ForEach(FaceArea.allCases) { a in
-                Button { area = a } label: {
-                    VStack(spacing: 4) {
-                        HStack(spacing: 3) {
-                            Text(a.rawValue).lineLimit(1).minimumScaleFactor(0.7)
-                            if changed(a) { Circle().frame(width: 4, height: 4) }
+        // Scrolls sideways, as seven names don't fit across a phone at full size.
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 18) {
+                ForEach(FaceArea.allCases) { a in
+                    Button { area = a } label: {
+                        VStack(spacing: 4) {
+                            HStack(spacing: 3) {
+                                Text(a.rawValue).lineLimit(1).fixedSize()
+                                if changed(a) { Circle().frame(width: 4, height: 4) }
+                            }
+                            .font(.subheadline.weight(a == area ? .bold : .regular))
+                            .foregroundStyle(a == area ? Color.primary : Color.secondary)
+                            Capsule().frame(height: 2)
+                                .foregroundStyle(a == area ? Color(red: 0.2, green: 0.85, blue: 0.95) : .clear)
                         }
-                        .font(.subheadline.weight(a == area ? .bold : .regular))
-                        .foregroundStyle(a == area ? Color.primary : Color.secondary)
-                        Capsule().frame(height: 2)
-                            .foregroundStyle(a == area ? Color(red: 0.2, green: 0.85, blue: 0.95) : .clear)
+                        .contentShape(Rectangle())
                     }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
+            .padding(.horizontal, 4)
         }
     }
 
