@@ -25,7 +25,6 @@ struct ContentView: View {
                 if model.hasImage {
                     toolPicker
                     toolPanel
-                    timingList
                 } else {
                     Spacer()
                 }
@@ -291,7 +290,13 @@ struct ContentView: View {
                               range: f.range)
                         .disabled(f.needsMesh && !model.selectedHasMesh)
                 }
-                HStack { Text(faceCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
+                HStack {
+                    Text(faceCaption).font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Reset all") { model.resetFaceSliders() }
+                        .font(.caption.bold()).disabled(!model.faceSlidersMoved || model.busy != nil)
+                    compareButton
+                }
             case .reshape:
                 sliderRow("Size", value: $model.reshapeSize, range: 0.08...0.5, reset: 0.22, undoable: false)
                 sliderRow("Strength", value: $model.reshapeStrength, range: 0.1...1, reset: 1, undoable: false)
@@ -438,20 +443,6 @@ struct ContentView: View {
             .disabled(abs(value.wrappedValue - reset) < 0.001 || model.busy != nil)
             .accessibilityLabel("Reset \(title)")
         }
-    }
-
-    private var timingList: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(model.timings, id: \.0) { item in
-                HStack {
-                    Text(item.0).lineLimit(1)
-                    Spacer()
-                    Text(String(format: "%.0f ms", item.1)).monospacedDigit()
-                }
-                .font(.caption2)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

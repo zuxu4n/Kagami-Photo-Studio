@@ -733,11 +733,15 @@ final class EditorModel: ObservableObject {
         }
     }
 
-    func resetSliders() {
-        smooth = 0
+    /// Whether any Face slider (Position included) is moved on the selected face.
+    var faceSlidersMoved: Bool { sliderShape(keeping: FaceShape()) != FaceShape() }
+
+    /// Puts every Face slider on the selected face back to the middle (one undo step). Its Reshape pushes and
+    /// Smooth stay.
+    func resetFaceSliders() {
+        sliderEditing(true)
         showSliders(FaceShape())
-        shapes = Array(repeating: FaceShape(), count: faces.count)
-        renderPreview()
+        sliderEditing(false)
     }
 
     // MARK: Timings (also written to Documents/timings.json for collection over USB)
