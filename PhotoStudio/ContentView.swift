@@ -10,6 +10,8 @@ struct ContentView: View {
     @State private var zoom: CGFloat = 1       // 1 = whole photo fits
     @State private var pan: CGSize = .zero     // offset of the zoomed photo from the centre, in points
     @State private var pinchStart: (zoom: CGFloat, pan: CGSize)?
+    @State private var finger: CGPoint?            // where the first finger on the photo is now (the drag gesture follows it)
+    @State private var pinchFinger: CGPoint?       // that finger when the pinch began
     @State private var dragStart: CGSize?      // pan when a one-finger drag began
     @State private var brushRing = false       // show the Heal brush size while its slider moves
     @State private var area: FaceArea = .face          // the Face main tab shown
@@ -158,6 +160,7 @@ struct ContentView: View {
             .simultaneousGesture(DragGesture(minimumDistance: 0)
                 .onChanged { v in
                     if !touching { touching = true }
+                    finger = v.location
                     if reshapeOn {
                         if pinchStart != nil {
                             // A second finger came down: this is a pinch, not a push.
@@ -221,18 +224,28 @@ struct ContentView: View {
                 .onChanged { v in
                     guard model.hasImage else { return }
                     comparing = false
+                    if pinchStart == nil { pinchFinger = finger }
                     let start = pinchStart ?? (zoom, pan)
                     pinchStart = start
                     let z = min(maxZoom, max(1, start.zoom * v.magnification))
                     // Keep the photo point under the pinch where it was.
                     let a = CGPoint(x: v.startLocation.x - geo.size.width / 2, y: v.startLocation.y - geo.size.height / 2)
                     let k = z / start.zoom
-                    let p = CGSize(width: a.x - (a.x - start.pan.width) * k, height: a.y - (a.y - start.pan.height) * k)
+                    var p = CGSize(width: a.x - (a.x - start.pan.width) * k, height: a.y - (a.y - start.pan.height) * k)
+                    // Two fingers moving together also move the photo. The pinch only reports where it began, so the
+                    // move is read from the first finger: how far it is from where a pure pinch about the start point
+                    // would have put it.
+                    if let f0 = pinchFinger, let f = finger {
+                        let c = v.startLocation, m = v.magnification
+                        p.width += f.x - (c.x + (f0.x - c.x) * m)
+                        p.height += f.y - (c.y + (f0.y - c.y) * m)
+                    }
                     zoom = z
                     pan = clampedPan(p, zoom: z, view: geo.size)
                 }
                 .onEnded { _ in
                     pinchStart = nil
+                    pinchFinger = nil
                     dragStart = nil
                     if zoom < 1.05 { withAnimation(.easeOut(duration: 0.15)) { zoom = 1; pan = .zero } }
                 })
