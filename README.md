@@ -26,7 +26,7 @@ The models are not committed to git (LaMa is about 100 MB). They come from the c
 
 ## Build
 
-This Mac account isn't an administrator, so the Xcode tools are selected per command instead of with `xcode-select`:
+Put your Apple team ID in `Local.xcconfig` (git ignores it; see `Signing.xcconfig`), then build. `DEVELOPER_DIR` picks Xcode without changing `xcode-select`:
 
 ```sh
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
@@ -34,4 +34,4 @@ xcodebuild -project PhotoStudio.xcodeproj -scheme PhotoStudio -configuration Rel
   -destination 'generic/platform=iOS' -derivedDataPath build -allowProvisioningUpdates build
 ```
 
-The shared scheme runs Release with the debugger off: attaching a debugger needs an admin password on this Mac. Metal kernels are compiled on the device at first use (`ShaderSource.swift`), so Xcode's optional Metal Toolchain isn't needed.
+The shared scheme runs Release with the debugger off: so it runs at full speed on the phone. Metal kernels are compiled on the device at first use (`ShaderSource.swift`), so Xcode's optional Metal Toolchain isn't needed.

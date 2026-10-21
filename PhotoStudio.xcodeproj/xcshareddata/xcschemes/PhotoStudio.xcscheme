@@ -30,7 +30,7 @@
       <Testables>
       </Testables>
    </TestAction>
-   <!-- Run uses Release and no debugger: this Mac's account can't authorise debugger attach without an admin password. -->
+   <!-- Run uses Release and no debugger, so on-device runs are full speed. -->
    <LaunchAction
       buildConfiguration = "Release"
       selectedDebuggerIdentifier = ""
