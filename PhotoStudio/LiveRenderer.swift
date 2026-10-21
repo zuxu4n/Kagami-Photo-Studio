@@ -76,11 +76,12 @@ final class LiveRenderer {
         return p
     }
 
-    /// `src` (32BGRA) with the plan applied, in a new buffer of the same size; `src` itself when there's nothing to do.
-    func render(_ src: CVPixelBuffer, plan: Plan) -> CVPixelBuffer {
+    /// `src` (32BGRA) with the plan applied, in `into` or else a new buffer of the same size; `src` itself when there's
+    /// nothing to do.
+    func render(_ src: CVPixelBuffer, plan: Plan, into dest: CVPixelBuffer? = nil) -> CVPixelBuffer {
         let w = CVPixelBufferGetWidth(src), h = CVPixelBufferGetHeight(src)
         let steps = (plan.smoothMask != nil ? 1 : 0) + (plan.retouchMasks != nil ? 1 : 0) + (plan.ops.isEmpty ? 0 : 1)
-        guard steps > 0, let input = texture(src), let out = newBuffer(w, h), let output = texture(out) else { return src }
+        guard steps > 0, let input = texture(src), let out = dest ?? newBuffer(w, h), let output = texture(out) else { return src }
         if scratch.first?.width != w || scratch.first?.height != h {
             let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: w, height: h, mipmapped: false)
             d.usage = [.shaderRead, .shaderWrite]

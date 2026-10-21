@@ -5,6 +5,8 @@ struct ContentView: View {
     @StateObject private var model = EditorModel()
     @State private var pickerItem: PhotosPickerItem?
     @State private var showCamera = false
+    @State private var videoItem: PhotosPickerItem?
+    @State private var movie: PickedMovie?
     @State private var comparing = false
     @State private var sliding = false     // a slider is being dragged
     @State private var touching = false    // a finger is on the photo
@@ -43,6 +45,10 @@ struct ContentView: View {
                         PhotosPicker(selection: $pickerItem, matching: .images) {
                             Label("Photo", systemImage: "photo.on.rectangle")
                         }
+                        PhotosPicker(selection: $videoItem, matching: .videos) {
+                            Label("Video", systemImage: "film")
+                        }
+                        .disabled(model.busy != nil)
                         Button { showCamera = true } label: { Label("Camera", systemImage: "camera") }
                             .disabled(model.busy != nil)
                     }
@@ -64,6 +70,15 @@ struct ContentView: View {
                 }
             }
             .fullScreenCover(isPresented: $showCamera) { CameraView() }
+            .fullScreenCover(item: $movie) { VideoEditView(movie: $0) }
+            .onChange(of: videoItem) { _, item in
+                guard let item else { return }
+                videoItem = nil
+                Task {
+                    do { movie = try await item.loadTransferable(type: PickedMovie.self) }
+                    catch { model.error = "This video can't be opened (\(error.localizedDescription))." }
+                }
+            }
             .alert("Something went wrong", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {
