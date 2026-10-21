@@ -89,8 +89,9 @@ struct ContentView: View {
                 if EnhanceBench.requested { await model.runEnhanceBench() }
                 if RemoveBench.requested { await model.runRemoveBench() }
             }
-            .onChange(of: model.tool) { _, t in
+            .onChange(of: model.tool) { old, t in
                 model.toolShown(t)
+                if old == .adjust || t == .adjust { model.renderPreview() }   // the crop shows only in Adjust
                 if t == .heal, model.healMode.selects { model.preparePeople() }
             }
             .onChange(of: model.healMode) { _, m in if m.selects { model.preparePeople() } }
@@ -488,6 +489,9 @@ struct ContentView: View {
                         .font(.caption.bold()).disabled(!model.faceSlidersMoved || model.busy != nil)
                     compareButton
                 }
+            case .adjust:
+                AdjustPanel(adjust: $model.adjust)
+                    .onChange(of: model.adjust) { _, _ in model.renderPreview() }
             case .reshape:
                 sliderRow("Size", value: $model.reshapeSize, range: 0.08...0.5, reset: 0.22, undoable: false)
                 sliderRow("Strength", value: $model.reshapeStrength, range: 0.1...1, reset: 1, undoable: false)

@@ -26,6 +26,9 @@ struct VideoEditView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var look = LiveLook()   // every effect starts at none, as on the camera
     @State private var control = LookControl.all[0]
+    @State private var adjust = Adjustments()
+    @State private var panel = "Face"      // which controls show: Face or Adjust
+    @State private var asset: AVURLAsset?
     @State private var player = AVPlayer()
     @State private var composition: AVVideoComposition?
     @State private var playing = false
@@ -75,6 +78,14 @@ struct VideoEditView: View {
             try? FileManager.default.removeItem(at: movie.url)   // our own temporary copy
         }
         .onChange(of: look) { _, new in box.look = new; refresh() }
+        .onChange(of: adjust) { old, new in
+            box.adjust = new
+            if old.outputSize(for: CGSize(width: 1000, height: 1600)) == new.outputSize(for: CGSize(width: 1000, height: 1600)) {
+                refresh()
+            } else {
+                Task { await recompose() }   // a new crop or turn changes the picture's size
+            }
+        }
     }
 
     private var topBar: some View {
@@ -95,6 +106,20 @@ struct VideoEditView: View {
 
     private var controls: some View {
         VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                Button { togglePlay() } label: {
+                    Image(systemName: playing ? "pause.fill" : "play.fill").font(.title3).frame(width: 36, height: 36)
+                }
+                Picker("Settings", selection: $panel) {
+                    Text("Face").tag("Face")
+                    Text("Adjust").tag("Adjust")
+                }
+                .pickerStyle(.segmented)
+            }
+            .padding(.horizontal, 16)
+            if panel == "Adjust" {
+                AdjustPanel(adjust: $adjust).padding(.horizontal, 16)
+            } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(LookControl.all) { c in
@@ -110,9 +135,6 @@ struct VideoEditView: View {
                 .padding(.horizontal, 16)
             }
             HStack(spacing: 10) {
-                Button { togglePlay() } label: {
-                    Image(systemName: playing ? "pause.fill" : "play.fill").font(.title3).frame(width: 36, height: 36)
-                }
                 Slider(value: Binding(get: { Double(control.get(look)) }, set: { control.set(&look, Float($0)) }),
                        in: Double(control.range.lowerBound)...Double(control.range.upperBound))
                     .tint(.white)
@@ -121,6 +143,7 @@ struct VideoEditView: View {
                 Button { control.set(&look, 0) } label: { Image(systemName: "arrow.counterclockwise") }
             }
             .padding(.horizontal, 16)
+            }
         }
         .padding(.top, 14)
         .padding(.bottom, 12)
@@ -130,6 +153,7 @@ struct VideoEditView: View {
     private func load() async {
         box.look = look
         let asset = AVURLAsset(url: movie.url)
+        self.asset = asset
         guard let c = try? await VideoLook.composition(for: asset, box: box) else {
             message = "This video can't be opened."
             return
@@ -144,6 +168,14 @@ struct VideoEditView: View {
         }
         player.play()
         playing = true
+    }
+
+    /// A new composition for a new picture size, swapped into the player where it is.
+    private func recompose() async {
+        guard let asset, let c = try? await VideoLook.composition(for: asset, box: box) else { return }
+        composition = c
+        player.currentItem?.videoComposition = c
+        refresh()
     }
 
     private func togglePlay() {

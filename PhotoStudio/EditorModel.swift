@@ -2,7 +2,7 @@ import SwiftUI
 import Photos
 
 enum Tool: String, CaseIterable, Identifiable {
-    case enhance = "Enhance", smooth = "Smooth", retouch = "Retouch", blur = "Background", heal = "Heal", face = "Face", reshape = "Warp"
+    case enhance = "Enhance", smooth = "Smooth", retouch = "Retouch", blur = "Background", heal = "Heal", face = "Face", reshape = "Warp", adjust = "Adjust"
     var id: String { rawValue }
 }
 
@@ -15,6 +15,7 @@ final class EditorModel: ObservableObject {
     @Published var busy: String?
     @Published var error: String?
     @Published var tool: Tool = .enhance
+    @Published var adjust = Adjustments()   // crop, turn, flip, light and colour; the crop shows only in the Adjust tool
     @Published var smooth: Float = 0
     @Published var slim: Float = 0          // Jawline; every Face slider shows the selected face's values
     @Published var eyes: Float = 0
@@ -458,6 +459,7 @@ final class EditorModel: ObservableObject {
         original = prev.uiImage()
         display = original
         smooth = 0
+        adjust = Adjustments()
         smoothOpened = false
         enhanceOn = false
         unenhanced = nil
@@ -792,6 +794,7 @@ final class EditorModel: ObservableObject {
         renderAgain = false
         let smooth = self.smooth, shapes = self.shapes, faces = self.faces, version = sourceVersion
         let retouch = shapes.map(\.retouch)
+        let adjust = self.adjust, adjustShape = tool == .adjust
         if blur > 0.001 || background != .off, personMatte == nil { findPeople() }   // blurs once the people are found
         let matte = personMatte, blur = matte == nil ? 0 : self.blur, edits = blurEdits, editsVersion = blurEditsVersion
         let cut = matte == nil ? nil : background.previewMode, cutKey = matte == nil ? BackgroundChoice.off : background
@@ -805,7 +808,7 @@ final class EditorModel: ObservableObject {
                 let withBlur = cachedBlur ?? EditorModel.apply(base, faces: faces, smooth: 0, shapes: shapes, retouch: false,
                                                                blur: blur, matte: matte, edits: edits, cut: cut, warp: false)
                 let out = EditorModel.apply(withBlur, faces: faces, smooth: 0, shapes: shapes, retouch: false)
-                let ui = out.uiImage()
+                let ui = adjust.isOff ? out.uiImage() : UIImage(cgImage: adjust.apply(out.cgImage(), shape: adjustShape))
                 return (base, withBlur, ui, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
             rendering = false
@@ -900,7 +903,7 @@ final class EditorModel: ObservableObject {
         }
         storeShape()
         let smooth = self.smooth, shapes = self.shapes, blur = self.blur, background = self.background
-        let faces = self.faces, matte = self.personMatte, edits = blurEdits
+        let faces = self.faces, matte = self.personMatte, edits = blurEdits, adjust = self.adjust
         let (data, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (Data?, Double, Double) in
             let meter = MemoryMeter()
             let t0 = CFAbsoluteTimeGetCurrent()
@@ -915,10 +918,11 @@ final class EditorModel: ObservableObject {
                     alpha = GPU.shared.warp(alpha, ops: FaceAnalyzer.warpOps(faces: faces, shapes: shapes, width: img.width, height: img.height))
                 }
                 for k in 0..<(out.width * out.height) { out.pixels[k * 4 + 3] = alpha.pixels[k * 4] }
-                data = out.uiImageWithAlpha().pngData()
+                let ui = out.uiImageWithAlpha()
+                data = adjust.isOff ? ui.pngData() : ui.cgImage.map { UIImage(cgImage: adjust.apply($0)).pngData() } ?? ui.pngData()
             } else {
                 let out = EditorModel.apply(img, faces: faces, smooth: smooth, shapes: shapes, blur: blur, matte: m, cut: background.previewMode)
-                data = out.uiImage().jpegData(compressionQuality: 0.95)
+                data = (adjust.isOff ? out.uiImage() : UIImage(cgImage: adjust.apply(out.cgImage()))).jpegData(compressionQuality: 0.95)
             }
             return (data, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
         }.value

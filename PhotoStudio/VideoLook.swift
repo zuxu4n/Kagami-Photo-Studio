@@ -7,6 +7,11 @@ final class LookBox: @unchecked Sendable {
     private let lock = NSLock()
     private var _look = LiveLook()
     private var _comparing = false
+    private var _adjust = Adjustments()
+    var adjust: Adjustments {
+        get { lock.lock(); defer { lock.unlock() }; return _adjust }
+        set { lock.lock(); _adjust = newValue; lock.unlock() }
+    }
     var look: LiveLook {
         get { lock.lock(); defer { lock.unlock() }; return _look }
         set { lock.lock(); _look = newValue; lock.unlock() }
@@ -64,6 +69,7 @@ final class LookCompositor: NSObject, AVVideoCompositing {
             let w = CVPixelBufferGetWidth(upright), h = CVPixelBufferGetHeight(upright)
             var img = CIImage(cvPixelBuffer: src).oriented(ins.orientation)
             img = img.transformed(by: CGAffineTransform(translationX: -img.extent.minX, y: -img.extent.minY))
+            if !ins.box.comparing { img = ins.box.adjust.apply(img) }   // crop, turn, flip, light and colour
             img = img.transformed(by: CGAffineTransform(scaleX: CGFloat(w) / img.extent.width, y: CGFloat(h) / img.extent.height))
             ci.render(img, to: upright, bounds: CGRect(x: 0, y: 0, width: w, height: h), colorSpace: CGColorSpaceCreateDeviceRGB())
 
@@ -94,7 +100,7 @@ enum VideoLook {
                                                              track.load(.nominalFrameRate), asset.load(.duration))
         let orientation = Self.orientation(transform)
         let turned = [.left, .right].contains(orientation)
-        var size = turned ? CGSize(width: natural.height, height: natural.width) : natural
+        var size = box.adjust.outputSize(for: turned ? CGSize(width: natural.height, height: natural.width) : natural)
         let k = min(1, maxSide / max(size.width, size.height))
         size = CGSize(width: (size.width * k / 2).rounded() * 2, height: (size.height * k / 2).rounded() * 2)
 
