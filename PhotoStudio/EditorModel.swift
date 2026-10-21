@@ -2,7 +2,7 @@ import SwiftUI
 import Photos
 
 enum Tool: String, CaseIterable, Identifiable {
-    case enhance = "Enhance", smooth = "Smooth", retouch = "Retouch", blur = "Background", heal = "Heal", face = "Face", reshape = "Reshape"
+    case enhance = "Enhance", smooth = "Smooth", retouch = "Retouch", blur = "Background", heal = "Heal", face = "Face", reshape = "Warp"
     var id: String { rawValue }
 }
 
@@ -251,7 +251,7 @@ final class EditorModel: ObservableObject {
             d.added.append(push(d.anchor, next))
             d.anchor = next
         }
-        if d.added.count >= room - 1 { info = "Reshape limit reached · undo or reset a face to push more" }
+        if d.added.count >= room - 1 { info = "Warp limit reached · undo or reset a face to push more" }
         // The rest of the way to the finger, redone on every move until it's a full step.
         let tail = hypot(point.x - d.anchor.x, point.y - d.anchor.y) > 0.5 && d.added.count < room ? [push(d.anchor, point)] : []
         reshape = d
