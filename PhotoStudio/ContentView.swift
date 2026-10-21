@@ -37,7 +37,7 @@ struct ContentView: View {
                 }
             }
             .padding(.horizontal, 12)
-            .navigationTitle("PhotoStudio")
+            .navigationTitle("Kagami")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

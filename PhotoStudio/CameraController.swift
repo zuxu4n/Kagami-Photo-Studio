@@ -58,7 +58,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         Task {
             let video = await AVCaptureDevice.requestAccess(for: .video)
             guard video else {
-                await MainActor.run { message = "PhotoStudio needs the camera. You can allow it in Settings › PhotoStudio." }
+                await MainActor.run { message = "Kagami needs the camera. You can allow it in Settings › Kagami." }
                 return
             }
             let audio = await AVCaptureDevice.requestAccess(for: .audio)
@@ -190,7 +190,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         videoQueue.async { [self] in
             let (w, h) = lastSize
             guard w > 0, writer == nil else { return }
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent("PhotoStudio-\(UUID().uuidString).mov")
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("Kagami-\(UUID().uuidString).mov")
             guard let wr = try? AVAssetWriter(outputURL: url, fileType: .mov) else { return }
             let vIn = AVAssetWriterInput(mediaType: .video, outputSettings: [
                 AVVideoCodecKey: AVVideoCodecType.hevc, AVVideoWidthKey: w, AVVideoHeightKey: h,
@@ -259,7 +259,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     private static func saveToPhotos(_ url: URL, done: @escaping (String?) -> Void) {
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             guard status == .authorized || status == .limited else {
-                done("PhotoStudio can't add to Photos. You can allow it in Settings › PhotoStudio."); return
+                done("Kagami can't add to Photos. You can allow it in Settings › Kagami."); return
             }
             PHPhotoLibrary.shared().performChanges({
                 let options = PHAssetResourceCreationOptions()

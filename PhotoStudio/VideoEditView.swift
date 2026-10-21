@@ -199,7 +199,7 @@ struct VideoEditView: View {
             message = "This video can't be saved."; return
         }
         export.videoComposition = composition
-        let out = FileManager.default.temporaryDirectory.appendingPathComponent("PhotoStudio-\(UUID().uuidString).mov")
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("Kagami-\(UUID().uuidString).mov")
         let progress = Task {
             for await state in export.states(updateInterval: 0.2) {
                 if case .exporting(let p) = state { await MainActor.run { saving = p.fractionCompleted } }
@@ -215,7 +215,7 @@ struct VideoEditView: View {
         progress.cancel()
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
-            message = "PhotoStudio can't add to Photos. You can allow it in Settings › PhotoStudio."; return
+            message = "Kagami can't add to Photos. You can allow it in Settings › Kagami."; return
         }
         do {
             try await PHPhotoLibrary.shared().performChanges {

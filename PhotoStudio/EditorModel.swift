@@ -898,7 +898,7 @@ final class EditorModel: ObservableObject {
         defer { busy = nil }
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
-            error = "Allow PhotoStudio to add photos in Settings to save."
+            error = "Allow Kagami to add photos in Settings to save."
             return
         }
         storeShape()
