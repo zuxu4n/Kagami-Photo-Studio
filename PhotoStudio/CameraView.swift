@@ -6,18 +6,8 @@ import AVFoundation
 struct CameraView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var camera = CameraController()
-    @State private var look: LiveLook
+    @State private var look = LiveLook()   // every effect starts at none ((a design call))
     @State private var control = LookControl.all[0]
-    private let fromPhoto: Bool
-
-    /// `initial` is the open photo's look, if there is one; otherwise the camera starts with a light default.
-    init(initial: LiveLook?) {
-        fromPhoto = initial != nil
-        var start = LiveLook()
-        start.shape.slim = -0.3
-        start.shape.eyes = 0.2
-        _look = State(initialValue: initial ?? start)
-    }
 
     var body: some View {
         ZStack {
@@ -59,7 +49,7 @@ struct CameraView: View {
                     Text(String(format: "● %d:%02d", camera.seconds / 60, camera.seconds % 60))
                         .font(.subheadline.monospacedDigit().weight(.semibold)).foregroundStyle(.red)
                 } else {
-                    Text(camera.faceCount == 0 ? "Looking for a face" : fromPhoto ? "Your photo's settings" : "Hold to compare")
+                    Text(camera.faceCount == 0 ? "Looking for a face" : "Hold to compare")
                         .font(.caption.weight(.medium))
                 }
                 Text(camera.stats).font(.caption2.monospacedDigit()).foregroundStyle(.white.opacity(0.7))

@@ -63,7 +63,7 @@ struct ContentView: View {
                     if let data = try? await item.loadTransferable(type: Data.self) { await model.load(data: data) }
                 }
             }
-            .fullScreenCover(isPresented: $showCamera) { CameraView(initial: model.cameraLook()) }
+            .fullScreenCover(isPresented: $showCamera) { CameraView() }
             .alert("Something went wrong", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {

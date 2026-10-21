@@ -5,7 +5,7 @@ import simd
 
 /// The camera's beauty settings, applied the same to every face.
 struct LiveLook: Equatable {
-    var smooth: Float = 0.3
+    var smooth: Float = 0
     var shape = FaceShape()   // Face sliders and the Retouch values (`shape.retouch`); Reshape pushes aren't used
     var isOff: Bool { smooth <= 0.001 && shape.retouch.isOff && shape.meshOff && abs(shape.slim) <= 0.001 && abs(shape.eyes) <= 0.001 }
 }
