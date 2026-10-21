@@ -1,0 +1,5 @@
+// Signing for builds on a phone. Your Apple team ID goes in Local.xcconfig next to this
+// file, which git ignores, with one line:
+//   DEVELOPMENT_TEAM = ABCDE12345
+// To sign with your own team, also change PRODUCT_BUNDLE_IDENTIFIER in the target settings.
+#include? "Local.xcconfig"

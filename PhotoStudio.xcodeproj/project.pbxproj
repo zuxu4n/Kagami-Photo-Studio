@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		5A1C00000000000000000001 /* PhotoStudio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PhotoStudio.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5A1C00000000000000000020 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -33,6 +34,7 @@
 			isa = PBXGroup;
 			children = (
 				5A1C00000000000000000002 /* PhotoStudio */,
+				5A1C00000000000000000020 /* Signing.xcconfig */,
 				5A1C00000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -174,6 +176,7 @@
 		};
 		5A1C0000000000000000000E /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5A1C00000000000000000020 /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -203,6 +206,7 @@
 		};
 		5A1C0000000000000000000F /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5A1C00000000000000000020 /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

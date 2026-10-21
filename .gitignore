@@ -6,3 +6,5 @@ xcuserdata/
 # Converted models are large; see README and tools/copy_models.sh
 PhotoStudio/Models/*.mlpackage
 build-*/
+# Your signing team; see Signing.xcconfig
+Local.xcconfig
