@@ -39,6 +39,7 @@ struct FaceShape: Equatable {
     var noseTip: Float = 0    // -1...1, smaller or bigger tip
     var size: Float = 0       // -1...1, smaller or bigger head
     var width: Float = 0      // -1...1, narrower or wider head (face, temples and hair)
+    var headHeight: Float = 0 // -1...1, shorter or taller head (chin to the top of the hair)
     var perspective: Float = 0   // -1...1, as if the photo were taken from further away or closer
     var positionX: Float = 0  // Position: where the oval is, across and down the face, in half-widths and half-heights of the face
     var positionY: Float = 0
@@ -61,7 +62,7 @@ struct FaceShape: Equatable {
     var pushes: [FacePush] = []   // in the order they were made; applied after the sliders
     var retouch = FaceRetouch()   // the Retouch tab's colour changes; not part of the warp (`isOff`)
     var meshOff: Bool {
-        abs(slim) <= 0.001 && abs(eyes) <= 0.001 && abs(size) <= 0.001 && abs(width) <= 0.001 && abs(perspective) <= 0.001 && abs(positionX) <= 0.001 && abs(positionY) <= 0.001
+        abs(slim) <= 0.001 && abs(eyes) <= 0.001 && abs(size) <= 0.001 && abs(width) <= 0.001 && abs(headHeight) <= 0.001 && abs(perspective) <= 0.001 && abs(positionX) <= 0.001 && abs(positionY) <= 0.001
             && abs(eyeWidth) <= 0.001 && abs(eyeHeight) <= 0.001 && abs(eyeTilt) <= 0.001 && abs(eyeDistance) <= 0.001
             && nose <= 0.001 && abs(noseSize) <= 0.001 && abs(noseWidth) <= 0.001 && abs(noseLift) <= 0.001 && abs(noseTip) <= 0.001
             && abs(jaw) <= 0.001 && abs(chin) <= 0.001 && abs(jawSize) <= 0.001 && define <= 0.001 && abs(jawLength) <= 0.001
@@ -327,6 +328,11 @@ enum FaceAnalyzer {
             // The whole head narrower or wider, hair included: one squeeze (or stretch) across the face, centred between
             // the cheeks, reaching a face width out to each side and a bit more up and down. It fades to nothing at its edge.
             ops.append(WarpOp(c: centre - down * 0.1 * faceW, r: 1.0 * faceW, kind: 3, m: across, s: -s.width * 0.12, pad: 1.15 * faceW))
+        }
+        if abs(s.headHeight) > 0.001 {
+            // The whole head shorter or taller, hair included: the same squeeze as Width turned upright, centred a little
+            // above the middle of the face so the chin and the top of the hair both move, reaching past them.
+            ops.append(WarpOp(c: mid - down * 0.15 * faceW, r: 1.3 * faceW, kind: 3, m: down, s: -s.headHeight * 0.12, pad: 1.0 * faceW))
         }
         let turn = SIMD2(s.positionX, s.positionY)
         if abs(s.perspective) > 0.001 || simd_length(turn) > 0.001, z.count == m.count {
@@ -706,7 +712,7 @@ enum FaceAnalyzer {
         let W = CGFloat(w), H = CGFloat(h)
         var pts = f.contour.map { CGPoint(x: $0.x * W, y: $0.y * H) }
         // Move each point the way the slim warp moves the pixels under it (forward version of the shader's blend).
-        let outline = FaceShape(slim: shape.slim, size: shape.size, width: shape.width, perspective: shape.perspective,
+        let outline = FaceShape(slim: shape.slim, size: shape.size, width: shape.width, headHeight: shape.headHeight, perspective: shape.perspective,
                                 positionX: shape.positionX, positionY: shape.positionY, jaw: shape.jaw, chin: shape.chin,
                                 jawSize: shape.jawSize, define: shape.define, jawLength: shape.jawLength)
         let ops = warpOps(faces: [f], shapes: [outline], width: w, height: h)

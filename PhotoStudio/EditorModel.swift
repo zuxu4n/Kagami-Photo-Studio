@@ -29,6 +29,7 @@ final class EditorModel: ObservableObject {
     @Published var noseTip: Float = 0
     @Published var size: Float = 0          // size, width, perspective, jaw, chin, lips, smile, smirk and forehead use the MediaPipe face mesh
     @Published var width: Float = 0
+    @Published var headHeight: Float = 0
     @Published var perspective: Float = 0
     @Published var positionX: Float = 0     // Position: the oval's place across and down the face, in half-widths and half-heights
     @Published var positionY: Float = 0
@@ -165,7 +166,7 @@ final class EditorModel: ObservableObject {
         v.slim = slim; v.eyes = eyes; v.nose = nose
         v.eyeWidth = eyeWidth; v.eyeHeight = eyeHeight; v.eyeTilt = eyeTilt; v.eyeDistance = eyeDistance
         v.noseSize = noseSize; v.noseWidth = noseWidth; v.noseLift = noseLift; v.noseTip = noseTip
-        v.size = size; v.width = width; v.perspective = perspective; v.positionX = positionX; v.positionY = positionY
+        v.size = size; v.width = width; v.headHeight = headHeight; v.perspective = perspective; v.positionX = positionX; v.positionY = positionY
         v.jaw = jaw; v.chin = chin; v.jawSize = jawSize; v.define = define; v.jawLength = jawLength; v.lips = lips; v.lipSize = lipSize; v.lipWidth = lipWidth;
         v.browThick = browThick; v.browLift = browLift; v.browShape = browShape; v.browTilt = browTilt; v.browRaise = browRaise; v.smile = smile; v.smirk = smirk; v.forehead = forehead
         v.retouch = FaceRetouch(teeth: teeth, eyes: brightEyes, tone: tone)
@@ -177,7 +178,7 @@ final class EditorModel: ObservableObject {
         slim = v.slim; eyes = v.eyes; nose = v.nose
         eyeWidth = v.eyeWidth; eyeHeight = v.eyeHeight; eyeTilt = v.eyeTilt; eyeDistance = v.eyeDistance
         noseSize = v.noseSize; noseWidth = v.noseWidth; noseLift = v.noseLift; noseTip = v.noseTip
-        size = v.size; width = v.width; perspective = v.perspective; positionX = v.positionX; positionY = v.positionY
+        size = v.size; width = v.width; headHeight = v.headHeight; perspective = v.perspective; positionX = v.positionX; positionY = v.positionY
         jaw = v.jaw; chin = v.chin; jawSize = v.jawSize; define = v.define; jawLength = v.jawLength; lips = v.lips; lipSize = v.lipSize; lipWidth = v.lipWidth;
         browThick = v.browThick; browLift = v.browLift; browShape = v.browShape; browTilt = v.browTilt; browRaise = v.browRaise; smile = v.smile; smirk = v.smirk; forehead = v.forehead
         teeth = v.retouch.teeth; brightEyes = v.retouch.eyes; tone = v.retouch.tone

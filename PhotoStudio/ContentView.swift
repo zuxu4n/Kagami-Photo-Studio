@@ -521,6 +521,7 @@ struct ContentView: View {
         .onChange(of: model.browRaise) { _, _ in model.renderPreview() }
         .onChange(of: model.smile) { _, _ in model.renderPreview() }
         .onChange(of: model.forehead) { _, _ in model.renderPreview() }
+        .onChange(of: model.headHeight) { _, _ in model.renderPreview() }
         .onChange(of: model.teeth) { _, _ in model.renderPreview() }
         .onChange(of: model.brightEyes) { _, _ in model.renderPreview() }
         .onChange(of: model.tone) { _, _ in model.renderPreview() }
@@ -661,12 +662,13 @@ struct ContentView: View {
 
 /// The Face tab's main tabs and their subtabs. Subtabs without a FaceFeature are buttons only for now.
 private enum FaceArea: String, CaseIterable, Identifiable {
-    case face = "Face", jaw = "Jaw", nose = "Nose", eyes = "Eyes", lips = "Lips", eyebrows = "Eyebrows", forehead = "Forehead"
+    case face = "Face", head = "Head", jaw = "Jaw", nose = "Nose", eyes = "Eyes", lips = "Lips", eyebrows = "Eyebrows", forehead = "Forehead"
     var id: String { rawValue }
 
     var subtabs: [String] {
         switch self {
         case .face: return ["Size", "Width", "Smile", "Position", "Perspective", "Smirk"]
+        case .head: return ["Size", "Width", "Height"]
         case .jaw: return ["Jaw", "Jawline", "Chin", "Size", "Define", "Length"]
         case .nose: return ["Size", "Width", "Narrow", "Lift", "Tip"]
         case .eyes: return ["Size", "Width", "Height", "Tilt", "Distance"]
@@ -685,6 +687,9 @@ private enum FaceArea: String, CaseIterable, Identifiable {
         case (.face, "Position"): return .position
         case (.face, "Perspective"): return .perspective
         case (.face, "Smirk"): return .smirk
+        case (.head, "Size"): return .size
+        case (.head, "Width"): return .width
+        case (.head, "Height"): return .headHeight
         case (.jaw, "Jaw"): return .jaw
         case (.jaw, "Jawline"): return .slim
         case (.jaw, "Chin"): return .chin
@@ -717,7 +722,7 @@ private enum FaceArea: String, CaseIterable, Identifiable {
 
 /// The Face tab's sliders. Jawline and Eyes use Apple Vision's landmarks; the rest use MediaPipe's face mesh.
 private enum FaceFeature: String, CaseIterable, Identifiable {
-    case slim = "Slim", size = "Size", width = "Width", position = "Position", perspective = "Perspective", eyes = "Eyes", eyeWidth = "Eye width", eyeHeight = "Eye height",
+    case slim = "Slim", size = "Size", width = "Width", headHeight = "Head height", position = "Position", perspective = "Perspective", eyes = "Eyes", eyeWidth = "Eye width", eyeHeight = "Eye height",
          eyeTilt = "Eye tilt", eyeDistance = "Eye distance", nose = "Nose",
          noseSize = "Nose size", noseWidth = "Nose width", noseLift = "Nose lift", noseTip = "Nose tip", jaw = "Jaw",
          chin = "Chin", jawSize = "Jaw size", define = "Define", jawLength = "Jaw length", lips = "Lips", lipSize = "Lip size",
@@ -731,6 +736,7 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .slim: return \.slim
         case .size: return \.size
         case .width: return \.width
+        case .headHeight: return \.headHeight
         case .perspective: return \.perspective
         case .position: return \.positionX   // Position has an oval on the photo instead of a slider
         case .eyes: return \.eyes
@@ -776,6 +782,7 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         case .browTilt: return "Tilt"
         case .browRaise: return "Raise"
         case .forehead: return "Height"
+        case .headHeight: return "Height"
         case .eyes: return "Size"
         case .eyeWidth: return "Width"
         case .eyeHeight: return "Height"
@@ -793,7 +800,7 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
 
     /// Two-way sliders start in the middle: left makes it smaller, right bigger.
     var range: ClosedRange<Float> {
-        [.slim, .size, .width, .perspective, .eyes, .eyeWidth, .eyeHeight, .eyeTilt, .eyeDistance, .noseSize, .noseWidth, .noseLift, .noseTip, .jaw, .chin, .jawSize, .jawLength, .lips, .lipSize, .lipWidth, .browThick, .browLift, .browShape, .browTilt, .browRaise, .smirk,
+        [.slim, .size, .width, .headHeight, .perspective, .eyes, .eyeWidth, .eyeHeight, .eyeTilt, .eyeDistance, .noseSize, .noseWidth, .noseLift, .noseTip, .jaw, .chin, .jawSize, .jawLength, .lips, .lipSize, .lipWidth, .browThick, .browLift, .browShape, .browTilt, .browRaise, .smirk,
          .forehead].contains(self) ? -1...1 : 0...1
     }
 
@@ -801,6 +808,7 @@ private enum FaceFeature: String, CaseIterable, Identifiable {
         switch self {
         case .size: return "Left smaller, right bigger"
         case .width: return "Left narrower, right wider"
+        case .headHeight: return "Left shorter, right taller"
         case .perspective: return "Left as if further away, right closer"
         case .position: return "The head turns towards the oval"
         case .smirk: return "Left lifts the left corner, right the right one"

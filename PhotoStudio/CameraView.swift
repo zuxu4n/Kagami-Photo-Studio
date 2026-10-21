@@ -123,6 +123,9 @@ struct LookControl: Identifiable {
 
     static let all: [LookControl] = [
         LookControl(id: "smooth", name: "Smooth", range: 0...1, get: { $0.smooth }, set: { $0.smooth = $1 }),
+        LookControl(id: "headSize", name: "Head size", range: -1...1, get: { $0.shape.size }, set: { $0.shape.size = $1 }),
+        LookControl(id: "headWidth", name: "Head width", range: -1...1, get: { $0.shape.width }, set: { $0.shape.width = $1 }),
+        LookControl(id: "headHeight", name: "Head height", range: -1...1, get: { $0.shape.headHeight }, set: { $0.shape.headHeight = $1 }),
         LookControl(id: "slim", name: "Slim", range: 0...1, get: { max(0, -$0.shape.slim) }, set: { $0.shape.slim = -$1 }),
         LookControl(id: "eyes", name: "Eyes", range: -1...1, get: { $0.shape.eyes }, set: { $0.shape.eyes = $1 }),
         LookControl(id: "nose", name: "Nose", range: -1...1, get: { $0.shape.noseSize }, set: { $0.shape.noseSize = $1 }),
