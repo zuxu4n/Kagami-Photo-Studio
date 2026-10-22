@@ -23,6 +23,7 @@ struct ContentView: View {
     @State private var reshapeDrag: Bool?      // Reshape on: nil until the finger moves, then true (pushing a face) or false (panning)
     @State private var positionDrag: Bool?     // Position shown: nil until the finger moves, then true (moving the oval) or false (panning)
     @State private var paintDrag: Bool?        // Heal › Brush or Erase: nil until the finger moves, then true (painting) or false (panning)
+    @State private var cropDrag: (x: CGFloat, y: CGFloat)?   // Adjust › Crop: where the frame was when the finger started moving it
     private let maxZoom: CGFloat = 8
 
     var body: some View {
@@ -91,7 +92,11 @@ struct ContentView: View {
             }
             .onChange(of: model.tool) { old, t in
                 model.toolShown(t)
-                if old == .adjust || t == .adjust { model.renderPreview() }   // the crop shows only in Adjust
+                if old == .adjust || t == .adjust {
+                    // The crop and turn show only in Adjust, so the picture changes shape: start from the whole of it.
+                    if !model.adjust.shapeOff { zoom = 1; pan = .zero }
+                    model.renderPreview()
+                }
                 if t == .heal, model.healMode.selects { model.preparePeople() }
             }
             .onChange(of: model.healMode) { _, m in if m.selects { model.preparePeople() } }
@@ -123,6 +128,15 @@ struct ContentView: View {
                                 .allowsHitTesting(false)
                             if positionOn, !comparing {
                                 PositionHandle(model: model, zoom: zoom).allowsHitTesting(false)
+                            }
+                        }
+                        if model.tool == .adjust, !comparing, model.display != nil {
+                            if cropOn {
+                                CropFrameOverlay(frame: model.adjust.cropFrame(for: shownSize), active: cropDrag != nil)
+                                    .aspectRatio(shownSize, contentMode: .fit)
+                                    .allowsHitTesting(false)
+                            } else if model.adjustTool == .rotate, sliding {
+                                StraightenGrid().aspectRatio(shownSize, contentMode: .fit).allowsHitTesting(false)
                             }
                         }
                     }
@@ -178,7 +192,7 @@ struct ContentView: View {
                 // While zoomed a one-finger drag pans, so holding the photo doesn't compare (the Compare button still does).
                 // With Reshape on, holding a face is the start of a push, so only the Compare button compares.
                 // With Position shown, holding the photo is the start of moving the oval.
-                if model.tool != .heal, !reshapeOn, !positionOn, !paintOn { comparing = pressing && zoom <= 1.01 && pinchStart == nil }
+                if model.tool != .heal, !reshapeOn, !positionOn, !paintOn, !cropOn { comparing = pressing && zoom <= 1.01 && pinchStart == nil }
             }, perform: {})
             .simultaneousGesture(DragGesture(minimumDistance: 0)
                 .onChanged { v in
@@ -213,6 +227,26 @@ struct ContentView: View {
                             return
                         }
                     }
+                    if cropOn {
+                        if pinchStart != nil {
+                            if cropDrag != nil { model.sliderEditing(false) }
+                            cropDrag = nil
+                        } else {
+                            if cropDrag == nil {
+                                guard hypot(v.translation.width, v.translation.height) > 4 else { return }
+                                cropDrag = (model.adjust.cropX, model.adjust.cropY)
+                                model.sliderEditing(true)
+                            }
+                            // The frame follows the finger; ±1 is the frame against either edge.
+                            if let start = cropDrag {
+                                let f = model.adjust.cropFrame(for: shownSize), fit = fittedSize(geo.size)
+                                let roomX = (1 - f.width) * fit.width * zoom / 2, roomY = (1 - f.height) * fit.height * zoom / 2
+                                if roomX > 0.5 { model.adjust.cropX = min(1, max(-1, start.x + v.translation.width / roomX)) }
+                                if roomY > 0.5 { model.adjust.cropY = min(1, max(-1, start.y + v.translation.height / roomY)) }
+                            }
+                            return
+                        }
+                    }
                     if positionOn {
                         if pinchStart != nil {
                             if positionDrag == true { model.cancelPosition() }
@@ -241,6 +275,8 @@ struct ContentView: View {
                     positionDrag = nil
                     if paintDrag == true { endPaint() }
                     paintDrag = nil
+                    if cropDrag != nil { model.sliderEditing(false) }
+                    cropDrag = nil
                 })
             .gesture(PinchRecognizer { state, centre, scale in twoFingerEvent(0, state, centre, scale, view: geo.size) })
             .gesture(TwoFingerPanRecognizer { state, centre, _ in twoFingerEvent(1, state, centre, nil, view: geo.size) })
@@ -289,7 +325,7 @@ struct ContentView: View {
 
     /// The photo's aspect-fit size in the canvas at zoom 1.
     private func fittedSize(_ view: CGSize) -> CGSize {
-        let img = model.previewSize
+        let img = shownSize
         guard img.width > 0, img.height > 0 else { return view }
         let s = min(view.width / img.width, view.height / img.height)
         return CGSize(width: img.width * s, height: img.height * s)
@@ -302,7 +338,15 @@ struct ContentView: View {
         return CGSize(width: min(mx, max(-mx, p.width)), height: min(my, max(-my, p.height)))
     }
 
+    /// The size of the picture on screen: in Adjust it's turned (and cropped, outside Crop), elsewhere it's the preview.
+    private var shownSize: CGSize {
+        guard model.tool == .adjust, let d = model.display else { return model.previewSize }
+        return CGSize(width: d.size.width * d.scale, height: d.size.height * d.scale)
+    }
+
     private var reshapeOn: Bool { model.tool == .reshape }
+    /// Adjust › Crop with a shape picked: a one-finger drag moves the frame (two fingers pinch and move around).
+    private var cropOn: Bool { model.tool == .adjust && model.adjustTool == .crop && model.adjust.crop != .original }
     /// Heal › Brush or Erase: a one-finger drag paints the selection (two fingers pinch and move around).
     /// Blur › Brush or Erase works the same way on the people kept sharp.
     private var paintOn: Bool { (model.tool == .heal && (model.healMode == .brush || model.healMode == .erase)) || model.blurTint }
@@ -320,7 +364,7 @@ struct ContentView: View {
     /// Maps a tap in the view to preview pixel coordinates, undoing the zoom and pan first (the image is aspect-fit).
     /// Points off the photo are nil unless `clamp` is false (a drag that runs past the edge).
     private func imagePoint(_ tap: CGPoint, in view: CGSize, clamp: Bool = true) -> CGPoint? {
-        let img = model.previewSize
+        let img = shownSize
         guard img.width > 0, img.height > 0 else { return nil }
         // The photo layer is scaled about the canvas centre, then moved by `pan`.
         let p = CGPoint(x: view.width / 2 + (tap.x - view.width / 2 - pan.width) / zoom,
@@ -490,8 +534,17 @@ struct ContentView: View {
                     compareButton
                 }
             case .adjust:
-                AdjustPanel(adjust: $model.adjust)
-                    .onChange(of: model.adjust) { _, _ in model.renderPreview() }
+                AdjustPanel(adjust: $model.adjust, tool: $model.adjustTool, editing: { e in
+                    sliding = e
+                    model.sliderEditing(e)
+                }) { compareButton }
+                .disabled(model.busy != nil)
+                .onChange(of: model.adjust) { old, new in
+                    // Moving the crop frame in Crop changes only the frame on top; the picture under it stays.
+                    var o = old; o.cropX = new.cropX; o.cropY = new.cropY
+                    if !(o == new && model.adjustTool == .crop) { model.renderPreview() }
+                }
+                .onChange(of: model.adjustTool) { _, _ in model.renderPreview() }
             case .reshape:
                 sliderRow("Size", value: $model.reshapeSize, range: 0.08...0.5, reset: 0.22, undoable: false)
                 sliderRow("Strength", value: $model.reshapeStrength, range: 0.1...1, reset: 1, undoable: false)

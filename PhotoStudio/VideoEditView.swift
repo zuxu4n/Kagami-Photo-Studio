@@ -27,6 +27,7 @@ struct VideoEditView: View {
     @State private var look = LiveLook()   // every effect starts at none, as on the camera
     @State private var control = LookControl.all[0]
     @State private var adjust = Adjustments()
+    @State private var adjustTool: AdjustTool = .brightness
     @State private var panel = "Face"      // which controls show: Face or Adjust
     @State private var asset: AVURLAsset?
     @State private var player = AVPlayer()
@@ -118,7 +119,9 @@ struct VideoEditView: View {
             }
             .padding(.horizontal, 16)
             if panel == "Adjust" {
-                AdjustPanel(adjust: $adjust).padding(.horizontal, 16)
+                AdjustPanel(adjust: $adjust, tool: $adjustTool)
+                    .environment(\.colorScheme, .dark)
+                    .padding(.horizontal, 16)
             } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
