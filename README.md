@@ -12,17 +12,24 @@ Prototype v0.1 (one screen):
 
 ## Clean room
 
-Everything here is written from scratch. No code, models, presets or assets come from Facetune, Remini, Photoroom, Meitu or BeautyPlus. The competitor study in `../study` only informed which features to build and the quality bar.
+Everything here is written from scratch. No code, models, presets or assets come from Facetune, Remini, Photoroom, Meitu or BeautyPlus. A study of those apps only informed which features to build and the quality bar; none of it is in this repository.
 
 ## Models
 
 | File | Source | Licence | Notes |
 |---|---|---|---|
-| `PhotoStudio/Models/RealESRGANGeneralX4.mlpackage` | xinntao/Real-ESRGAN `realesr-general-x4v3.pth` | BSD-3-Clause | Converted with coremltools 9, FP16 |
-| `PhotoStudio/Models/LamaInpaint.mlpackage` | advimman/lama `big-lama` | Apache-2.0 (check the weights' terms before shipping) | FP16, with BatchNorm folded to scale and shift (raw FP16 BatchNorm overflows). One multifunction package: `main` at 512 and `lama1024`, sharing one copy of the weights (`../speedtest/scripts/convert_lama_multi.py`). Needs iOS 18. |
-| `PhotoStudio/Models/FaceMesh.mlpackage` | Google MediaPipe `face_landmarker.task` (float16/1), its `face_landmarks_detector.tflite` (Face Mesh V2) | Apache-2.0 (model card: "Licensed under Apache License, Version 2.0") | Converted without TensorFlow by `../speedtest/scripts/convert_facemesh.py` (reads the TFLite file, runs its graph in PyTorch, coremltools 9, FP16); landmarks within 0.1 px of the original. The bundle's BlazeFace detector and blendshape model aren't used. |
+| `PhotoStudio/Models/RealESRGANGeneralX4.mlpackage` | xinntao/Real-ESRGAN `realesr-general-x4v3.pth` | BSD-3-Clause | Converted with coremltools 9, FP16 (`tools/models/esrgan.py`) |
+| `PhotoStudio/Models/LamaInpaint.mlpackage` | advimman/lama `big-lama` | Apache-2.0 (check the weights' terms before shipping) | FP16, with BatchNorm folded to scale and shift (raw FP16 BatchNorm overflows). One multifunction package: `main` at 512 and `lama1024`, sharing one copy of the weights (`tools/models/lama.py`). Needs iOS 18. |
+| `PhotoStudio/Models/FaceMesh.mlpackage` | Google MediaPipe `face_landmarker.task` (float16/1), its `face_landmarks_detector.tflite` (Face Mesh V2) | Apache-2.0 (model card: "Licensed under Apache License, Version 2.0") | Converted without TensorFlow by `tools/models/facemesh.py` (reads the TFLite file, runs its graph in PyTorch, coremltools 9, FP16); landmarks within 0.1 px of the original. The bundle's BlazeFace detector and blendshape model aren't used. |
 
-The models are not committed to git (LaMa is about 100 MB). They come from the conversion scripts in `../speedtest/scripts`; copy them in with `tools/copy_models.sh`.
+The models are not committed to git (LaMa is about 100 MB). Make them on a Mac with Python 3.12:
+
+```sh
+python3 -m venv .venv && .venv/bin/pip install -r tools/models/requirements.txt
+PYTHON=.venv/bin/python tools/make_models.sh path/to/any-photo.jpg
+```
+
+This downloads the original weights from their authors (about 370 MB, each checked against a SHA-256), converts them and writes the three packages to `PhotoStudio/Models`. The photo is optional: with it, each converted model is compared with the original PyTorch model on a crop of it and the PSNR is printed. LaMa takes the longest, several minutes.
 
 ## Build
 
