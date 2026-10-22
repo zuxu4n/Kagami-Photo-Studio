@@ -39,7 +39,7 @@ struct ContentView: View {
                 }
             }
             .padding(.horizontal, 12)
-            .navigationTitle("Kagami")
+            .navigationTitle("Mioru")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

@@ -230,8 +230,8 @@ enum AdjustTool: String, CaseIterable, Identifiable {
 }
 
 extension Color {
-    /// Kagami's highlight colour, as on the Face tabs.
-    static let kagami = Color(red: 0.2, green: 0.85, blue: 0.95)
+    /// Mioru's highlight colour, as on the Face tabs.
+    static let mioru = Color(red: 0.2, green: 0.85, blue: 0.95)
 }
 
 /// The Adjust controls: a row of tools with icons, and above it the picked tool's controls.
@@ -297,7 +297,7 @@ struct AdjustPanel<Accessory: View>: View {
                     Label("Done", systemImage: "checkmark").font(.subheadline.bold())
                         .padding(.horizontal, 12).frame(height: 30)
                         .foregroundStyle(.black)
-                        .background(Color.kagami, in: Capsule())
+                        .background(Color.mioru, in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Done cropping")
@@ -332,10 +332,10 @@ struct AdjustPanel<Accessory: View>: View {
                             .font(.system(size: 17, weight: .medium))
                             .frame(width: 42, height: 42)
                             .foregroundStyle(t == tool ? Color.black : Color.primary)
-                            .background(t == tool ? Color.kagami : Color.secondary.opacity(0.15), in: Circle())
+                            .background(t == tool ? Color.mioru : Color.secondary.opacity(0.15), in: Circle())
                             .overlay(alignment: .topTrailing) {
                                 if t.isChanged(adjust) && t != tool {
-                                    Circle().fill(Color.kagami).frame(width: 7, height: 7).offset(x: -1, y: 1)
+                                    Circle().fill(Color.mioru).frame(width: 7, height: 7).offset(x: -1, y: 1)
                                 }
                             }
                         Text(t.rawValue).font(.system(size: 10, weight: t == tool ? .semibold : .regular)).lineLimit(1).minimumScaleFactor(0.8)
@@ -368,7 +368,7 @@ struct AdjustPanel<Accessory: View>: View {
                                 .frame(width: 26, height: 26)
                                 Text(r.rawValue).font(.caption2.weight(on ? .semibold : .regular)).lineLimit(1).fixedSize()
                             }
-                            .foregroundStyle(on ? Color.kagami : Color.primary)
+                            .foregroundStyle(on ? Color.mioru : Color.primary)
                             .frame(minWidth: 50).padding(.vertical, 4)
                             .contentShape(Rectangle())
                         }
@@ -483,7 +483,7 @@ struct TwoWaySlider: View {
             ZStack {
                 Capsule().fill(Color.secondary.opacity(0.25)).frame(height: 4)
                 Capsule().fill(Color.secondary.opacity(0.8)).frame(width: 2, height: 12).position(x: centre, y: mid)
-                Capsule().fill(Color.kagami).frame(width: abs(x - centre), height: 4).position(x: (x + centre) / 2, y: mid)
+                Capsule().fill(Color.mioru).frame(width: abs(x - centre), height: 4).position(x: (x + centre) / 2, y: mid)
                 Circle().fill(Color.white)
                     .overlay(Circle().stroke(Color.black.opacity(0.08), lineWidth: 0.5))
                     .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
@@ -494,7 +494,7 @@ struct TwoWaySlider: View {
                         .font(.caption.bold().monospacedDigit())
                         .foregroundStyle(.black)
                         .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Color.kagami, in: Capsule())
+                        .background(Color.mioru, in: Capsule())
                         .fixedSize()
                         .position(x: min(max(x, 24), geo.size.width - 24), y: mid - 30)
                         .transition(.opacity)
