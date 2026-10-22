@@ -1,0 +1,5 @@
+# Python 3.12 on a Mac (Core ML conversion and the PSNR checks need macOS)
+torch==2.7.1
+coremltools==9.0
+numpy==2.2.6
+pillow==11.3.0

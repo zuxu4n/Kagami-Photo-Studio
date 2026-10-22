@@ -8,3 +8,4 @@ PhotoStudio/Models/*.mlpackage
 build-*/
 # Your signing team; see Signing.xcconfig
 Local.xcconfig
+tools/models/cache/
