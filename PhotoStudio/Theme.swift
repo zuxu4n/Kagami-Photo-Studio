@@ -3,18 +3,18 @@ import UIKit
 
 // MARK: Colour
 
-/// Mioru's colour tokens. Brand screens (home, welcome, About) are warm and light, with dark versions; the editing
+/// Miyori's colour tokens. Brand screens (home, welcome, About) are warm and light, with dark versions; the editing
 /// screens (photo editor, camera, video) are always a dark neutral, so nothing tints the way a photo's colours look.
 extension Color {
     // Brand
     /// The rose accent for fills: buttons, the picked tool, slider fills. White text on it passes AA (5.1:1), in
     /// light and dark alike.
-    static let mioru = Color(hex: 0xC43871)
-    static let mioruPressed = Color(hex: 0xA92D5F)
+    static let rose = Color(hex: 0xC43871)
+    static let rosePressed = Color(hex: 0xA92D5F)
     /// Rose for text and icons on brand screens (a lighter rose in dark mode, 5.4:1 on its background).
-    static let mioruInk = Color(light: 0xC43871, dark: 0xEC74A3)
+    static let roseInk = Color(light: 0xC43871, dark: 0xEC74A3)
     /// Rose for text and icons on the dark editing screens (5.7:1 on their panels).
-    static let mioruOnDark = Color(hex: 0xEC74A3)
+    static let roseOnDark = Color(hex: 0xEC74A3)
     static let blush = Color(light: 0xF8DDE8, dark: 0x3A2430)
     static let powder = Color(light: 0xDDEFFA, dark: 0x1E2F3A)
     static let powderInk = Color(light: 0x2F6E93, dark: 0x9BCDEB)   // text and icons on powder
@@ -60,13 +60,33 @@ extension UIColor {
 // MARK: Type, spacing, shape, motion
 
 extension Font {
-    /// The wordmark and large editorial titles: New York, Apple's serif.
+    /// The wordmark: New York, Apple's serif, at a fixed size.
     static func display(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font { .system(size: size, weight: weight, design: .serif) }
-    static let toolLabel = Font.system(size: 11, weight: .medium)
-    static let panelTitle = Font.system(size: 15, weight: .semibold)
-    static let panelValue = Font.system(size: 15, weight: .medium).monospacedDigit()
-    static let hint = Font.system(size: 12)
-    static let chip = Font.system(size: 13, weight: .medium)
+    /// Editorial titles in New York that follow the reader's text size.
+    static func display(_ style: Font.TextStyle, weight: Font.Weight = .semibold) -> Font { .system(style, design: .serif, weight: weight) }
+
+    /// The system font in the text style nearest `size` (its size at the default text size), so it follows the
+    /// reader's text size.
+    static func ui(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        let style: Font.TextStyle
+        switch size {
+        case ..<11.5: style = .caption2
+        case ..<12.5: style = .caption
+        case ..<13.5: style = .footnote
+        case ..<15.5: style = .subheadline
+        case ..<16.5: style = .callout
+        case ..<18: style = .body
+        case ..<21: style = .title3
+        case ..<25: style = .title2
+        case ..<31: style = .title
+        default: style = .largeTitle
+        }
+        return .system(style, weight: weight)
+    }
+    static let panelTitle = Font.ui(15, .semibold)
+    static let panelValue = Font.ui(15, .medium).monospacedDigit()
+    static let hint = Font.ui(12)
+    static let chip = Font.ui(13, .medium)
 }
 
 enum Space {
@@ -80,20 +100,20 @@ enum Radius {
 }
 
 extension Animation {
-    static let mioruQuick = Animation.snappy(duration: 0.22)
-    static let mioruSoft = Animation.smooth(duration: 0.35)
+    static let quick = Animation.snappy(duration: 0.22)
+    static let gentle = Animation.smooth(duration: 0.35)
 }
 
 // MARK: Buttons
 
-/// Shrinks a little and dims while pressed: the feel every tappable thing in Mioru shares.
+/// Shrinks a little and dims while pressed: the feel every tappable thing in Miyori shares.
 struct PressableStyle: ButtonStyle {
     var scale: CGFloat = 0.96
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? scale : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)
-            .animation(.mioruQuick, value: configuration.isPressed)
+            .animation(.quick, value: configuration.isPressed)
     }
 }
 
@@ -104,14 +124,14 @@ struct PrimaryButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 16, weight: .semibold))
+            .font(.ui(16, .semibold))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity, minHeight: height)
-            .background(configuration.isPressed ? Color.mioruPressed : Color.mioru,
+            .background(configuration.isPressed ? Color.rosePressed : Color.rose,
                         in: RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
             .opacity(enabled ? 1 : 0.4)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.mioruQuick, value: configuration.isPressed)
+            .animation(.quick, value: configuration.isPressed)
     }
 }
 
@@ -121,14 +141,14 @@ struct PillButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 15, weight: .semibold))
+            .font(.ui(15, .semibold))
             .foregroundStyle(.white)
             .padding(.horizontal, 16)
             .frame(height: 34)
-            .background(configuration.isPressed ? Color.mioruPressed : Color.mioru, in: Capsule())
+            .background(configuration.isPressed ? Color.rosePressed : Color.rose, in: Capsule())
             .opacity(enabled ? 1 : 0.35)
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .animation(.mioruQuick, value: configuration.isPressed)
+            .animation(.quick, value: configuration.isPressed)
     }
 }
 
@@ -171,10 +191,10 @@ struct ModeTabs<Value: Hashable>: View {
             ForEach(items, id: \.self) { item in
                 let on = item == selection
                 Button {
-                    withAnimation(.mioruQuick) { selection = item }
+                    withAnimation(.quick) { selection = item }
                 } label: {
                     Text(title(item))
-                        .font(.system(size: 13, weight: on ? .semibold : .medium))
+                        .font(.ui(13, on ? .semibold : .medium))
                         .lineLimit(1).minimumScaleFactor(0.8)
                         .foregroundStyle(on ? Color.studioText : Color.studioSecondary)
                         .frame(maxWidth: .infinity, minHeight: 32)
@@ -213,13 +233,13 @@ struct Chip: View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Text(title).lineLimit(1).fixedSize()
-                if dot { Circle().fill(on ? Color.white : Color.mioruOnDark).frame(width: 5, height: 5) }
+                if dot { Circle().fill(on ? Color.white : Color.roseOnDark).frame(width: 5, height: 5) }
             }
             .font(.chip)
             .foregroundStyle(on ? Color.white : Color.studioText.opacity(0.85))
             .padding(.horizontal, 12)
             .frame(height: 32)
-            .background(on ? Color.mioru : Color.studioRaised, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+            .background(on ? Color.rose : Color.studioRaised, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(PressableStyle())
@@ -242,11 +262,11 @@ struct PanelTextButton: View {
                 if let icon { Image(systemName: icon).font(.system(size: 12, weight: .semibold)) }
                 Text(title)
             }
-            .font(.system(size: 13, weight: .semibold))
+            .font(.ui(13, .semibold))
             .foregroundStyle(prominent ? Color.white : Color.studioText)
             .padding(.horizontal, 12)
             .frame(height: 32)
-            .background(prominent ? Color.mioru : Color.studioRaised, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+            .background(prominent ? Color.rose : Color.studioRaised, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
             .opacity(enabled ? 1 : 0.35)
         }
         .buttonStyle(PressableStyle())
@@ -298,10 +318,10 @@ struct Toast: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            if let icon { Image(systemName: icon).foregroundStyle(Color.mioruOnDark) }
+            if let icon { Image(systemName: icon).foregroundStyle(Color.roseOnDark) }
             Text(text).lineLimit(2).multilineTextAlignment(.leading)
         }
-        .font(.system(size: 14, weight: .medium))
+        .font(.ui(14, .medium))
         .foregroundStyle(Color.studioText)
         .padding(.horizontal, 16).padding(.vertical, 10)
         .background(Color.studioPanel.opacity(0.92), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -334,12 +354,12 @@ private struct ToastModifier: ViewModifier {
             }
             .onChange(of: id) { _, _ in
                 guard let message, !message.isEmpty else { return }
-                withAnimation(.mioruSoft) { shown = message }
+                withAnimation(.gentle) { shown = message }
             }
             .task(id: id) {
                 guard shown != nil else { return }
                 try? await Task.sleep(for: .seconds(2.6))
-                withAnimation(.mioruSoft) { shown = nil }
+                withAnimation(.gentle) { shown = nil }
             }
     }
 }
@@ -351,7 +371,7 @@ struct BusyBadge: View {
     var body: some View {
         HStack(spacing: 10) {
             ProgressView().tint(Color.studioText).controlSize(.small)
-            Text(text).font(.system(size: 14, weight: .medium)).foregroundStyle(Color.studioText)
+            Text(text).font(.ui(14, .medium)).foregroundStyle(Color.studioText)
         }
         .padding(.horizontal, 16).padding(.vertical, 11)
         .background(Color.studioPanel.opacity(0.92), in: Capsule())

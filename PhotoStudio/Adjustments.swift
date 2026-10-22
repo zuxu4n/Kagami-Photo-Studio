@@ -303,12 +303,12 @@ struct AdjustPanel<Accessory: View>: View {
 
     private func confirmCrop() {
         confirmed += 1
-        withAnimation(.mioruQuick) { tool = lastTool }
+        withAnimation(.quick) { tool = lastTool }
     }
 
     private func cancelCrop() {
         if let e = cropEntry { change { $0.crop = e.crop; $0.cropRect = e.rect } }
-        withAnimation(.mioruQuick) { tool = lastTool }
+        withAnimation(.quick) { tool = lastTool }
     }
 
     private var toolRow: some View {
@@ -316,22 +316,22 @@ struct AdjustPanel<Accessory: View>: View {
             ForEach(AdjustTool.allCases) { t in
                 let on = t == tool
                 Button {
-                    withAnimation(.mioruQuick) { tool = t }
+                    withAnimation(.quick) { tool = t }
                 } label: {
                     VStack(spacing: 5) {
                         Image(systemName: t.icon)
                             .font(.system(size: 16, weight: .medium))
                             .frame(width: 40, height: 40)
                             .foregroundStyle(on ? Color.white : Color.studioText)
-                            .background(on ? Color.mioru : Color.studioRaised, in: Circle())
+                            .background(on ? Color.rose : Color.studioRaised, in: Circle())
                             .overlay(alignment: .topTrailing) {
                                 if t.isChanged(adjust) && !on {
-                                    Circle().fill(Color.mioruOnDark).frame(width: 7, height: 7)
+                                    Circle().fill(Color.roseOnDark).frame(width: 7, height: 7)
                                         .overlay(Circle().stroke(Color.studioPanel, lineWidth: 1.5))
                                         .offset(x: -1, y: 1)
                                 }
                             }
-                        Text(t.rawValue).font(.system(size: 10, weight: on ? .semibold : .medium)).lineLimit(1).minimumScaleFactor(0.8)
+                        Text(t.rawValue).font(.ui(10, on ? .semibold : .medium)).lineLimit(1).minimumScaleFactor(0.8)
                             .foregroundStyle(on ? Color.studioText : Color.studioSecondary)
                     }
                     .frame(maxWidth: .infinity)
@@ -359,9 +359,9 @@ struct AdjustPanel<Accessory: View>: View {
                                     if r == .free { Image(systemName: "crop").font(.system(size: 19)) } else { RatioIcon(ratio: r.value) }
                                 }
                                 .frame(width: 26, height: 26)
-                                Text(r.rawValue).font(.system(size: 11, weight: on ? .semibold : .medium)).lineLimit(1).fixedSize()
+                                Text(r.rawValue).font(.ui(11, on ? .semibold : .medium)).lineLimit(1).fixedSize()
                             }
-                            .foregroundStyle(on ? Color.mioruOnDark : Color.studioText.opacity(0.85))
+                            .foregroundStyle(on ? Color.roseOnDark : Color.studioText.opacity(0.85))
                             .frame(minWidth: 50).padding(.vertical, 4)
                             .contentShape(Rectangle())
                         }
@@ -452,7 +452,7 @@ private struct RatioIcon: View {
     }
 }
 
-/// Mioru's slider, used by every tool. The fill runs from the slider's origin (the middle for two-way sliders, the
+/// Miyori's slider, used by every tool. The fill runs from the slider's origin (the middle for two-way sliders, the
 /// left end otherwise) to the knob, and the value shows above the knob while it moves. A drag moves the value by how
 /// far the finger goes, wherever it starts, so small changes are easy. Two-way sliders catch at 0 with a tap you can
 /// feel; a double tap puts the slider back to `reset`.
@@ -494,7 +494,7 @@ struct ValueSlider: View {
                 if twoWay {
                     Capsule().fill(Color.white.opacity(0.5)).frame(width: 2, height: 10).position(x: o, y: mid)
                 }
-                Capsule().fill(Color.mioru).frame(width: abs(x - o), height: 3).position(x: (x + o) / 2, y: mid)
+                Capsule().fill(Color.rose).frame(width: abs(x - o), height: 3).position(x: (x + o) / 2, y: mid)
                 Circle().fill(Color.white)
                     .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
                     .frame(width: knob, height: knob)
@@ -502,10 +502,10 @@ struct ValueSlider: View {
                     .position(x: x, y: mid)
                 if start != nil {
                     Text(text(value))
-                        .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                        .font(.ui(12, .semibold).monospacedDigit())
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Color.mioru, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .background(Color.rose, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                         .fixedSize()
                         .position(x: min(max(x, 24), geo.size.width - 24), y: mid - 28)
                         .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .bottom)))
@@ -515,7 +515,7 @@ struct ValueSlider: View {
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { g in
                     if start == nil {
-                        withAnimation(.mioruQuick) { start = value }
+                        withAnimation(.quick) { start = value }
                         editing(true)
                     }
                     var v = (start ?? value) + Float(g.translation.width / run) * span
@@ -524,14 +524,14 @@ struct ValueSlider: View {
                     if v != value { value = v }
                 }
                 .onEnded { _ in
-                    withAnimation(.mioruQuick) { start = nil }
+                    withAnimation(.quick) { start = nil }
                     editing(false)
                 })
             .simultaneousGesture(TapGesture(count: 2).onEnded {
                 let to = reset ?? origin
                 guard value != to else { return }
                 editing(true)
-                withAnimation(.mioruQuick) { value = to }
+                withAnimation(.quick) { value = to }
                 editing(false)
             })
         }

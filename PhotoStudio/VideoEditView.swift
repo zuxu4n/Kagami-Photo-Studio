@@ -56,13 +56,13 @@ struct VideoEditView: View {
                     VStack(spacing: 14) {
                         ZStack {
                             Circle().stroke(Color.white.opacity(0.15), lineWidth: 4)
-                            Circle().trim(from: 0, to: saving).stroke(Color.mioru, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                            Circle().trim(from: 0, to: saving).stroke(Color.rose, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                                 .rotationEffect(.degrees(-90))
                                 .animation(.linear(duration: 0.2), value: saving)
-                            Text("\(Int(saving * 100))%").font(.system(size: 14, weight: .semibold).monospacedDigit())
+                            Text("\(Int(saving * 100))%").font(.ui(14, .semibold).monospacedDigit())
                         }
                         .frame(width: 64, height: 64)
-                        Text("Saving video").font(.system(size: 15, weight: .medium))
+                        Text("Saving video").font(.ui(15, .medium))
                     }
                     .foregroundStyle(Color.studioText)
                     .padding(.horizontal, 32).padding(.vertical, 24)
@@ -77,13 +77,14 @@ struct VideoEditView: View {
                     .padding(.top, 60)
                     .task(id: message) {
                         try? await Task.sleep(for: .seconds(2.5))
-                        if self.message == message { withAnimation(.mioruSoft) { self.message = nil } }
+                        if self.message == message { withAnimation(.gentle) { self.message = nil } }
                     }
             }
         }
-        .animation(.mioruSoft, value: message)
-        .animation(.mioruQuick, value: saving != nil)
+        .animation(.gentle, value: message)
+        .animation(.quick, value: saving != nil)
         .environment(\.colorScheme, .dark)
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .sensoryFeedback(.success, trigger: message) { _, new in new == "Saved to Photos" }
         .task { await load() }
         .onDisappear {
@@ -107,7 +108,7 @@ struct VideoEditView: View {
             StudioIconButton(icon: "xmark", label: "Close video") { close() }
                 .disabled(saving != nil)
             Spacer()
-            Text("Hold the video to compare").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.studioSecondary)
+            Text("Hold the video to compare").font(.ui(13, .medium)).foregroundStyle(Color.studioSecondary)
             Spacer()
             Button("Save") { Task { await save() } }
                 .buttonStyle(PillButtonStyle())

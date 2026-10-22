@@ -8,6 +8,7 @@ struct HomeView: View {
     var openCamera: () -> Void
     var showWelcome: () -> Void
     @State private var showAbout = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         ScrollView {
@@ -16,7 +17,7 @@ struct HomeView: View {
                 hero
                 HStack(spacing: Space.m) {
                     tile(title: "Camera", subtitle: "Film with your look", icon: "camera", tint: .powder, ink: .powderInk, action: openCamera)
-                    tile(title: "Video", subtitle: "Smooth and reshape", icon: "play.rectangle", tint: .surface, ink: .mioruInk, action: openVideo)
+                    tile(title: "Video", subtitle: "Smooth and reshape", icon: "play.rectangle", tint: .surface, ink: .roseInk, action: openVideo)
                 }
                 tools
                 privacy
@@ -28,13 +29,14 @@ struct HomeView: View {
         }
         .scrollIndicators(.hidden)
         .background(Color.canvasWarm.ignoresSafeArea())
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .overlay {
             if let busy {
                 ZStack {
                     Color.black.opacity(0.15).ignoresSafeArea()
                     HStack(spacing: 10) {
-                        ProgressView().tint(Color.mioruInk)
-                        Text(busy).font(.system(size: 15, weight: .medium)).foregroundStyle(Color.ink)
+                        ProgressView().tint(Color.roseInk)
+                        Text(busy).font(.ui(15, .medium)).foregroundStyle(Color.ink)
                     }
                     .padding(.horizontal, 20).padding(.vertical, 14)
                     .background(Color.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -43,7 +45,7 @@ struct HomeView: View {
                 .transition(.opacity)
             }
         }
-        .animation(.mioruQuick, value: busy)
+        .animation(.quick, value: busy)
         .sheet(isPresented: $showAbout) {
             AboutView(showWelcome: { showAbout = false; showWelcome() })
                 .presentationDetents([.large])
@@ -66,7 +68,7 @@ struct HomeView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(PressableStyle(scale: 0.9))
-            .accessibilityLabel("About Mioru")
+            .accessibilityLabel("About Miyori")
         }
         .padding(.top, Space.s)
     }
@@ -75,29 +77,31 @@ struct HomeView: View {
     private var hero: some View {
         Button { openPhoto(nil) } label: {
             ZStack(alignment: .topLeading) {
-                ArchArt(width: 0.36, height: 0.6, inset: 0.07)
+                if !typeSize.isAccessibilitySize {   // the larger text needs the room
+                    ArchArt(width: 0.36, height: 0.6, inset: 0.07)
+                }
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Edit a photo")
-                        .font(.display(30))
+                        .font(.display(.title))
                         .foregroundStyle(Color.ink)
                     Text("Retouch, reshape and enhance, right here on your iPhone.")
-                        .font(.system(size: 15))
+                        .font(.ui(15))
                         .foregroundStyle(Color.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 16)
                     HStack(spacing: 6) {
                         Text("Choose a photo")
-                        Image(systemName: "arrow.right").font(.system(size: 13, weight: .semibold))
+                        Image(systemName: "arrow.right").font(.ui(13, .semibold))
                     }
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.ui(15, .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 18).frame(height: 44)
-                    .background(Color.mioru, in: Capsule())
+                    .background(Color.rose, in: Capsule())
                 }
                 .padding(22)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-            .frame(height: 300)
+            .frame(minHeight: 300)
             .background(Color.blush)
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         }
@@ -115,8 +119,8 @@ struct HomeView: View {
                     .frame(width: 44, height: 44)
                     .background(tint == .surface ? Color.blush : Color.surface.opacity(0.7), in: Circle())
                 Spacer(minLength: 18)
-                Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Color.ink)
-                Text(subtitle).font(.system(size: 13)).foregroundStyle(Color.inkSecondary).padding(.top, 2)
+                Text(title).font(.ui(17, .semibold)).foregroundStyle(Color.ink)
+                Text(subtitle).font(.ui(13)).foregroundStyle(Color.inkSecondary).padding(.top, 2)
             }
             .padding(16)
             .frame(maxWidth: .infinity, minHeight: 148, alignment: .leading)
@@ -130,19 +134,20 @@ struct HomeView: View {
     private var tools: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Start with a tool")
-                .font(.display(20))
+                .font(.display(.title3))
                 .foregroundStyle(Color.ink)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: 4), spacing: 18) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: typeSize.isAccessibilitySize ? 2 : 4),
+                      spacing: 18) {
                 ForEach(Tool.groups.flatMap { $0 }) { t in
                     Button { openPhoto(t) } label: {
                         VStack(spacing: 7) {
                             Image(systemName: t.icon)
                                 .font(.system(size: 20, weight: .regular))
-                                .foregroundStyle(Color.mioruInk)
+                                .foregroundStyle(Color.roseInk)
                                 .frame(width: 56, height: 56)
                                 .background(Color.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.hairline))
-                            Text(t.rawValue).font(.system(size: 12, weight: .medium)).foregroundStyle(Color.ink).lineLimit(1)
+                            Text(t.rawValue).font(.ui(12, .medium)).foregroundStyle(Color.ink).lineLimit(1)
                         }
                         .frame(maxWidth: .infinity)
                         .contentShape(Rectangle())
@@ -160,7 +165,7 @@ struct HomeView: View {
             Image(systemName: "lock.fill").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.powderInk)
                 .frame(width: 26, height: 26).background(Color.powder, in: Circle())
             Text("Everything happens on this iPhone. Your photos are never uploaded.")
-                .font(.system(size: 13))
+                .font(.ui(13))
                 .foregroundStyle(Color.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -168,22 +173,22 @@ struct HomeView: View {
     }
 }
 
-/// "mioru" set in New York, with a small rose dot: the app's name wherever it appears.
+/// "miyori" set in New York, with a small rose dot: the app's name wherever it appears.
 struct Wordmark: View {
     var size: CGFloat = 30
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: size * 0.06) {
-            Text("mioru").font(.display(size, weight: .medium)).tracking(-0.5).foregroundStyle(Color.ink)
-            Circle().fill(Color.mioru).frame(width: size * 0.2, height: size * 0.2)
+            Text("miyori").font(.display(size, weight: .medium)).tracking(-0.5).foregroundStyle(Color.ink)
+            Circle().fill(Color.rose).frame(width: size * 0.2, height: size * 0.2)
         }
         .accessibilityElement()
-        .accessibilityLabel("Mioru")
+        .accessibilityLabel("Miyori")
         .accessibilityAddTraits(.isHeader)
     }
 }
 
-/// Mioru's motif: an arched mirror in powder blue standing on the bottom edge, with a rose sun rising behind it.
+/// Miyori's motif: an arched mirror in powder blue standing on the bottom edge, with a rose sun rising behind it.
 /// `width` and `height` are the arch's share of the space; it sits `inset` (a share of the width) from the right.
 struct ArchArt: View {
     var width: CGFloat = 0.42
@@ -198,7 +203,7 @@ struct ArchArt: View {
             // The sun, behind the arch's shoulder.
             let sun = archW * 0.42
             ctx.fill(Path(ellipseIn: CGRect(x: arch.minX - sun * 0.45, y: arch.minY + archW * 0.12, width: sun, height: sun)),
-                     with: .color(.mioru.opacity(0.9)))
+                     with: .color(.rose.opacity(0.9)))
             ctx.fill(archPath(arch), with: .color(.powder))
             // A thin inner line, like a mirror's bevel.
             ctx.stroke(archPath(arch.insetBy(dx: archW * 0.09, dy: archW * 0.09)), with: .color(.white.opacity(0.75)), lineWidth: 1.2)
@@ -237,39 +242,47 @@ struct ArchArt: View {
 
 // MARK: Welcome
 
-/// Shown once, the first time Mioru opens.
+/// Shown once, the first time Miyori opens.
 struct WelcomeView: View {
     var done: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ArchArt()
-                .frame(height: 210)
-                .frame(maxWidth: .infinity)
-                .background(Color.blush)
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                .padding(.top, Space.l)
-            Text("Welcome to Mioru")
-                .font(.display(32))
-                .foregroundStyle(Color.ink)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ArchArt()
+                    .frame(height: 210)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.blush)
+                    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .padding(.top, Space.l)
+                Text("Welcome to Miyori")
+                    .font(.display(.largeTitle))
+                    .foregroundStyle(Color.ink)
+                    .padding(.top, 28)
+                Text("A photo studio that lives on your iPhone.")
+                    .font(.ui(16))
+                    .foregroundStyle(Color.inkSecondary)
+                    .padding(.top, 6)
+                VStack(alignment: .leading, spacing: 20) {
+                    point("lock", "Private by design", "Every edit happens on this iPhone. Nothing is uploaded.")
+                    point("wand.and.stars", "Studio retouching", "Enhance, smooth skin, reshape features and remove what doesn't belong.")
+                    point("heart", "Free and open source", "No subscription, no watermark, no account.")
+                }
                 .padding(.top, 28)
-            Text("A photo studio that lives on your iPhone.")
-                .font(.system(size: 16))
-                .foregroundStyle(Color.inkSecondary)
-                .padding(.top, 6)
-            VStack(alignment: .leading, spacing: 20) {
-                point("lock", "Private by design", "Every edit happens on this iPhone. Nothing is uploaded.")
-                point("wand.and.stars", "Studio retouching", "Enhance, smooth skin, reshape features and remove what doesn't belong.")
-                point("heart", "Free and open source", "No subscription, no watermark, no account.")
             }
-            .padding(.top, 28)
-            Spacer(minLength: 24)
+            .padding(.horizontal, 24)
+            .padding(.bottom, Space.l)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .safeAreaInset(edge: .bottom) {
             Button("Get started", action: done)
                 .buttonStyle(PrimaryButtonStyle())
-                .padding(.bottom, Space.s)
+                .padding(.horizontal, 24)
+                .padding(.vertical, Space.s)
+                .background(Color.canvasWarm)
         }
-        .padding(.horizontal, 24)
         .background(Color.canvasWarm.ignoresSafeArea())
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .presentationCornerRadius(28)
     }
 
@@ -281,8 +294,8 @@ struct WelcomeView: View {
                 .frame(width: 40, height: 40)
                 .background(Color.blush, in: Circle())
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 16, weight: .semibold)).foregroundStyle(Color.ink)
-                Text(text).font(.system(size: 14)).foregroundStyle(Color.inkSecondary).fixedSize(horizontal: false, vertical: true)
+                Text(title).font(.ui(16, .semibold)).foregroundStyle(Color.ink)
+                Text(text).font(.ui(14)).foregroundStyle(Color.inkSecondary).fixedSize(horizontal: false, vertical: true)
             }
         }
         .accessibilityElement(children: .combine)
@@ -291,7 +304,7 @@ struct WelcomeView: View {
 
 // MARK: About
 
-/// About Mioru: privacy, the source code, the open models it runs on, and the welcome again.
+/// About Miyori: privacy, the source code, the open models it runs on, and the welcome again.
 struct AboutView: View {
     var showWelcome: () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -316,11 +329,11 @@ struct AboutView: View {
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Wordmark(size: 34)
-                    Text(version).font(.system(size: 13)).foregroundStyle(Color.inkSecondary)
+                    Text(version).font(.ui(13)).foregroundStyle(Color.inkSecondary)
                 }
                 group("Privacy") {
                     row(icon: "lock", title: "On this iPhone only",
-                        text: "Mioru has no servers and no network code. Photos and videos are only read when you pick them, and saved copies go straight to Photos.")
+                        text: "Miyori has no servers and no network code. Photos and videos are only read when you pick them, and saved copies go straight to Photos.")
                 }
                 group("Open source") {
                     Link(destination: URL(string: "https://github.com/zuxu4n/Kagami-Photo-Studio")!) {
@@ -336,7 +349,7 @@ struct AboutView: View {
                     row(icon: "face.smiling", title: "MediaPipe Face Mesh", text: "Face · Apache-2.0")
                 }
                 Button(action: showWelcome) {
-                    Text("Show the welcome again").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.mioruInk)
+                    Text("Show the welcome again").font(.ui(15, .semibold)).foregroundStyle(Color.roseInk)
                         .frame(maxWidth: .infinity, minHeight: 48)
                 }
                 .buttonStyle(PressableStyle())
@@ -345,13 +358,14 @@ struct AboutView: View {
             .padding(.vertical, Space.l)
         }
         .background(Color.canvasWarm.ignoresSafeArea())
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 
     private var divider: some View { Rectangle().fill(Color.hairline).frame(height: 1).padding(.leading, 56) }
 
     private func group(_ title: String, @ViewBuilder _ content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased()).font(.system(size: 12, weight: .semibold)).tracking(0.6).foregroundStyle(Color.inkSecondary)
+            Text(title.uppercased()).font(.ui(12, .semibold)).tracking(0.6).foregroundStyle(Color.inkSecondary)
                 .padding(.leading, 4)
             VStack(spacing: 0) { content() }
                 .background(Color.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -364,8 +378,8 @@ struct AboutView: View {
             Image(systemName: icon).font(.system(size: 14, weight: .medium)).foregroundStyle(Color.blushInk)
                 .frame(width: 32, height: 32).background(Color.blush, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.ink)
-                Text(text).font(.system(size: 13)).foregroundStyle(Color.inkSecondary).multilineTextAlignment(.leading)
+                Text(title).font(.ui(15, .semibold)).foregroundStyle(Color.ink)
+                Text(text).font(.ui(13)).foregroundStyle(Color.inkSecondary).multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)

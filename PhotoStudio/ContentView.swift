@@ -38,7 +38,7 @@ struct ContentView: View {
             // The video editor is shown in place, not as a full-screen cover: a cover that opens as the photo picker
             // closes is laid out without the screen's safe areas.
             if let movie {
-                VideoEditView(movie: movie) { withAnimation(.mioruSoft) { self.movie = nil } }
+                VideoEditView(movie: movie) { withAnimation(.gentle) { self.movie = nil } }
                     .transition(.opacity)
             } else if model.hasImage {
                 editor.transition(.opacity)
@@ -51,8 +51,8 @@ struct ContentView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.mioruSoft, value: model.hasImage)
-        .animation(.mioruSoft, value: movie?.id)
+        .animation(.gentle, value: model.hasImage)
+        .animation(.gentle, value: movie?.id)
         .preferredColorScheme(model.hasImage || movie != nil ? .dark : nil)
         // One picker for photos and videos (two pickers on one view mix up their selections).
         .photosPicker(isPresented: $picking, selection: $pickerItem, matching: pickerFilter)
@@ -118,13 +118,13 @@ struct ContentView: View {
             canvas
             toolPanel
                 .padding(.horizontal, Space.l)
-                .padding(.top, Space.m)
-                .frame(maxWidth: .infinity, minHeight: 178, alignment: .center)
+                .padding(.vertical, Space.m)
+                .frame(maxWidth: .infinity, minHeight: 184, alignment: .center)
                 .background(Color.studioPanel)
             toolBar
         }
         .background(Color.studio.ignoresSafeArea())
-        .toast(model.info, id: model.infoID) { $0 == "Saved to Photos" ? "checkmark.circle.fill" : nil }
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)   // the tool panel is dense; past this it would push the photo away
         .sensoryFeedback(.success, trigger: model.info) { _, new in new == "Saved to Photos" }
         .confirmationDialog("Close this photo?", isPresented: $confirmClose, titleVisibility: .visible) {
             Button("Discard edits", role: .destructive) { closePhoto() }
@@ -157,7 +157,7 @@ struct ContentView: View {
     }
 
     private func closePhoto() {
-        withAnimation(.mioruSoft) { model.close() }
+        withAnimation(.gentle) { model.close() }
         zoom = 1; pan = .zero
     }
 
@@ -208,7 +208,7 @@ struct ContentView: View {
                     }
                     if comparing {
                         Text("Original")
-                            .font(.system(size: 12, weight: .semibold)).tracking(0.4)
+                            .font(.ui(12, .semibold)).tracking(0.4)
                             .foregroundStyle(Color.studioText)
                             .padding(.horizontal, 10).padding(.vertical, 5)
                             .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
@@ -217,7 +217,7 @@ struct ContentView: View {
                             .allowsHitTesting(false)
                     }
                 }
-                .animation(.mioruQuick, value: comparing)
+                .animation(.quick, value: comparing)
                 .contentShape(Rectangle())
                 .onTapGesture { location in
                     guard model.busy == nil, let p = imagePoint(location, in: geo.size) else { return }
@@ -342,9 +342,10 @@ struct ContentView: View {
                     BusyBadge(text: b).allowsHitTesting(false)
                 }
             }
-            .animation(.mioruQuick, value: model.busy)
+            .animation(.quick, value: model.busy)
         }
         .clipped()
+        .toast(model.info, id: model.infoID) { $0 == "Saved to Photos" ? "checkmark.circle.fill" : nil }
     }
 
     /// Hold-to-compare at the bottom left of the photo, and the zoom (tap to fit) at the bottom right.
@@ -354,7 +355,7 @@ struct ContentView: View {
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(Color.studioText)
                 .frame(width: 40, height: 40)
-                .background(comparing ? Color.mioru : Color.black.opacity(0.4), in: Circle())
+                .background(comparing ? Color.rose : Color.black.opacity(0.4), in: Circle())
                 .contentShape(Circle())
                 .onLongPressGesture(minimumDuration: 0, maximumDistance: 60, pressing: { comparing = $0 }, perform: {})
                 .accessibilityLabel("Hold to compare with the original")
@@ -363,13 +364,13 @@ struct ContentView: View {
             Spacer()
             if zoom > 1.01 {
                 Button {
-                    withAnimation(.mioruQuick) { zoom = 1; pan = .zero }
+                    withAnimation(.quick) { zoom = 1; pan = .zero }
                 } label: {
                     HStack(spacing: 4) {
                         Text(String(format: "%.1f×", zoom)).monospacedDigit()
                         Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 11, weight: .semibold))
                     }
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.ui(13, .semibold))
                     .foregroundStyle(Color.studioText)
                     .padding(.horizontal, 12).frame(height: 32)
                     .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
@@ -381,7 +382,7 @@ struct ContentView: View {
         }
         .padding(Space.m)
         .frame(maxHeight: .infinity, alignment: .bottom)
-        .animation(.mioruQuick, value: zoom > 1.01)
+        .animation(.quick, value: zoom > 1.01)
     }
 
     /// Two fingers pinch and move the photo together: the photo point that was under the fingers' middle when they
@@ -492,7 +493,7 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, Space.s)
             }
-            .onChange(of: model.tool) { _, t in withAnimation(.mioruQuick) { proxy.scrollTo(t, anchor: .center) } }
+            .onChange(of: model.tool) { _, t in withAnimation(.quick) { proxy.scrollTo(t, anchor: .center) } }
             .onAppear { proxy.scrollTo(model.tool, anchor: .center) }
         }
         .frame(height: 66)
@@ -505,7 +506,7 @@ struct ContentView: View {
         let on = t == model.tool
         let changed = toolChanged(t)
         return Button {
-            withAnimation(.mioruQuick) { model.tool = t }
+            withAnimation(.quick) { model.tool = t }
         } label: {
             VStack(spacing: 5) {
                 Image(systemName: t.icon)
@@ -513,12 +514,12 @@ struct ContentView: View {
                     .frame(height: 24)
                     .overlay(alignment: .topTrailing) {
                         if changed && !on {
-                            Circle().fill(Color.mioruOnDark).frame(width: 6, height: 6).offset(x: 6, y: -2)
+                            Circle().fill(Color.roseOnDark).frame(width: 6, height: 6).offset(x: 6, y: -2)
                         }
                     }
-                Text(t.rawValue).font(.system(size: 11, weight: on ? .semibold : .medium)).lineLimit(1).fixedSize()
+                Text(t.rawValue).font(.ui(11, on ? .semibold : .medium)).lineLimit(1).fixedSize()
             }
-            .foregroundStyle(on ? Color.mioruOnDark : Color.studioSecondary)
+            .foregroundStyle(on ? Color.roseOnDark : Color.studioSecondary)
             .frame(minWidth: 66, minHeight: 66)
             .contentShape(Rectangle())
         }
@@ -542,15 +543,16 @@ struct ContentView: View {
     }
 
     @ViewBuilder private var toolPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             switch model.tool {
             case .enhance:
                 if model.enhanceOn {
                     HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.mioruOnDark)
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.roseOnDark)
                         Text("Enhanced").font(.panelTitle).foregroundStyle(Color.studioText)
                         Spacer()
                         PanelTextButton(title: "Turn off") { Task { await model.runEnhance() } }
+                            .disabled(model.busy != nil)
                     }
                     .frame(height: 36)
                     sliderRow("Strength", value: $model.enhanceStrength, reset: model.enhanceStrengthDefault, undoable: false) { editing in
@@ -568,6 +570,7 @@ struct ContentView: View {
                         Label("Enhance photo", systemImage: "sparkles")
                     }
                     .buttonStyle(PrimaryButtonStyle(height: 46))
+                    .disabled(model.busy != nil)
                 }
             case .smooth:
                 sliderRow("Smooth skin", value: $model.smooth)
@@ -594,7 +597,7 @@ struct ContentView: View {
                     .disabled(model.busy != nil)
                 }
                 HStack(spacing: Space.s) {
-                    Text("Edges").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.studioSecondary)
+                    Text("Edges").font(.ui(13, .medium)).foregroundStyle(Color.studioSecondary)
                     ModeTabs(items: BlurMode.allCases, selection: $model.blurMode, title: { $0 == .view ? "Auto" : $0.rawValue })
                 }
                 .disabled(model.personMatte == nil)
@@ -626,7 +629,7 @@ struct ContentView: View {
                 subtabChips
                 if feature == .position {
                     HStack {
-                        Text("Drag the oval around the head").font(.system(size: 14, weight: .medium)).foregroundStyle(Color.studioText)
+                        Text("Drag the oval around the head").font(.ui(14, .medium)).foregroundStyle(Color.studioText)
                         Spacer()
                         ResetButton(label: "Reset Position") { model.resetPosition() }
                             .disabled(!model.positionMoved || model.busy != nil)
@@ -667,7 +670,7 @@ struct ContentView: View {
                 }
             }
         }
-        .animation(.mioruQuick, value: model.tool)
+        .animation(.quick, value: model.tool)
         .onChange(of: model.smooth) { _, _ in model.renderPreview() }
         .onChange(of: model.enhanceStrength) { _, _ in model.dragEnhanceStrength() }
         .onChange(of: model.slim) { _, _ in model.renderPreview() }
@@ -730,16 +733,16 @@ struct ContentView: View {
                 HStack(spacing: 20) {
                     ForEach(FaceArea.allCases) { a in
                         let on = a == area
-                        Button { withAnimation(.mioruQuick) { area = a } } label: {
+                        Button { withAnimation(.quick) { area = a } } label: {
                             VStack(spacing: 6) {
                                 HStack(spacing: 4) {
                                     Text(a.rawValue).lineLimit(1).fixedSize()
-                                    if changed(a) { Circle().fill(Color.mioruOnDark).frame(width: 4, height: 4) }
+                                    if changed(a) { Circle().fill(Color.roseOnDark).frame(width: 4, height: 4) }
                                 }
-                                .font(.system(size: 14, weight: on ? .semibold : .medium))
+                                .font(.ui(14, on ? .semibold : .medium))
                                 .foregroundStyle(on ? Color.studioText : Color.studioSecondary)
                                 Capsule().frame(height: 2)
-                                    .foregroundStyle(on ? Color.mioru : .clear)
+                                    .foregroundStyle(on ? Color.rose : .clear)
                             }
                             .contentShape(Rectangle())
                         }
@@ -750,7 +753,7 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 2)
             }
-            .onChange(of: area) { _, a in withAnimation(.mioruQuick) { proxy.scrollTo(a, anchor: .center) } }
+            .onChange(of: area) { _, a in withAnimation(.quick) { proxy.scrollTo(a, anchor: .center) } }
         }
         .sensoryFeedback(.selection, trigger: area)
     }
@@ -818,7 +821,7 @@ struct ContentView: View {
                            onEditing: ((Bool) -> Void)? = nil, onReset: (() -> Void)? = nil) -> some View {
         HStack(spacing: Space.s) {
             Text(title)
-                .font(.system(size: 13, weight: .medium))
+                .font(.ui(13, .medium))
                 .foregroundStyle(Color.studioText)
                 .lineLimit(1).minimumScaleFactor(0.8)
                 .frame(width: 92, alignment: .leading)
@@ -835,7 +838,7 @@ struct ContentView: View {
             }
             .disabled(abs(value.wrappedValue - reset) < 0.001 || model.busy != nil)
         }
-        .frame(height: 44)
+        .frame(height: 42)
     }
 }
 

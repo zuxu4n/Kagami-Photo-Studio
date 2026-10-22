@@ -5,7 +5,7 @@ struct MioruApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .tint(.mioru)
+                .tint(.rose)
         }
     }
 }

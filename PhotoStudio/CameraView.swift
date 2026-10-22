@@ -32,12 +32,13 @@ struct CameraView: View {
                     .padding(.top, 64)
                     .task(id: message) {
                         try? await Task.sleep(for: .seconds(2.5))
-                        if camera.message == message { withAnimation(.mioruSoft) { camera.message = nil } }
+                        if camera.message == message { withAnimation(.gentle) { camera.message = nil } }
                     }
             }
         }
-        .animation(.mioruSoft, value: camera.message)
+        .animation(.gentle, value: camera.message)
         .environment(\.colorScheme, .dark)
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .statusBarHidden()
         .sensoryFeedback(.impact(weight: .medium), trigger: camera.recording)
         .onAppear { camera.look = look; camera.start() }
@@ -53,19 +54,19 @@ struct CameraView: View {
             Group {
                 if camera.recording {
                     HStack(spacing: 6) {
-                        Circle().fill(Color.mioruOnDark).frame(width: 7, height: 7)
+                        Circle().fill(Color.roseOnDark).frame(width: 7, height: 7)
                         Text(String(format: "%d:%02d", camera.seconds / 60, camera.seconds % 60)).monospacedDigit()
                     }
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.ui(14, .semibold))
                 } else {
                     Text(camera.faceCount == 0 ? "Looking for a face" : "Hold the picture to compare")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.ui(13, .medium))
                 }
             }
             .foregroundStyle(Color.studioText)
             .padding(.horizontal, 12).frame(height: 30)
             .background(Color.black.opacity(0.35), in: Capsule())
-            .animation(.mioruQuick, value: camera.recording)
+            .animation(.quick, value: camera.recording)
             Spacer()
             StudioIconButton(icon: "arrow.triangle.2.circlepath", label: "Switch camera", onPhoto: true) { camera.switchCamera() }
                 .disabled(camera.recording)
@@ -91,10 +92,10 @@ struct CameraView: View {
             ZStack {
                 Circle().stroke(.white, lineWidth: 4).frame(width: 76, height: 76)
                 RoundedRectangle(cornerRadius: camera.recording ? 7 : 31, style: .continuous)
-                    .fill(Color.mioru)
+                    .fill(Color.rose)
                     .frame(width: camera.recording ? 30 : 62, height: camera.recording ? 30 : 62)
             }
-            .animation(.mioruQuick, value: camera.recording)
+            .animation(.quick, value: camera.recording)
         }
         .buttonStyle(PressableStyle(scale: 0.94))
         .accessibilityLabel(camera.recording ? "Stop recording" : "Record")
@@ -121,9 +122,9 @@ struct LookControls: View {
                 ValueSlider(value: Binding(get: { control.get(look) }, set: { control.set(&look, $0) }), range: control.range)
                     .accessibilityLabel(control.name)
                 Text(control.range.lowerBound < 0 ? ValueSlider.label(control.get(look)) : "\(Int((control.get(look) * 100).rounded()))")
-                    .font(.system(size: 13, weight: .medium).monospacedDigit()).foregroundStyle(Color.studioText)
+                    .font(.ui(13, .medium).monospacedDigit()).foregroundStyle(Color.studioText)
                     .frame(width: 38, alignment: .trailing)
-                ResetButton(label: "Reset \(control.name)") { withAnimation(.mioruQuick) { control.set(&look, 0) } }
+                ResetButton(label: "Reset \(control.name)") { withAnimation(.quick) { control.set(&look, 0) } }
                     .disabled(abs(control.get(look)) < 0.001)
             }
             .padding(.leading, Space.l).padding(.trailing, Space.s)
@@ -146,15 +147,15 @@ struct CameraAccessView: View {
             Spacer()
             Image(systemName: "camera")
                 .font(.system(size: 26, weight: .medium))
-                .foregroundStyle(Color.mioruOnDark)
+                .foregroundStyle(Color.roseOnDark)
                 .frame(width: 72, height: 72)
                 .background(Color.studioRaised, in: Circle())
             Text("Allow the camera")
-                .font(.display(26))
+                .font(.display(.title))
                 .foregroundStyle(Color.studioText)
                 .padding(.top, 20)
-            Text("Mioru films with your look applied live. Everything stays on this iPhone.")
-                .font(.system(size: 15))
+            Text("Miyori films with your look applied live. Everything stays on this iPhone.")
+                .font(.ui(15))
                 .foregroundStyle(Color.studioSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.top, 8)

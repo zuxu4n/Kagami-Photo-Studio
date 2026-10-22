@@ -65,7 +65,6 @@ final class EditorModel: ObservableObject {
     /// A short message for the person (shown as a toast); `infoID` changes with each one, so a repeat shows again.
     @Published var info: String = "" { didSet { infoID &+= 1 } }
     @Published private(set) var infoID = 0
-    @Published private(set) var photoDetails = ""   // the working photo's size and faces found
     /// Changed since it was opened or last saved, so closing it asks first.
     @Published private(set) var edited = false
 
@@ -478,7 +477,6 @@ final class EditorModel: ObservableObject {
         canUndo = false
         canRedo = false
         toolShown(tool)
-        photoDetails = "\(full.width)×\(full.height) · \(found.count) face(s)"
         edited = false
         record("Open + face landmarks", ms, peakMB: meter.stop(), extra: ["decode_ms": decodeMs])
     }
@@ -500,7 +498,6 @@ final class EditorModel: ObservableObject {
         canUndo = false
         canRedo = false
         edited = false
-        photoDetails = ""
     }
 
     // MARK: Where Smooth starts
@@ -703,7 +700,6 @@ final class EditorModel: ObservableObject {
             carryShapes(to: found)
             faceCount = found.count
         }
-        photoDetails = "\(img.width)×\(img.height) · \(faceCount) face(s)"
         renderPreview()
     }
 
