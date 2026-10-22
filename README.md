@@ -1,4 +1,4 @@
-# PhotoStudio (prototype)
+# Kagami (prototype)
 
 A free, open-source, on-device photo editor for iPhone. Everything runs on the phone: there is no network code at all.
 

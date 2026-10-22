@@ -2,7 +2,7 @@ import SwiftUI
 import Photos
 
 enum Tool: String, CaseIterable, Identifiable {
-    case enhance = "Enhance", smooth = "Smooth", retouch = "Retouch", blur = "Background", heal = "Heal", face = "Face", reshape = "Reshape"
+    case enhance = "Enhance", smooth = "Smooth", retouch = "Retouch", blur = "Background", heal = "Heal", face = "Face", reshape = "Warp", adjust = "Adjust"
     var id: String { rawValue }
 }
 
@@ -15,6 +15,8 @@ final class EditorModel: ObservableObject {
     @Published var busy: String?
     @Published var error: String?
     @Published var tool: Tool = .enhance
+    @Published var adjust = Adjustments()   // crop, turn, flip, light and colour; the crop and turn show only in the Adjust tool
+    @Published var adjustTool: AdjustTool = .crop   // the tool picked inside Adjust; Crop shows the whole picture with its frame on top
     @Published var smooth: Float = 0
     @Published var slim: Float = 0          // Jawline; every Face slider shows the selected face's values
     @Published var eyes: Float = 0
@@ -29,6 +31,7 @@ final class EditorModel: ObservableObject {
     @Published var noseTip: Float = 0
     @Published var size: Float = 0          // size, width, perspective, jaw, chin, lips, smile, smirk and forehead use the MediaPipe face mesh
     @Published var width: Float = 0
+    @Published var headHeight: Float = 0
     @Published var perspective: Float = 0
     @Published var positionX: Float = 0     // Position: the oval's place across and down the face, in half-widths and half-heights
     @Published var positionY: Float = 0
@@ -69,6 +72,7 @@ final class EditorModel: ObservableObject {
     private var shapes: [FaceShape] = []             // Face tab values for each face, same order as `faces`
     private var smoothed: (version: Int, smooth: Float, retouch: [FaceRetouch], image: RGBAImage)?  // the preview after Smooth and Retouch, reused while Blur or Face values move
     private var blurred: (version: Int, smooth: Float, retouch: [FaceRetouch], blur: Float, edits: Int, cut: BackgroundChoice, image: RGBAImage)?  // and after Blur, reused while only Face values move
+    private var warped: (version: Int, smooth: Float, retouch: [FaceRetouch], blur: Float, edits: Int, cut: BackgroundChoice, shapes: [FaceShape], image: RGBAImage)?  // and after the Face warp, reused while only Adjust moves
     /// The people on the working photo, found when Blur is first needed and again only after Enhance or Heal change it.
     @Published var personMatte: PersonMatte? { didSet { sourceVersion &+= 1 } }
     @Published var blurMode: BlurMode = .view
@@ -165,7 +169,7 @@ final class EditorModel: ObservableObject {
         v.slim = slim; v.eyes = eyes; v.nose = nose
         v.eyeWidth = eyeWidth; v.eyeHeight = eyeHeight; v.eyeTilt = eyeTilt; v.eyeDistance = eyeDistance
         v.noseSize = noseSize; v.noseWidth = noseWidth; v.noseLift = noseLift; v.noseTip = noseTip
-        v.size = size; v.width = width; v.perspective = perspective; v.positionX = positionX; v.positionY = positionY
+        v.size = size; v.width = width; v.headHeight = headHeight; v.perspective = perspective; v.positionX = positionX; v.positionY = positionY
         v.jaw = jaw; v.chin = chin; v.jawSize = jawSize; v.define = define; v.jawLength = jawLength; v.lips = lips; v.lipSize = lipSize; v.lipWidth = lipWidth;
         v.browThick = browThick; v.browLift = browLift; v.browShape = browShape; v.browTilt = browTilt; v.browRaise = browRaise; v.smile = smile; v.smirk = smirk; v.forehead = forehead
         v.retouch = FaceRetouch(teeth: teeth, eyes: brightEyes, tone: tone)
@@ -177,7 +181,7 @@ final class EditorModel: ObservableObject {
         slim = v.slim; eyes = v.eyes; nose = v.nose
         eyeWidth = v.eyeWidth; eyeHeight = v.eyeHeight; eyeTilt = v.eyeTilt; eyeDistance = v.eyeDistance
         noseSize = v.noseSize; noseWidth = v.noseWidth; noseLift = v.noseLift; noseTip = v.noseTip
-        size = v.size; width = v.width; perspective = v.perspective; positionX = v.positionX; positionY = v.positionY
+        size = v.size; width = v.width; headHeight = v.headHeight; perspective = v.perspective; positionX = v.positionX; positionY = v.positionY
         jaw = v.jaw; chin = v.chin; jawSize = v.jawSize; define = v.define; jawLength = v.jawLength; lips = v.lips; lipSize = v.lipSize; lipWidth = v.lipWidth;
         browThick = v.browThick; browLift = v.browLift; browShape = v.browShape; browTilt = v.browTilt; browRaise = v.browRaise; smile = v.smile; smirk = v.smirk; forehead = v.forehead
         teeth = v.retouch.teeth; brightEyes = v.retouch.eyes; tone = v.retouch.tone
@@ -250,7 +254,7 @@ final class EditorModel: ObservableObject {
             d.added.append(push(d.anchor, next))
             d.anchor = next
         }
-        if d.added.count >= room - 1 { info = "Reshape limit reached · undo or reset a face to push more" }
+        if d.added.count >= room - 1 { info = "Warp limit reached · undo or reset a face to push more" }
         // The rest of the way to the finger, redone on every move until it's a full step.
         let tail = hypot(point.x - d.anchor.x, point.y - d.anchor.y) > 0.5 && d.added.count < room ? [push(d.anchor, point)] : []
         reshape = d
@@ -457,6 +461,7 @@ final class EditorModel: ObservableObject {
         original = prev.uiImage()
         display = original
         smooth = 0
+        adjust = Adjustments()
         smoothOpened = false
         enhanceOn = false
         unenhanced = nil
@@ -682,7 +687,8 @@ final class EditorModel: ObservableObject {
         storeShape()
         return UndoStep(pixels: pixels, enhanceOn: enhanceOn, unenhanced: unenhanced, enhancedFull: enhancedFull, enhanceBase: enhanceBase,
                         enhanceStrength: enhanceStrength, healsSinceEnhance: healsSinceEnhance,
-                        faces: faces, shapes: shapes, selectedFace: selectedFace, smooth: smooth, blur: blur, personMatte: personMatte, blurEdits: blurEdits, background: background)
+                        faces: faces, shapes: shapes, selectedFace: selectedFace, smooth: smooth, blur: blur, personMatte: personMatte, blurEdits: blurEdits, background: background,
+                        adjust: adjust)
     }
 
     func pushUndo(_ step: UndoStep) {
@@ -703,7 +709,7 @@ final class EditorModel: ObservableObject {
                 record("Slider drag: \(dragFrames.count) frames, \(Int(Double(dragFrames.count) / secs)) per second", secs * 1000)
             }
             storeShape()
-            if start.smooth != smooth || start.blur != blur || start.shapes != shapes { pushUndo(start) }
+            if start.smooth != smooth || start.blur != blur || start.shapes != shapes || start.adjust != adjust { pushUndo(start) }
         }
     }
 
@@ -751,6 +757,7 @@ final class EditorModel: ObservableObject {
         blur = step.blur
         blurEdits = step.blurEdits
         background = step.background
+        adjust = step.adjust
         if case .unchanged = step.pixels, let m = step.personMatte { personMatte = m }
         defer {
             // The people as they were with those fixes, or made again from the cutout if the step didn't hold them.
@@ -791,26 +798,29 @@ final class EditorModel: ObservableObject {
         renderAgain = false
         let smooth = self.smooth, shapes = self.shapes, faces = self.faces, version = sourceVersion
         let retouch = shapes.map(\.retouch)
+        let adjust = self.adjust, adjustShape = tool == .adjust, adjustCrop = adjustTool != .crop
         if blur > 0.001 || background != .off, personMatte == nil { findPeople() }   // blurs once the people are found
         let matte = personMatte, blur = matte == nil ? 0 : self.blur, edits = blurEdits, editsVersion = blurEditsVersion
         let cut = matte == nil ? nil : background.previewMode, cutKey = matte == nil ? BackgroundChoice.off : background
         let cached = smoothed.flatMap { $0.version == version && $0.smooth == smooth && $0.retouch == retouch ? $0.image : nil }
         let cachedBlur = blurred.flatMap { $0.version == version && $0.smooth == smooth && $0.retouch == retouch && $0.blur == blur && $0.edits == editsVersion && $0.cut == cutKey ? $0.image : nil }
+        let cachedWarp = cachedBlur == nil ? nil : warped.flatMap { $0.version == version && $0.smooth == smooth && $0.retouch == retouch && $0.blur == blur && $0.edits == editsVersion && $0.cut == cutKey && $0.shapes == shapes ? $0.image : nil }
         Task {
-            let (base, withBlur, img, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (RGBAImage, RGBAImage, UIImage, Double, Double) in
+            let (base, withBlur, out, img, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (RGBAImage, RGBAImage, RGBAImage, UIImage, Double, Double) in
                 let meter = MemoryMeter()
                 let t0 = CFAbsoluteTimeGetCurrent()
                 let base = cached ?? EditorModel.apply(prev, faces: faces, smooth: smooth, shapes: shapes, warp: false)
                 let withBlur = cachedBlur ?? EditorModel.apply(base, faces: faces, smooth: 0, shapes: shapes, retouch: false,
                                                                blur: blur, matte: matte, edits: edits, cut: cut, warp: false)
-                let out = EditorModel.apply(withBlur, faces: faces, smooth: 0, shapes: shapes, retouch: false)
-                let ui = out.uiImage()
-                return (base, withBlur, ui, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
+                let out = cachedWarp ?? EditorModel.apply(withBlur, faces: faces, smooth: 0, shapes: shapes, retouch: false)
+                let ui = adjust.isOff ? out.uiImage() : UIImage(cgImage: adjust.apply(out.cgImage(), shape: adjustShape, crop: adjustCrop))
+                return (base, withBlur, out, ui, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
             }.value
             rendering = false
             if version == sourceVersion {   // a new photo or new faces make this frame stale; the next one replaces it
                 smoothed = (version, smooth, retouch, base)
                 blurred = (version, smooth, retouch, blur, editsVersion, cutKey, withBlur)
+                warped = (version, smooth, retouch, blur, editsVersion, cutKey, shapes, out)
                 display = img
                 dragFrames.count += 1
             }
@@ -894,12 +904,12 @@ final class EditorModel: ObservableObject {
         defer { busy = nil }
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
-            error = "Allow PhotoStudio to add photos in Settings to save."
+            error = "Allow Kagami to add photos in Settings to save."
             return
         }
         storeShape()
         let smooth = self.smooth, shapes = self.shapes, blur = self.blur, background = self.background
-        let faces = self.faces, matte = self.personMatte, edits = blurEdits
+        let faces = self.faces, matte = self.personMatte, edits = blurEdits, adjust = self.adjust
         let (data, ms, peak) = await Task.detached(priority: .userInitiated) { () -> (Data?, Double, Double) in
             let meter = MemoryMeter()
             let t0 = CFAbsoluteTimeGetCurrent()
@@ -914,10 +924,11 @@ final class EditorModel: ObservableObject {
                     alpha = GPU.shared.warp(alpha, ops: FaceAnalyzer.warpOps(faces: faces, shapes: shapes, width: img.width, height: img.height))
                 }
                 for k in 0..<(out.width * out.height) { out.pixels[k * 4 + 3] = alpha.pixels[k * 4] }
-                data = out.uiImageWithAlpha().pngData()
+                let ui = out.uiImageWithAlpha()
+                data = adjust.isOff ? ui.pngData() : ui.cgImage.map { UIImage(cgImage: adjust.apply($0)).pngData() } ?? ui.pngData()
             } else {
                 let out = EditorModel.apply(img, faces: faces, smooth: smooth, shapes: shapes, blur: blur, matte: m, cut: background.previewMode)
-                data = out.uiImage().jpegData(compressionQuality: 0.95)
+                data = (adjust.isOff ? out.uiImage() : UIImage(cgImage: adjust.apply(out.cgImage()))).jpegData(compressionQuality: 0.95)
             }
             return (data, (CFAbsoluteTimeGetCurrent() - t0) * 1000, meter.stop())
         }.value

@@ -208,7 +208,7 @@ final class Retouch {
     }
 
     // Compiled on the device at first use, like ShaderSource.
-    private static let shader = """
+    static let shader = """
 #include <metal_stdlib>
 using namespace metal;
 
