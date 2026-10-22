@@ -824,10 +824,10 @@ struct ContentView: View {
                 .foregroundStyle(Color.studioText)
                 .lineLimit(1).minimumScaleFactor(0.8)
                 .frame(width: 92, alignment: .leading)
-            ValueSlider(value: value, range: range, reset: reset) { editing in
+            ValueSlider(value: value, range: range, reset: reset, editing: { editing in
                 sliding = editing
                 if let onEditing { onEditing(editing) } else if undoable { model.sliderEditing(editing) } else { brushRing = editing }
-            }
+            })
             .accessibilityLabel(title)
             ResetButton(label: "Reset \(title)") {
                 if let onReset { onReset(); return }
