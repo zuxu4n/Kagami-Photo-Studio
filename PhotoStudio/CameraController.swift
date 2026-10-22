@@ -8,6 +8,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
                               AVCaptureAudioDataOutputSampleBufferDelegate {
     @Published private(set) var recording = false
     @Published private(set) var seconds = 0               // length of the recording so far
+    @Published private(set) var denied = false             // camera access was refused
     @Published private(set) var stats = ""                // frame rate and time per frame, for testing
     @Published private(set) var faceCount = 0
     @Published private(set) var front = true
@@ -58,7 +59,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         Task {
             let video = await AVCaptureDevice.requestAccess(for: .video)
             guard video else {
-                await MainActor.run { message = "Mioru needs the camera. You can allow it in Settings › Mioru." }
+                await MainActor.run { denied = true }
                 return
             }
             let audio = await AVCaptureDevice.requestAccess(for: .audio)

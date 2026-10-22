@@ -1,15 +1,21 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
+/// The app's one window: the home screen until a photo or video is open, then its editor. The camera opens over it.
 struct ContentView: View {
     @StateObject private var model = EditorModel()
+    @AppStorage("welcomeSeen") private var welcomeSeen = false
+    @State private var picking = false
+    @State private var pickerFilter = PHPickerFilter.images   // what the photo picker shows: photos, or videos
     @State private var pickerItem: PhotosPickerItem?
     @State private var showCamera = false
-    @State private var videoItem: PhotosPickerItem?
+    @State private var showWelcome = false
     @State private var movie: PickedMovie?
     @State private var comparing = false
     @State private var sliding = false     // a slider is being dragged
     @State private var touching = false    // a finger is on the photo
+    @State private var confirmClose = false
     @State private var zoom: CGFloat = 1       // 1 = whole photo fits
     @State private var pan: CGSize = .zero     // offset of the zoomed photo from the centre, in points
     @State private var pinchStart: (zoom: CGFloat, pan: CGSize)?
@@ -28,83 +34,131 @@ struct ContentView: View {
     private let maxZoom: CGFloat = 8
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 10) {
-                canvas
-                if model.hasImage {
-                    toolPicker
-                    toolPanel
-                } else {
-                    Spacer()
-                }
+        ZStack {
+            // The video editor is shown in place, not as a full-screen cover: a cover that opens as the photo picker
+            // closes is laid out without the screen's safe areas.
+            if let movie {
+                VideoEditView(movie: movie) { withAnimation(.mioruSoft) { self.movie = nil } }
+                    .transition(.opacity)
+            } else if model.hasImage {
+                editor.transition(.opacity)
+            } else {
+                HomeView(busy: model.busy,
+                         openPhoto: { tool in openPhoto(tool) },
+                         openVideo: { pickerFilter = .videos; picking = true },
+                         openCamera: { showCamera = true },
+                         showWelcome: { showWelcome = true })
+                    .transition(.opacity)
             }
-            .padding(.horizontal, 12)
-            .navigationTitle("Mioru")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    HStack {
-                        PhotosPicker(selection: $pickerItem, matching: .images) {
-                            Label("Photo", systemImage: "photo.on.rectangle")
-                        }
-                        PhotosPicker(selection: $videoItem, matching: .videos) {
-                            Label("Video", systemImage: "film")
-                        }
-                        .disabled(model.busy != nil)
-                        Button { showCamera = true } label: { Label("Camera", systemImage: "camera") }
-                            .disabled(model.busy != nil)
-                    }
-                }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { Task { await model.undo() } } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
-                        .disabled(!model.canUndo || model.busy != nil)
-                    Button { Task { await model.redo() } } label: { Label("Redo", systemImage: "arrow.uturn.forward") }
-                        .disabled(!model.canRedo || model.busy != nil)
-                    Button("Save") { Task { await model.save() } }
-                        .disabled(!model.hasImage || model.busy != nil)
-                }
-            }
-            .onChange(of: pickerItem) { _, item in
-                guard let item else { return }
-                zoom = 1; pan = .zero
-                Task {
-                    if let data = try? await item.loadTransferable(type: Data.self) { await model.load(data: data) }
-                }
-            }
-            .fullScreenCover(isPresented: $showCamera) { CameraView() }
-            .fullScreenCover(item: $movie) { VideoEditView(movie: $0) }
-            .onChange(of: videoItem) { _, item in
-                guard let item else { return }
-                videoItem = nil
+        }
+        .animation(.mioruSoft, value: model.hasImage)
+        .animation(.mioruSoft, value: movie?.id)
+        .preferredColorScheme(model.hasImage || movie != nil ? .dark : nil)
+        // One picker for photos and videos (two pickers on one view mix up their selections).
+        .photosPicker(isPresented: $picking, selection: $pickerItem, matching: pickerFilter)
+        .onChange(of: pickerItem) { _, item in
+            guard let item else { return }
+            pickerItem = nil
+            if item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) }) {
                 Task {
                     do { movie = try await item.loadTransferable(type: PickedMovie.self) }
                     catch { model.error = "This video can't be opened (\(error.localizedDescription))." }
                 }
+                return
             }
-            .alert("Something went wrong", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(model.error ?? "")
-            }
-            .task {
-                await model.warmUp()
-                if EnhanceBench.requested { await model.runEnhanceBench() }
-                if RemoveBench.requested { await model.runRemoveBench() }
-            }
-            .onChange(of: model.tool) { old, t in
-                model.toolShown(t)
-                if old == .adjust || t == .adjust {
-                    // The crop and turn show only in Adjust, so the picture changes shape: start from the whole of it.
-                    if !model.adjust.shapeOff { zoom = 1; pan = .zero }
-                    model.renderPreview()
-                }
-                if t == .heal, model.healMode.selects { model.preparePeople() }
-            }
-            .onChange(of: model.healMode) { _, m in if m.selects { model.preparePeople() } }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
-                model.noteMemoryWarning()
+            zoom = 1; pan = .zero
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) { await model.load(data: data) }
+                else { model.error = "This photo can't be opened. It may still be downloading from iCloud." }
             }
         }
+        .fullScreenCover(isPresented: $showCamera) { CameraView() }
+        .sheet(isPresented: $showWelcome) {
+            WelcomeView { welcomeSeen = true; showWelcome = false }
+                .interactiveDismissDisabled(!welcomeSeen)
+        }
+        .alert("Something went wrong", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.error ?? "")
+        }
+        .task {
+            if !welcomeSeen { showWelcome = true }
+            await model.warmUp()
+            if EnhanceBench.requested { await model.runEnhanceBench() }
+            if RemoveBench.requested { await model.runRemoveBench() }
+        }
+        .onChange(of: model.tool) { old, t in
+            model.toolShown(t)
+            if old == .adjust || t == .adjust {
+                // The crop and turn show only in Adjust, so the picture changes shape: start from the whole of it.
+                if !model.adjust.shapeOff { zoom = 1; pan = .zero }
+                model.renderPreview()
+            }
+            if t == .heal, model.healMode.selects { model.preparePeople() }
+        }
+        .onChange(of: model.healMode) { _, m in if m.selects { model.preparePeople() } }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
+            model.noteMemoryWarning()
+        }
+    }
+
+    /// Opens the photo picker; a tool picked on the home screen is the one the photo opens in.
+    private func openPhoto(_ tool: Tool?) {
+        if let tool { model.tool = tool }
+        pickerFilter = .images
+        picking = true
+    }
+
+    // MARK: Editor
+
+    private var editor: some View {
+        VStack(spacing: 0) {
+            topBar
+            canvas
+            toolPanel
+                .padding(.horizontal, Space.l)
+                .padding(.top, Space.m)
+                .frame(maxWidth: .infinity, minHeight: 178, alignment: .center)
+                .background(Color.studioPanel)
+            toolBar
+        }
+        .background(Color.studio.ignoresSafeArea())
+        .toast(model.info, id: model.infoID) { $0 == "Saved to Photos" ? "checkmark.circle.fill" : nil }
+        .sensoryFeedback(.success, trigger: model.info) { _, new in new == "Saved to Photos" }
+        .confirmationDialog("Close this photo?", isPresented: $confirmClose, titleVisibility: .visible) {
+            Button("Discard edits", role: .destructive) { closePhoto() }
+            Button("Keep editing", role: .cancel) {}
+        } message: {
+            Text("Your edits haven't been saved to Photos.")
+        }
+    }
+
+    private var topBar: some View {
+        HStack(spacing: 4) {
+            StudioIconButton(icon: "xmark", label: "Close photo") {
+                if model.edited { confirmClose = true } else { closePhoto() }
+            }
+            .disabled(model.busy != nil)
+            Spacer()
+            StudioIconButton(icon: "arrow.uturn.backward", label: "Undo") { Task { await model.undo() } }
+                .disabled(!model.canUndo || model.busy != nil)
+            StudioIconButton(icon: "arrow.uturn.forward", label: "Redo") { Task { await model.redo() } }
+                .disabled(!model.canRedo || model.busy != nil)
+            Spacer()
+            Button("Save") { Task { await model.save() } }
+                .buttonStyle(PillButtonStyle())
+                .disabled(model.busy != nil)
+                .accessibilityHint("Saves a copy to Photos")
+        }
+        .padding(.horizontal, Space.s)
+        .padding(.trailing, Space.s)
+        .frame(height: 52)
+    }
+
+    private func closePhoto() {
+        withAnimation(.mioruSoft) { model.close() }
+        zoom = 1; pan = .zero
     }
 
     // MARK: Canvas with pinch zoom, pan, hold-to-compare and tap-to-heal
@@ -112,187 +166,222 @@ struct ContentView: View {
     private var canvas: some View {
         GeometryReader { geo in
             ZStack {
-                Color.black
-                if let img = comparing ? model.original : model.display {
-                    ZStack {
-                        Image(uiImage: img).resizable().scaledToFit()
-                        if model.selectionTint, !comparing, let sel = model.selectionOverlay {
-                            Image(uiImage: sel).resizable().scaledToFit().allowsHitTesting(false)
-                        }
-                        if model.blurTint, !comparing, let sel = model.blurOverlay {
-                            Image(uiImage: sel).resizable().scaledToFit().allowsHitTesting(false)
-                        }
-                        if model.tool == .face || model.tool == .reshape || (model.tool == .retouch && model.faceCount > 1), model.display != nil {
-                            FaceGuides(model: model, zoom: zoom)
-                                .opacity(sliding || touching || comparing || model.busy != nil ? 0.3 : 1)  // dim, don't hide, while adjusting
-                                .animation(.easeInOut(duration: sliding || touching ? 0.15 : 0.35), value: sliding || touching || comparing)
-                                .allowsHitTesting(false)
-                            if positionOn, !comparing {
-                                PositionHandle(model: model, zoom: zoom).allowsHitTesting(false)
+                ZStack {
+                    Color.studio
+                    if let img = comparing ? model.original : model.display {
+                        ZStack {
+                            Image(uiImage: img).resizable().scaledToFit()
+                            if model.selectionTint, !comparing, let sel = model.selectionOverlay {
+                                Image(uiImage: sel).resizable().scaledToFit().allowsHitTesting(false)
                             }
-                        }
-                        if model.tool == .adjust, !comparing, model.display != nil {
-                            if cropOn {
-                                CropFrameOverlay(frame: model.adjust.cropFrame(for: shownSize), active: cropDrag != nil, edges: model.adjust.crop == .free)
-                                    .aspectRatio(shownSize, contentMode: .fit)
+                            if model.blurTint, !comparing, let sel = model.blurOverlay {
+                                Image(uiImage: sel).resizable().scaledToFit().allowsHitTesting(false)
+                            }
+                            if model.tool == .face || model.tool == .reshape || (model.tool == .retouch && model.faceCount > 1), model.display != nil {
+                                FaceGuides(model: model, zoom: zoom)
+                                    .opacity(sliding || touching || comparing || model.busy != nil ? 0.3 : 1)  // dim, don't hide, while adjusting
+                                    .animation(.easeInOut(duration: sliding || touching ? 0.15 : 0.35), value: sliding || touching || comparing)
                                     .allowsHitTesting(false)
-                            } else if model.adjustTool == .rotate, sliding {
-                                StraightenGrid().aspectRatio(shownSize, contentMode: .fit).allowsHitTesting(false)
-                            }
-                        }
-                    }
-                    .scaleEffect(zoom)
-                    .offset(pan)
-                } else {
-                    VStack(spacing: 8) {
-                        Image(systemName: "photo").font(.largeTitle)
-                        Text("Choose a photo to start").font(.callout)
-                        Text("Everything runs on this iPhone. Nothing is uploaded.").font(.caption)
-                    }
-                    .foregroundStyle(.secondary)
-                }
-                if brushRing, model.tool == .heal || model.tool == .blur || reshapeOn {
-                    // The brush as it will land on the photo at this zoom (Reshape's is sized to the selected face).
-                    let r = model.tool == .heal ? CGFloat(model.brush) : model.tool == .blur ? CGFloat(model.blurBrush) : model.reshapeRadiusFraction
-                    let d = r * 2 * fittedSize(geo.size).width * zoom
-                    Circle().stroke(Color.white, lineWidth: 1.5).frame(width: d, height: d)
-                        .shadow(color: .black.opacity(0.6), radius: 1).allowsHitTesting(false)
-                }
-                if zoom > 1.01 {
-                    Button {
-                        withAnimation(.easeOut(duration: 0.2)) { zoom = 1; pan = .zero }
-                    } label: {
-                        Text(String(format: "%.1f× · Fit", zoom)).font(.caption.bold()).monospacedDigit()
-                            .padding(.horizontal, 10).padding(.vertical, 6).background(.ultraThinMaterial, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing).padding(8)
-                }
-                if let b = model.busy {
-                    ProgressView(b).padding(14).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                }
-                if comparing { Text("Original").font(.caption.bold()).padding(6).background(.ultraThinMaterial, in: Capsule()).frame(maxHeight: .infinity, alignment: .top).padding(.top, 8) }
-            }
-            .contentShape(Rectangle())
-            .onTapGesture { location in
-                guard model.busy == nil, let p = imagePoint(location, in: geo.size) else { return }
-                switch model.tool {
-                case .heal:
-                    switch model.healMode {
-                    case .spot: Task { await model.heal(at: p) }
-                    case .people: Task { await model.peopleTap(at: p) }
-                    case .brush, .erase:
-                        model.paint(to: p, erase: model.healMode == .erase, finished: true)
-                    }
-                case .blur where model.blurMode.paints: model.paintBlur(to: p, finished: true)
-                case .face, .reshape, .retouch: model.selectFace(at: p)
-                default: break
-                }
-            }
-            .onLongPressGesture(minimumDuration: 0.15, maximumDistance: 30, pressing: { pressing in
-                // While zoomed a one-finger drag pans, so holding the photo doesn't compare (the Compare button still does).
-                // With Reshape on, holding a face is the start of a push, so only the Compare button compares.
-                // With Position shown, holding the photo is the start of moving the oval.
-                if model.tool != .heal, !reshapeOn, !positionOn, !paintOn, !cropOn { comparing = pressing && zoom <= 1.01 && pinchStart == nil }
-            }, perform: {})
-            .simultaneousGesture(DragGesture(minimumDistance: 0)
-                .onChanged { v in
-                    if !touching { touching = true }
-                    if reshapeOn {
-                        if pinchStart != nil {
-                            // A second finger came down: this is a pinch, not a push.
-                            if reshapeDrag == true { model.cancelReshape() }
-                            reshapeDrag = false
-                        } else if reshapeDrag == nil {
-                            // Wait for a little movement so the first finger of a pinch doesn't push.
-                            guard hypot(v.translation.width, v.translation.height) > 6 else { return }
-                            reshapeDrag = imagePoint(v.startLocation, in: geo.size).map { model.beginReshape(at: $0) } ?? false
-                        }
-                        if reshapeDrag == true {
-                            model.moveReshape(to: imagePoint(v.location, in: geo.size, clamp: false)!)
-                            return
-                        }
-                    }
-                    if paintOn {
-                        if pinchStart != nil {
-                            // A second finger came down: a pinch, so the stroke so far stays and painting stops.
-                            if paintDrag == true { endPaint() }
-                            paintDrag = false
-                        } else if paintDrag == nil {
-                            guard hypot(v.translation.width, v.translation.height) > 6 else { return }
-                            paintDrag = true
-                            if let a = imagePoint(v.startLocation, in: geo.size, clamp: false) { paint(a) }
-                        }
-                        if paintDrag == true, let b = imagePoint(v.location, in: geo.size, clamp: false) {
-                            paint(b)
-                            return
-                        }
-                    }
-                    if cropOn {
-                        if pinchStart != nil {
-                            if cropDrag != nil { model.sliderEditing(false) }
-                            cropDrag = nil
-                            cropPan = true
-                        } else if !cropPan {
-                            let size = shownSize, fit = fittedSize(geo.size)
-                            guard size.width > 0, let a = imagePoint(v.startLocation, in: geo.size, clamp: false),
-                                  let b = imagePoint(v.location, in: geo.size, clamp: false) else { return }
-                            if cropDrag == nil {
-                                guard hypot(v.translation.width, v.translation.height) > 4 else { return }
-                                // A corner or edge within about 30 points resizes; inside the frame moves it; outside pans.
-                                let f = model.adjust.cropFrame(for: size)
-                                let reach = CGSize(width: 30 / (fit.width * zoom), height: 30 / (fit.height * zoom))
-                                if let h = Adjustments.cropHandle(at: CGPoint(x: a.x / size.width, y: a.y / size.height), frame: f,
-                                                                  reach: reach, edges: model.adjust.crop == .free) {
-                                    cropDrag = (f, h)
-                                    model.sliderEditing(true)
-                                } else {
-                                    cropPan = true
+                                if positionOn, !comparing {
+                                    PositionHandle(model: model, zoom: zoom).allowsHitTesting(false)
                                 }
                             }
-                            if let drag = cropDrag {
-                                let d = CGVector(dx: (b.x - a.x) / size.width, dy: (b.y - a.y) / size.height)
-                                model.adjust.cropRect = Adjustments.dragged(drag.frame, drag.handle, by: d, keepShape: model.adjust.crop != .free)
+                            if model.tool == .adjust, !comparing, model.display != nil {
+                                if cropOn {
+                                    CropFrameOverlay(frame: model.adjust.cropFrame(for: shownSize), active: cropDrag != nil, edges: model.adjust.crop == .free)
+                                        .aspectRatio(shownSize, contentMode: .fit)
+                                        .allowsHitTesting(false)
+                                } else if model.adjustTool == .rotate, sliding {
+                                    StraightenGrid().aspectRatio(shownSize, contentMode: .fit).allowsHitTesting(false)
+                                }
+                            }
+                        }
+                        .scaleEffect(zoom)
+                        .offset(pan)
+                    }
+                    if brushRing, model.tool == .heal || model.tool == .blur || reshapeOn {
+                        // The brush as it will land on the photo at this zoom (Reshape's is sized to the selected face).
+                        let r = model.tool == .heal ? CGFloat(model.brush) : model.tool == .blur ? CGFloat(model.blurBrush) : model.reshapeRadiusFraction
+                        let d = r * 2 * fittedSize(geo.size).width * zoom
+                        Circle().stroke(Color.white, lineWidth: 1.5).frame(width: d, height: d)
+                            .shadow(color: .black.opacity(0.6), radius: 1).allowsHitTesting(false)
+                    }
+                    if comparing {
+                        Text("Original")
+                            .font(.system(size: 12, weight: .semibold)).tracking(0.4)
+                            .foregroundStyle(Color.studioText)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            .frame(maxHeight: .infinity, alignment: .top).padding(.top, 10)
+                            .transition(.opacity)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .animation(.mioruQuick, value: comparing)
+                .contentShape(Rectangle())
+                .onTapGesture { location in
+                    guard model.busy == nil, let p = imagePoint(location, in: geo.size) else { return }
+                    switch model.tool {
+                    case .heal:
+                        switch model.healMode {
+                        case .spot: Task { await model.heal(at: p) }
+                        case .people: Task { await model.peopleTap(at: p) }
+                        case .brush, .erase:
+                            model.paint(to: p, erase: model.healMode == .erase, finished: true)
+                        }
+                    case .blur where model.blurMode.paints: model.paintBlur(to: p, finished: true)
+                    case .face, .reshape, .retouch: model.selectFace(at: p)
+                    default: break
+                    }
+                }
+                .onLongPressGesture(minimumDuration: 0.15, maximumDistance: 30, pressing: { pressing in
+                    // While zoomed a one-finger drag pans, so holding the photo doesn't compare (the Compare button still does).
+                    // With Reshape on, holding a face is the start of a push, so only the Compare button compares.
+                    // With Position shown, holding the photo is the start of moving the oval.
+                    if model.tool != .heal, !reshapeOn, !positionOn, !paintOn, !cropOn { comparing = pressing && zoom <= 1.01 && pinchStart == nil }
+                }, perform: {})
+                .simultaneousGesture(DragGesture(minimumDistance: 0)
+                    .onChanged { v in
+                        if !touching { touching = true }
+                        if reshapeOn {
+                            if pinchStart != nil {
+                                // A second finger came down: this is a pinch, not a push.
+                                if reshapeDrag == true { model.cancelReshape() }
+                                reshapeDrag = false
+                            } else if reshapeDrag == nil {
+                                // Wait for a little movement so the first finger of a pinch doesn't push.
+                                guard hypot(v.translation.width, v.translation.height) > 6 else { return }
+                                reshapeDrag = imagePoint(v.startLocation, in: geo.size).map { model.beginReshape(at: $0) } ?? false
+                            }
+                            if reshapeDrag == true {
+                                model.moveReshape(to: imagePoint(v.location, in: geo.size, clamp: false)!)
                                 return
                             }
                         }
-                    }
-                    if positionOn {
-                        if pinchStart != nil {
-                            if positionDrag == true { model.cancelPosition() }
-                            positionDrag = false
-                        } else if positionDrag == nil {
-                            guard hypot(v.translation.width, v.translation.height) > 4 else { return }
-                            positionDrag = model.beginPosition()
+                        if paintOn {
+                            if pinchStart != nil {
+                                // A second finger came down: a pinch, so the stroke so far stays and painting stops.
+                                if paintDrag == true { endPaint() }
+                                paintDrag = false
+                            } else if paintDrag == nil {
+                                guard hypot(v.translation.width, v.translation.height) > 6 else { return }
+                                paintDrag = true
+                                if let a = imagePoint(v.startLocation, in: geo.size, clamp: false) { paint(a) }
+                            }
+                            if paintDrag == true, let b = imagePoint(v.location, in: geo.size, clamp: false) {
+                                paint(b)
+                                return
+                            }
                         }
-                        if positionDrag == true, let a = imagePoint(v.startLocation, in: geo.size, clamp: false),
-                           let b = imagePoint(v.location, in: geo.size, clamp: false) {
-                            model.movePosition(by: CGSize(width: b.x - a.x, height: b.y - a.y))
-                            return
+                        if cropOn {
+                            if pinchStart != nil {
+                                if cropDrag != nil { model.sliderEditing(false) }
+                                cropDrag = nil
+                                cropPan = true
+                            } else if !cropPan {
+                                let size = shownSize, fit = fittedSize(geo.size)
+                                guard size.width > 0, let a = imagePoint(v.startLocation, in: geo.size, clamp: false),
+                                      let b = imagePoint(v.location, in: geo.size, clamp: false) else { return }
+                                if cropDrag == nil {
+                                    guard hypot(v.translation.width, v.translation.height) > 4 else { return }
+                                    // A corner or edge within about 30 points resizes; inside the frame moves it; outside pans.
+                                    let f = model.adjust.cropFrame(for: size)
+                                    let reach = CGSize(width: 30 / (fit.width * zoom), height: 30 / (fit.height * zoom))
+                                    if let h = Adjustments.cropHandle(at: CGPoint(x: a.x / size.width, y: a.y / size.height), frame: f,
+                                                                      reach: reach, edges: model.adjust.crop == .free) {
+                                        cropDrag = (f, h)
+                                        model.sliderEditing(true)
+                                    } else {
+                                        cropPan = true
+                                    }
+                                }
+                                if let drag = cropDrag {
+                                    let d = CGVector(dx: (b.x - a.x) / size.width, dy: (b.y - a.y) / size.height)
+                                    model.adjust.cropRect = Adjustments.dragged(drag.frame, drag.handle, by: d, keepShape: model.adjust.crop != .free)
+                                    return
+                                }
+                            }
                         }
+                        if positionOn {
+                            if pinchStart != nil {
+                                if positionDrag == true { model.cancelPosition() }
+                                positionDrag = false
+                            } else if positionDrag == nil {
+                                guard hypot(v.translation.width, v.translation.height) > 4 else { return }
+                                positionDrag = model.beginPosition()
+                            }
+                            if positionDrag == true, let a = imagePoint(v.startLocation, in: geo.size, clamp: false),
+                               let b = imagePoint(v.location, in: geo.size, clamp: false) {
+                                model.movePosition(by: CGSize(width: b.x - a.x, height: b.y - a.y))
+                                return
+                            }
+                        }
+                        guard zoom > 1.01, pinchStart == nil else { dragStart = nil; return }
+                        // Starts from where the photo is now, so lifting one finger after a pinch doesn't jump.
+                        let start = dragStart ?? CGSize(width: pan.width - v.translation.width, height: pan.height - v.translation.height)
+                        dragStart = start
+                        pan = clampedPan(CGSize(width: start.width + v.translation.width, height: start.height + v.translation.height), zoom: zoom, view: geo.size)
                     }
-                    guard zoom > 1.01, pinchStart == nil else { dragStart = nil; return }
-                    // Starts from where the photo is now, so lifting one finger after a pinch doesn't jump.
-                    let start = dragStart ?? CGSize(width: pan.width - v.translation.width, height: pan.height - v.translation.height)
-                    dragStart = start
-                    pan = clampedPan(CGSize(width: start.width + v.translation.width, height: start.height + v.translation.height), zoom: zoom, view: geo.size)
+                    .onEnded { _ in
+                        touching = false; dragStart = nil
+                        if reshapeDrag == true { model.endReshape() }
+                        reshapeDrag = nil
+                        if positionDrag == true { model.endPosition() }
+                        positionDrag = nil
+                        if paintDrag == true { endPaint() }
+                        paintDrag = nil
+                        if cropDrag != nil { model.sliderEditing(false) }
+                        cropDrag = nil
+                        cropPan = false
+                    })
+                .gesture(PinchRecognizer { state, centre, scale in twoFingerEvent(0, state, centre, scale, view: geo.size) })
+                .gesture(TwoFingerPanRecognizer { state, centre, _ in twoFingerEvent(1, state, centre, nil, view: geo.size) })
+                // On top of the photo's gestures, so a tap on these never lands on the photo.
+                canvasControls
+                if let b = model.busy {
+                    BusyBadge(text: b).allowsHitTesting(false)
                 }
-                .onEnded { _ in
-                    touching = false; dragStart = nil
-                    if reshapeDrag == true { model.endReshape() }
-                    reshapeDrag = nil
-                    if positionDrag == true { model.endPosition() }
-                    positionDrag = nil
-                    if paintDrag == true { endPaint() }
-                    paintDrag = nil
-                    if cropDrag != nil { model.sliderEditing(false) }
-                    cropDrag = nil
-                    cropPan = false
-                })
-            .gesture(PinchRecognizer { state, centre, scale in twoFingerEvent(0, state, centre, scale, view: geo.size) })
-            .gesture(TwoFingerPanRecognizer { state, centre, _ in twoFingerEvent(1, state, centre, nil, view: geo.size) })
+            }
+            .animation(.mioruQuick, value: model.busy)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipped()
+    }
+
+    /// Hold-to-compare at the bottom left of the photo, and the zoom (tap to fit) at the bottom right.
+    private var canvasControls: some View {
+        HStack(alignment: .bottom) {
+            Image(systemName: "square.split.2x1")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Color.studioText)
+                .frame(width: 40, height: 40)
+                .background(comparing ? Color.mioru : Color.black.opacity(0.4), in: Circle())
+                .contentShape(Circle())
+                .onLongPressGesture(minimumDuration: 0, maximumDistance: 60, pressing: { comparing = $0 }, perform: {})
+                .accessibilityLabel("Hold to compare with the original")
+                .accessibilityAddTraits(.isButton)
+                .opacity(model.busy == nil ? 1 : 0)
+            Spacer()
+            if zoom > 1.01 {
+                Button {
+                    withAnimation(.mioruQuick) { zoom = 1; pan = .zero }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(String(format: "%.1f×", zoom)).monospacedDigit()
+                        Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 11, weight: .semibold))
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.studioText)
+                    .padding(.horizontal, 12).frame(height: 32)
+                    .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                }
+                .buttonStyle(PressableStyle())
+                .accessibilityLabel("Zoom \(String(format: "%.1f", zoom)) times. Fit the photo")
+                .transition(.opacity)
+            }
+        }
+        .padding(Space.m)
+        .frame(maxHeight: .infinity, alignment: .bottom)
+        .animation(.mioruQuick, value: zoom > 1.01)
     }
 
     /// Two fingers pinch and move the photo together: the photo point that was under the fingers' middle when they
@@ -389,166 +478,178 @@ struct ContentView: View {
 
     // MARK: Tools
 
-    /// The tools as a row that scrolls sideways (eight don't fit across a phone), styled like a segmented control.
-    /// The picked tool scrolls into view.
-    private var toolPicker: some View {
+    /// The tool bar along the bottom, grouped: fix the photo, then beauty, then remove and replace.
+    private var toolBar: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
-                    ForEach(Tool.allCases) { t in
-                        Button {
-                            model.tool = t
-                        } label: {
-                            Text(t.rawValue).font(.subheadline.weight(t == model.tool ? .semibold : .regular)).lineLimit(1).fixedSize()
-                                .padding(.horizontal, 12).padding(.vertical, 6)
-                                .foregroundStyle(Color.primary)
-                                .background(t == model.tool ? Color(.systemBackground) : .clear, in: Capsule())
-                                .shadow(color: .black.opacity(t == model.tool ? 0.12 : 0), radius: 2, y: 1)
-                                .contentShape(Capsule())
+                HStack(spacing: 0) {
+                    ForEach(Array(Tool.groups.enumerated()), id: \.offset) { i, group in
+                        if i > 0 {
+                            Rectangle().fill(Color.studioHairline).frame(width: 1, height: 28).padding(.horizontal, 4)
                         }
-                        .buttonStyle(.plain)
-                        .id(t)
+                        ForEach(group) { t in toolButton(t).id(t) }
                     }
                 }
-                .padding(2)
+                .padding(.horizontal, Space.s)
             }
-            .background(Color.secondary.opacity(0.14), in: Capsule())
-            .onChange(of: model.tool) { _, t in withAnimation { proxy.scrollTo(t, anchor: .center) } }
+            .onChange(of: model.tool) { _, t in withAnimation(.mioruQuick) { proxy.scrollTo(t, anchor: .center) } }
+            .onAppear { proxy.scrollTo(model.tool, anchor: .center) }
+        }
+        .frame(height: 66)
+        .background(Color.studioPanel)
+        .overlay(alignment: .top) { Rectangle().fill(Color.studioHairline).frame(height: 1) }
+        .sensoryFeedback(.selection, trigger: model.tool)
+    }
+
+    private func toolButton(_ t: Tool) -> some View {
+        let on = t == model.tool
+        let changed = toolChanged(t)
+        return Button {
+            withAnimation(.mioruQuick) { model.tool = t }
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: t.icon)
+                    .font(.system(size: 20, weight: on ? .semibold : .regular))
+                    .frame(height: 24)
+                    .overlay(alignment: .topTrailing) {
+                        if changed && !on {
+                            Circle().fill(Color.mioruOnDark).frame(width: 6, height: 6).offset(x: 6, y: -2)
+                        }
+                    }
+                Text(t.rawValue).font(.system(size: 11, weight: on ? .semibold : .medium)).lineLimit(1).fixedSize()
+            }
+            .foregroundStyle(on ? Color.mioruOnDark : Color.studioSecondary)
+            .frame(minWidth: 66, minHeight: 66)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle(scale: 0.92))
+        .accessibilityLabel(t.rawValue + (changed ? ", changed" : ""))
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    /// Whether a tool has changed the photo (for the dot in the tool bar). Face and Warp count the selected face.
+    private func toolChanged(_ t: Tool) -> Bool {
+        switch t {
+        case .enhance: return model.enhanceOn
+        case .smooth: return model.smooth > 0.001
+        case .retouch: return model.teeth > 0.001 || model.brightEyes > 0.001 || model.tone > 0.001
+        case .blur: return model.blur > 0.001 || model.background != .off
+        case .heal: return false
+        case .face: return model.faceSlidersMoved
+        case .reshape: return model.selectedHasPushes
+        case .adjust: return !model.adjust.isOff
         }
     }
 
     @ViewBuilder private var toolPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             switch model.tool {
             case .enhance:
-                HStack {
-                    Button {
-                        Task { await model.runEnhance() }
-                    } label: {
-                        Label(model.enhanceOn ? "Enhance on · tap to undo" : "Enhance",
-                              systemImage: model.enhanceOn ? "checkmark.circle.fill" : "sparkles")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.busy != nil)
-                    Spacer()
-                    compareButton
-                }
                 if model.enhanceOn {
-                    HStack {
-                        Text("Strength").font(.subheadline).frame(width: 96, alignment: .leading)
-                        Slider(value: $model.enhanceStrength, in: 0...1) { editing in
-                            sliding = editing
-                            if editing { model.beginEnhanceStrength() } else { Task { await model.applyEnhanceStrength() } }
-                        }
-                        Button {
-                            model.beginEnhanceStrength()
-                            model.enhanceStrength = model.enhanceStrengthDefault
-                            Task { await model.applyEnhanceStrength() }
-                        } label: {
-                            Image(systemName: "arrow.counterclockwise").font(.footnote.bold())
-                        }
-                        .buttonStyle(.borderless)
-                        .disabled(abs(model.enhanceStrength - model.enhanceStrengthDefault) < 0.001)
-                        .accessibilityLabel("Reset Strength")
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.mioruOnDark)
+                        Text("Enhanced").font(.panelTitle).foregroundStyle(Color.studioText)
+                        Spacer()
+                        PanelTextButton(title: "Turn off") { Task { await model.runEnhance() } }
                     }
-                    .disabled(model.busy != nil)
+                    .frame(height: 36)
+                    sliderRow("Strength", value: $model.enhanceStrength, reset: model.enhanceStrengthDefault, undoable: false) { editing in
+                        if editing { model.beginEnhanceStrength() } else { Task { await model.applyEnhanceStrength() } }
+                    } onReset: {
+                        model.beginEnhanceStrength()
+                        model.enhanceStrength = model.enhanceStrengthDefault
+                        Task { await model.applyEnhanceStrength() }
+                    }
+                    HintText("Fades between your photo and the enhanced one. Faces stay as they are.")
+                } else {
+                    HintText("Sharpens detail and cleans up noise from the photo's own pixels, up to 4× for small photos. Faces stay as they are.")
+                        .padding(.top, 2)
+                    Button { Task { await model.runEnhance() } } label: {
+                        Label("Enhance photo", systemImage: "sparkles")
+                    }
+                    .buttonStyle(PrimaryButtonStyle(height: 46))
                 }
-                Text(model.enhanceOn
-                     ? "Strength fades between your photo and the enhanced one. Faces stay as they are. Tap Enhance again to undo."
-                     : "Real-ESRGAN on device, from the photo's own pixels. Never smaller than the original (up to 4x for small photos); faces stay as they are.")
-                    .font(.caption).foregroundStyle(.secondary)
             case .smooth:
                 sliderRow("Smooth skin", value: $model.smooth)
-                HStack { Text(model.faceCount == 0 ? "No face found" : "Edges, eyes and lips stay sharp").font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
+                HintText(model.faceCount == 0 ? "No face found in this photo" : "Edges, eyes and lips stay sharp")
             case .retouch:
                 sliderRow("Whiten teeth", value: $model.teeth)
                 sliderRow("Brighten eyes", value: $model.brightEyes)
                 sliderRow("Even tone", value: $model.tone)
-                HStack { Text(retouchCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
+                HintText(retouchCaption)
             case .blur:
-                Picker("Blur part", selection: Binding(get: { model.blurPanel }, set: { model.showBlurPanel($0) })) {
-                    ForEach(BlurPanel.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                ModeTabs(items: BlurPanel.allCases, selection: Binding(get: { model.blurPanel }, set: { model.showBlurPanel($0) }),
+                         title: { $0 == .remove ? "Remove" : $0.rawValue })
                 if model.blurPanel == .blur {
                     sliderRow("Strength", value: $model.blur)
                         .disabled(model.background != .off)
                 } else {
-                    Picker("Background", selection: Binding(get: { model.background }, set: { model.setBackground($0) })) {
-                        ForEach(BackgroundChoice.allCases) { Text($0.rawValue).tag($0) }
+                    HStack(spacing: Space.s) {
+                        ForEach(BackgroundChoice.allCases) { c in
+                            Chip(title: c.rawValue, on: model.background == c) { model.setBackground(c) }
+                        }
+                        Spacer(minLength: 0)
                     }
-                    .pickerStyle(.segmented)
+                    .frame(height: 44)
                     .disabled(model.busy != nil)
                 }
-                Picker("Blur", selection: $model.blurMode) {
-                    ForEach(BlurMode.allCases) { Text($0.rawValue).tag($0) }
+                HStack(spacing: Space.s) {
+                    Text("Edges").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.studioSecondary)
+                    ModeTabs(items: BlurMode.allCases, selection: $model.blurMode, title: { $0 == .view ? "Auto" : $0.rawValue })
                 }
-                .pickerStyle(.segmented)
                 .disabled(model.personMatte == nil)
                 if model.blurMode.paints {
-                    HStack {
-                        sliderRow("Brush", value: $model.blurBrush, range: 0.005...0.15, reset: 0.04, undoable: false)
-                        Button("Reset") { model.resetBlurEdits() }
-                            .font(.caption.bold()).disabled(model.blurEdits.isEmpty || model.busy != nil)
+                    HStack(spacing: Space.s) {
+                        sliderRow("Brush size", value: $model.blurBrush, range: 0.005...0.15, reset: 0.04, undoable: false)
+                        PanelTextButton(title: "Reset") { model.resetBlurEdits() }
+                            .disabled(model.blurEdits.isEmpty || model.busy != nil)
                     }
                 }
-                HStack { Text(blurCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
+                HintText(blurCaption)
             case .heal:
-                Picker("Heal", selection: $model.healMode) {
-                    ForEach(HealMode.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                ModeTabs(items: HealMode.allCases, selection: $model.healMode)
                 if model.healMode != .people {
-                    sliderRow("Brush", value: $model.brush, range: 0.004...0.08, reset: 0.025, undoable: false)
+                    sliderRow("Brush size", value: $model.brush, range: 0.004...0.08, reset: 0.025, undoable: false)
                 }
                 if model.healMode.selects {
-                    HStack {
-                        Button("Add shadow") { Task { await model.addShadow() } }
-                        Button("Clear") { model.clearSelection() }
+                    HStack(spacing: Space.s) {
+                        PanelTextButton(title: "Add shadow") { Task { await model.addShadow() } }
+                        PanelTextButton(title: "Clear") { model.clearSelection() }
                         Spacer()
-                        Button { Task { await model.removeSelection() } } label: { Label("Remove", systemImage: "wand.and.stars") }
-                            .buttonStyle(.borderedProminent)
+                        PanelTextButton(title: "Remove", icon: "wand.and.stars", prominent: true) { Task { await model.removeSelection() } }
                     }
-                    .font(.subheadline)
                     .disabled(!model.hasSelection || model.busy != nil)
                 }
-                HStack {
-                    Text(healCaption).font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    compareButton
-                }
+                HintText(healCaption)
             case .face:
                 areaTabs
                 subtabChips
                 if feature == .position {
                     HStack {
-                        Text("Drag the oval around the head").font(.subheadline)
+                        Text("Drag the oval around the head").font(.system(size: 14, weight: .medium)).foregroundStyle(Color.studioText)
                         Spacer()
-                        Button { model.resetPosition() } label: {
-                            Image(systemName: "arrow.counterclockwise").font(.footnote.bold())
-                        }
-                        .buttonStyle(.borderless)
-                        .disabled(!model.positionMoved || model.busy != nil)
-                        .accessibilityLabel("Reset Position")
+                        ResetButton(label: "Reset Position") { model.resetPosition() }
+                            .disabled(!model.positionMoved || model.busy != nil)
                     }
+                    .frame(height: 44)
                     .disabled(!model.selectedHasMesh)
                 } else if let f = feature {
                     sliderRow(f.title, value: Binding(get: { model[keyPath: f.value] }, set: { model[keyPath: f.value] = $0 }),
                               range: f.range)
                         .disabled(f.needsMesh && !model.selectedHasMesh)
+                } else {
+                    Color.clear.frame(height: 44)
                 }
-                HStack {
-                    Text(faceCaption).font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Reset all") { model.resetFaceSliders() }
-                        .font(.caption.bold()).disabled(!model.faceSlidersMoved || model.busy != nil)
-                    compareButton
+                HStack(alignment: .firstTextBaseline) {
+                    HintText(faceCaption)
+                    PanelTextButton(title: "Reset all") { model.resetFaceSliders() }
+                        .disabled(!model.faceSlidersMoved || model.busy != nil)
                 }
             case .adjust:
                 AdjustPanel(adjust: $model.adjust, tool: $model.adjustTool, editing: { e in
                     sliding = e
                     model.sliderEditing(e)
-                }) { compareButton }
+                })
                 .disabled(model.busy != nil)
                 .onChange(of: model.adjust) { old, new in
                     // Moving the crop frame in Crop changes only the frame on top; the picture under it stays.
@@ -557,19 +658,16 @@ struct ContentView: View {
                 }
                 .onChange(of: model.adjustTool) { _, _ in model.renderPreview() }
             case .reshape:
-                sliderRow("Size", value: $model.reshapeSize, range: 0.08...0.5, reset: 0.22, undoable: false)
+                sliderRow("Brush size", value: $model.reshapeSize, range: 0.08...0.5, reset: 0.22, undoable: false)
                 sliderRow("Strength", value: $model.reshapeStrength, range: 0.1...1, reset: 1, undoable: false)
-                HStack {
-                    Text("Drag on a face to push it. Pinch to zoom; drag off the face to move around.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Reset face") { model.resetReshape() }
-                        .font(.caption.bold()).disabled(!model.selectedHasPushes || model.busy != nil)
+                HStack(alignment: .firstTextBaseline) {
+                    HintText(model.faceCount == 0 ? "No face found in this photo" : warpCaption)
+                    PanelTextButton(title: "Reset face") { model.resetReshape() }
+                        .disabled(!model.selectedHasPushes || model.busy != nil)
                 }
-                HStack { Text(faceCaption).font(.caption).foregroundStyle(.secondary); Spacer(); compareButton }
             }
-            Text(model.info).font(.caption2).foregroundStyle(.secondary)
         }
+        .animation(.mioruQuick, value: model.tool)
         .onChange(of: model.smooth) { _, _ in model.renderPreview() }
         .onChange(of: model.enhanceStrength) { _, _ in model.dragEnhanceStrength() }
         .onChange(of: model.slim) { _, _ in model.renderPreview() }
@@ -624,30 +722,37 @@ struct ContentView: View {
         }
     }
 
-    /// The main Face tabs; a dot marks the ones with a slider moved on the selected face.
+    /// The main Face tabs, underlined in rose; a dot marks the ones with a slider moved on the selected face.
     private var areaTabs: some View {
-        // Scrolls sideways, as seven names don't fit across a phone at full size.
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 18) {
-                ForEach(FaceArea.allCases) { a in
-                    Button { area = a } label: {
-                        VStack(spacing: 4) {
-                            HStack(spacing: 3) {
-                                Text(a.rawValue).lineLimit(1).fixedSize()
-                                if changed(a) { Circle().frame(width: 4, height: 4) }
+        // Scrolls sideways, as eight names don't fit across a phone at full size.
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 20) {
+                    ForEach(FaceArea.allCases) { a in
+                        let on = a == area
+                        Button { withAnimation(.mioruQuick) { area = a } } label: {
+                            VStack(spacing: 6) {
+                                HStack(spacing: 4) {
+                                    Text(a.rawValue).lineLimit(1).fixedSize()
+                                    if changed(a) { Circle().fill(Color.mioruOnDark).frame(width: 4, height: 4) }
+                                }
+                                .font(.system(size: 14, weight: on ? .semibold : .medium))
+                                .foregroundStyle(on ? Color.studioText : Color.studioSecondary)
+                                Capsule().frame(height: 2)
+                                    .foregroundStyle(on ? Color.mioru : .clear)
                             }
-                            .font(.subheadline.weight(a == area ? .bold : .regular))
-                            .foregroundStyle(a == area ? Color.primary : Color.secondary)
-                            Capsule().frame(height: 2)
-                                .foregroundStyle(a == area ? Color(red: 0.2, green: 0.85, blue: 0.95) : .clear)
+                            .contentShape(Rectangle())
                         }
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                        .id(a)
+                        .accessibilityAddTraits(on ? .isSelected : [])
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 2)
             }
-            .padding(.horizontal, 4)
+            .onChange(of: area) { _, a in withAnimation(.mioruQuick) { proxy.scrollTo(a, anchor: .center) } }
         }
+        .sensoryFeedback(.selection, trigger: area)
     }
 
     /// The picked main tab's subtabs; a dot marks a moved slider.
@@ -655,30 +760,27 @@ struct ContentView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(area.subtabs, id: \.self) { sub in
-                    Button { subtabs[area] = sub } label: {
-                        HStack(spacing: 4) {
-                            Text(sub)
-                            if changed(area, sub) { Circle().frame(width: 5, height: 5) }
-                        }
-                        .font(.caption.bold())
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .foregroundStyle(sub == subtab ? Color.black : Color.primary)
-                        .background(sub == subtab ? Color(red: 0.2, green: 0.85, blue: 0.95) : Color.secondary.opacity(0.18), in: Capsule())
-                    }
-                    .buttonStyle(.plain)
+                    Chip(title: sub, on: sub == subtab, dot: changed(area, sub)) { subtabs[area] = sub }
                 }
             }
         }
+        .sensoryFeedback(.selection, trigger: subtab)
     }
 
     private var faceCaption: String {
-        if model.faceCount == 0 { return "No face found" }
-        if !model.reshaping, feature == nil { return "\(area.rawValue) \(subtab): coming soon" }
+        if model.faceCount == 0 { return "No face found in this photo" }
+        if !model.reshaping, feature == nil { return "\(area.rawValue) \(subtab) is coming soon" }
         if !model.reshaping, let f = feature, f.needsMesh, !model.selectedHasMesh { return "Couldn't map this face closely enough for \(subtab)" }
         let hint = model.reshaping ? "" : feature?.hint ?? ""
         if model.faceCount == 1 { return hint }
         let which = "Face \((model.selectedFace ?? 0) + 1) of \(model.faceCount) · tap another face to switch"
         return hint.isEmpty ? which : "\(hint) · \(which)"
+    }
+
+    private var warpCaption: String {
+        let how = "Drag on a face to push it. Drag off the face to move around."
+        guard model.faceCount > 1 else { return how }
+        return "Face \((model.selectedFace ?? 0) + 1) of \(model.faceCount) · tap another face to switch"
     }
 
     private var healCaption: String {
@@ -691,7 +793,7 @@ struct ContentView: View {
     }
 
     private var retouchCaption: String {
-        if model.faceCount == 0 { return "No face found" }
+        if model.faceCount == 0 { return "No face found in this photo" }
         if model.faceCount == 1 { return "Colour only; the face's shape stays" }
         return "Face \((model.selectedFace ?? 0) + 1) of \(model.faceCount) · tap another face to switch"
     }
@@ -709,36 +811,62 @@ struct ContentView: View {
         return m.hasPerson ? "Everyone found stays sharp" : "No person found, so the whole photo is blurred"
     }
 
-    private var compareButton: some View {
-        Text("Hold to compare")
-            .font(.caption.bold())
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(.thinMaterial, in: Capsule())
-            .onLongPressGesture(minimumDuration: 0, maximumDistance: 60, pressing: { comparing = $0 }, perform: {})
-    }
-
     /// A labelled slider with a reset button that puts it back to `reset` (greyed out while it's already there).
-    /// Two-way sliders (ranges below zero) snap to 0 when released within 4% of it.
-    /// For undoable sliders the reset is one undo step, like a drag.
-    private func sliderRow(_ title: String, value: Binding<Float>, range: ClosedRange<Float> = 0...1, reset: Float = 0, undoable: Bool = true) -> some View {
-        HStack {
-            Text(title).font(.subheadline).frame(width: 96, alignment: .leading)
-            Slider(value: value, in: range) { editing in
+    /// For undoable sliders a drag or a reset is one undo step; the others show the brush size on the photo while
+    /// they move. `onEditing` and `onReset` replace that for sliders with their own steps (Enhance's Strength).
+    private func sliderRow(_ title: String, value: Binding<Float>, range: ClosedRange<Float> = 0...1, reset: Float = 0, undoable: Bool = true,
+                           onEditing: ((Bool) -> Void)? = nil, onReset: (() -> Void)? = nil) -> some View {
+        HStack(spacing: Space.s) {
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.studioText)
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .frame(width: 92, alignment: .leading)
+            ValueSlider(value: value, range: range, reset: reset) { editing in
                 sliding = editing
-                // Two-way sliders snap back to the middle when let go close to it, so "off" is easy to hit.
-                if !editing, range.lowerBound < 0, abs(value.wrappedValue) < 0.04 { value.wrappedValue = 0 }
-                if undoable { model.sliderEditing(editing) } else { brushRing = editing }
+                if let onEditing { onEditing(editing) } else if undoable { model.sliderEditing(editing) } else { brushRing = editing }
             }
-            Button {
+            .accessibilityLabel(title)
+            ResetButton(label: "Reset \(title)") {
+                if let onReset { onReset(); return }
                 if undoable { model.sliderEditing(true) }
                 value.wrappedValue = reset
                 if undoable { model.sliderEditing(false) }
-            } label: {
-                Image(systemName: "arrow.counterclockwise").font(.footnote.bold())
             }
-            .buttonStyle(.borderless)
             .disabled(abs(value.wrappedValue - reset) < 0.001 || model.busy != nil)
-            .accessibilityLabel("Reset \(title)")
+        }
+        .frame(height: 44)
+    }
+}
+
+extension Tool {
+    /// The tool bar's groups: fix and frame the photo, beauty, then remove and replace.
+    static let groups: [[Tool]] = [[.enhance, .adjust], [.smooth, .retouch, .face, .reshape], [.heal, .blur]]
+
+    var icon: String {
+        switch self {
+        case .enhance: return "sparkles"
+        case .smooth: return "drop"
+        case .retouch: return "wand.and.stars"
+        case .blur: return "person.and.background.dotted"
+        case .heal: return "bandage"
+        case .face: return "face.smiling"
+        case .reshape: return "hand.draw"
+        case .adjust: return "slider.horizontal.3"
+        }
+    }
+
+    /// One line about the tool, for the home screen.
+    var blurb: String {
+        switch self {
+        case .enhance: return "Sharper detail"
+        case .smooth: return "Soft, even skin"
+        case .retouch: return "Teeth, eyes, tone"
+        case .blur: return "Blur or remove"
+        case .heal: return "Spots and people"
+        case .face: return "Reshape features"
+        case .reshape: return "Push by hand"
+        case .adjust: return "Crop and light"
         }
     }
 }
@@ -943,7 +1071,7 @@ private struct PositionHandle: View {
                 let major = max(h.major * fw, 18 / zoom), minor = major * h.minor / h.major
                 // The frame's height is the short axis; turned so it points along `angle`, at the middle of the face.
                 Ellipse().fill(Color.white.opacity(0.3))
-                    .overlay(Ellipse().stroke(Color(red: 0.2, green: 0.85, blue: 0.95), lineWidth: 2.5 / zoom))
+                    .overlay(Ellipse().stroke(Color.faceGuide, lineWidth: 2.5 / zoom))
                     .frame(width: 2 * major, height: 2 * minor)
                     .rotationEffect(.radians(h.angle - .pi / 2))
                     .position(x: ox + h.puck.x * fw, y: oy + h.puck.y * fh)
@@ -968,7 +1096,7 @@ private struct FaceGuides: View {
             let style = StrokeStyle(lineWidth: 1.75 / zoom, lineCap: .round, lineJoin: .round)
             ZStack {
                 Self.path(faces.filter { !$0.selected }.flatMap(\.curves), ox, oy, fw, fh).stroke(Color.white, style: style)
-                Self.path(faces.filter(\.selected).flatMap(\.curves), ox, oy, fw, fh).stroke(Color(red: 0.2, green: 0.85, blue: 0.95), style: style)
+                Self.path(faces.filter(\.selected).flatMap(\.curves), ox, oy, fw, fh).stroke(Color.faceGuide, style: style)
             }
         }
     }

@@ -23,7 +23,7 @@ struct PickedMovie: Transferable, Identifiable {
 /// Plays a video with the look drawn on it, with the camera's sliders, and saves a new copy (with its sound) to Photos.
 struct VideoEditView: View {
     let movie: PickedMovie
-    @Environment(\.dismiss) private var dismiss
+    var close: () -> Void
     @State private var look = LiveLook()   // every effect starts at none, as on the camera
     @State private var control = LookControl.all[0]
     @State private var adjust = Adjustments()
@@ -39,39 +39,52 @@ struct VideoEditView: View {
     @State private var box = LookBox()
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        VStack(spacing: 0) {
+            topBar
             PlayerLayerView(player: player)
-                .ignoresSafeArea()
                 .gesture(DragGesture(minimumDistance: 0)
                     .onChanged { _ in if !box.comparing { box.comparing = true; refresh() } }
                     .onEnded { _ in box.comparing = false; refresh() })
-            VStack(spacing: 0) {
-                topBar
-                Spacer()
-                controls
-            }
+                .overlay(alignment: .bottomLeading) { playButton.padding(Space.m) }
+            controls
+        }
+        .background(Color.studio.ignoresSafeArea())
+        .overlay {
             if let saving {
-                VStack(spacing: 10) {
-                    ProgressView(value: saving).tint(.white).frame(width: 200)
-                    Text("Saving \(Int(saving * 100))%").font(.callout.monospacedDigit())
+                ZStack {
+                    Color.black.opacity(0.4).ignoresSafeArea()
+                    VStack(spacing: 14) {
+                        ZStack {
+                            Circle().stroke(Color.white.opacity(0.15), lineWidth: 4)
+                            Circle().trim(from: 0, to: saving).stroke(Color.mioru, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                                .animation(.linear(duration: 0.2), value: saving)
+                            Text("\(Int(saving * 100))%").font(.system(size: 14, weight: .semibold).monospacedDigit())
+                        }
+                        .frame(width: 64, height: 64)
+                        Text("Saving video").font(.system(size: 15, weight: .medium))
+                    }
+                    .foregroundStyle(Color.studioText)
+                    .padding(.horizontal, 32).padding(.vertical, 24)
+                    .background(Color.studioPanel, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 }
-                .padding(20)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .transition(.opacity)
             }
+        }
+        .overlay(alignment: .top) {
             if let message {
-                Text(message)
-                    .font(.callout)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(.ultraThinMaterial, in: Capsule())
+                Toast(text: message, icon: message == "Saved to Photos" ? "checkmark.circle.fill" : nil)
+                    .padding(.top, 60)
                     .task(id: message) {
                         try? await Task.sleep(for: .seconds(2.5))
-                        if self.message == message { self.message = nil }
+                        if self.message == message { withAnimation(.mioruSoft) { self.message = nil } }
                     }
             }
         }
-        .foregroundStyle(.white)
-        .statusBarHidden()
+        .animation(.mioruSoft, value: message)
+        .animation(.mioruQuick, value: saving != nil)
+        .environment(\.colorScheme, .dark)
+        .sensoryFeedback(.success, trigger: message) { _, new in new == "Saved to Photos" }
         .task { await load() }
         .onDisappear {
             player.pause()
@@ -91,66 +104,49 @@ struct VideoEditView: View {
 
     private var topBar: some View {
         HStack {
-            Button { dismiss() } label: { Image(systemName: "xmark").font(.title3.weight(.semibold)).frame(width: 44, height: 44) }
+            StudioIconButton(icon: "xmark", label: "Close video") { close() }
                 .disabled(saving != nil)
             Spacer()
-            Text("Hold to compare").font(.caption.weight(.medium))
+            Text("Hold the video to compare").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.studioSecondary)
             Spacer()
             Button("Save") { Task { await save() } }
-                .font(.headline)
-                .frame(height: 44)
+                .buttonStyle(PillButtonStyle())
                 .disabled(saving != nil || composition == nil)
+                .accessibilityHint("Saves a copy to Photos")
         }
-        .padding(.horizontal, 12)
-        .background(LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
+        .padding(.leading, Space.s).padding(.trailing, Space.l)
+        .frame(height: 52)
+    }
+
+    private var playButton: some View {
+        Button { togglePlay() } label: {
+            Image(systemName: playing ? "pause.fill" : "play.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.studioText)
+                .frame(width: 40, height: 40)
+                .background(Color.black.opacity(0.45), in: Circle())
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(PressableStyle(scale: 0.9))
+        .accessibilityLabel(playing ? "Pause" : "Play")
     }
 
     private var controls: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                Button { togglePlay() } label: {
-                    Image(systemName: playing ? "pause.fill" : "play.fill").font(.title3).frame(width: 36, height: 36)
-                }
-                Picker("Settings", selection: $panel) {
-                    Text("Face").tag("Face")
-                    Text("Adjust").tag("Adjust")
-                }
-                .pickerStyle(.segmented)
-            }
-            .padding(.horizontal, 16)
+        VStack(spacing: Space.m) {
+            ModeTabs(items: ["Face", "Adjust"], selection: $panel, title: { $0 })
+                .padding(.horizontal, Space.l)
             if panel == "Adjust" {
                 AdjustPanel(adjust: $adjust, tool: $adjustTool, freeCrop: false)
-                    .environment(\.colorScheme, .dark)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, Space.l)
             } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(LookControl.all) { c in
-                        Button { control = c } label: {
-                            Text(c.name)
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 12).padding(.vertical, 7)
-                                .background(c.id == control.id ? Color.white : Color.white.opacity(0.18), in: Capsule())
-                                .foregroundStyle(c.id == control.id ? Color.black : Color.white)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-            HStack(spacing: 10) {
-                Slider(value: Binding(get: { Double(control.get(look)) }, set: { control.set(&look, Float($0)) }),
-                       in: Double(control.range.lowerBound)...Double(control.range.upperBound))
-                    .tint(.white)
-                Text("\(Int((control.get(look) * 100).rounded()))")
-                    .font(.caption.monospacedDigit()).frame(width: 34, alignment: .trailing)
-                Button { control.set(&look, 0) } label: { Image(systemName: "arrow.counterclockwise") }
-            }
-            .padding(.horizontal, 16)
+                LookControls(look: $look, control: $control)
+                Spacer(minLength: 0)
             }
         }
-        .padding(.top, 14)
-        .padding(.bottom, 12)
-        .background(LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
+        .padding(.top, Space.m)
+        .padding(.bottom, Space.s)
+        .frame(height: 236, alignment: .top)
+        .background(Color.studioPanel.ignoresSafeArea(edges: .bottom))
     }
 
     private func load() async {
@@ -244,7 +240,7 @@ struct PlayerLayerView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> LayerView {
         let v = LayerView()
-        v.backgroundColor = .black
+        v.backgroundColor = UIColor(hex: 0x0D0D0E)
         v.playerLayer.player = player
         v.playerLayer.videoGravity = .resizeAspect
         return v

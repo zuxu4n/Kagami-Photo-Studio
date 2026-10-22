@@ -12,28 +12,34 @@ struct CameraView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            CameraPreview(layer: camera.displayLayer)
-                .ignoresSafeArea()
-                .gesture(DragGesture(minimumDistance: 0)
-                    .onChanged { _ in if !camera.comparing { camera.comparing = true } }
-                    .onEnded { _ in camera.comparing = false })
-            VStack(spacing: 0) {
-                topBar
-                Spacer()
-                controls
+            if camera.denied {
+                CameraAccessView { dismiss() }
+            } else {
+                CameraPreview(layer: camera.displayLayer)
+                    .ignoresSafeArea()
+                    .gesture(DragGesture(minimumDistance: 0)
+                        .onChanged { _ in if !camera.comparing { camera.comparing = true } }
+                        .onEnded { _ in camera.comparing = false })
+                VStack(spacing: 0) {
+                    topBar
+                    Spacer()
+                    controls
+                }
             }
             if let message = camera.message {
-                Text(message)
-                    .font(.callout)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(.ultraThinMaterial, in: Capsule())
+                Toast(text: message, icon: message == "Saved to Photos" ? "checkmark.circle.fill" : nil)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 64)
                     .task(id: message) {
                         try? await Task.sleep(for: .seconds(2.5))
-                        if camera.message == message { camera.message = nil }
+                        if camera.message == message { withAnimation(.mioruSoft) { camera.message = nil } }
                     }
             }
         }
+        .animation(.mioruSoft, value: camera.message)
+        .environment(\.colorScheme, .dark)
         .statusBarHidden()
+        .sensoryFeedback(.impact(weight: .medium), trigger: camera.recording)
         .onAppear { camera.look = look; camera.start() }
         .onDisappear { camera.stop() }
         .onChange(of: look) { _, new in camera.look = new }
@@ -41,60 +47,41 @@ struct CameraView: View {
 
     private var topBar: some View {
         HStack {
-            Button { dismiss() } label: { Image(systemName: "xmark").font(.title3.weight(.semibold)).frame(width: 44, height: 44) }
+            StudioIconButton(icon: "xmark", label: "Close camera", onPhoto: true) { dismiss() }
                 .disabled(camera.recording)
             Spacer()
-            VStack(spacing: 2) {
+            Group {
                 if camera.recording {
-                    Text(String(format: "● %d:%02d", camera.seconds / 60, camera.seconds % 60))
-                        .font(.subheadline.monospacedDigit().weight(.semibold)).foregroundStyle(.red)
+                    HStack(spacing: 6) {
+                        Circle().fill(Color.mioruOnDark).frame(width: 7, height: 7)
+                        Text(String(format: "%d:%02d", camera.seconds / 60, camera.seconds % 60)).monospacedDigit()
+                    }
+                    .font(.system(size: 14, weight: .semibold))
                 } else {
-                    Text(camera.faceCount == 0 ? "Looking for a face" : "Hold to compare")
-                        .font(.caption.weight(.medium))
+                    Text(camera.faceCount == 0 ? "Looking for a face" : "Hold the picture to compare")
+                        .font(.system(size: 13, weight: .medium))
                 }
-                Text(camera.stats).font(.caption2.monospacedDigit()).foregroundStyle(.white.opacity(0.7))
             }
+            .foregroundStyle(Color.studioText)
+            .padding(.horizontal, 12).frame(height: 30)
+            .background(Color.black.opacity(0.35), in: Capsule())
+            .animation(.mioruQuick, value: camera.recording)
             Spacer()
-            Button { camera.switchCamera() } label: {
-                Image(systemName: "arrow.triangle.2.circlepath.camera").font(.title3).frame(width: 44, height: 44)
-            }
-            .disabled(camera.recording)
+            StudioIconButton(icon: "arrow.triangle.2.circlepath", label: "Switch camera", onPhoto: true) { camera.switchCamera() }
+                .disabled(camera.recording)
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 8)
-        .background(LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
+        .padding(.horizontal, Space.s)
+        .padding(.top, Space.xs)
     }
 
     private var controls: some View {
-        VStack(spacing: 12) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(LookControl.all) { c in
-                        Button { control = c } label: {
-                            Text(c.name)
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 12).padding(.vertical, 7)
-                                .background(c.id == control.id ? Color.white : Color.white.opacity(0.18), in: Capsule())
-                                .foregroundStyle(c.id == control.id ? Color.black : Color.white)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-            HStack(spacing: 10) {
-                Slider(value: Binding(get: { Double(control.get(look)) }, set: { control.set(&look, Float($0)) }),
-                       in: Double(control.range.lowerBound)...Double(control.range.upperBound))
-                    .tint(.white)
-                Text("\(Int((control.get(look) * 100).rounded()))")
-                    .font(.caption.monospacedDigit()).foregroundStyle(.white).frame(width: 34, alignment: .trailing)
-                Button { control.set(&look, 0) } label: { Image(systemName: "arrow.counterclockwise").foregroundStyle(.white) }
-            }
-            .padding(.horizontal, 20)
+        VStack(spacing: 14) {
+            LookControls(look: $look, control: $control)
             recordButton
         }
-        .padding(.top, 14)
-        .padding(.bottom, 8)
-        .background(LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
+        .padding(.top, Space.l)
+        .padding(.bottom, Space.s)
+        .background(LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
     }
 
     private var recordButton: some View {
@@ -102,14 +89,84 @@ struct CameraView: View {
             if camera.recording { camera.stopRecording() } else { camera.startRecording() }
         } label: {
             ZStack {
-                Circle().stroke(.white, lineWidth: 4).frame(width: 74, height: 74)
-                RoundedRectangle(cornerRadius: camera.recording ? 6 : 30)
-                    .fill(.red)
-                    .frame(width: camera.recording ? 30 : 60, height: camera.recording ? 30 : 60)
+                Circle().stroke(.white, lineWidth: 4).frame(width: 76, height: 76)
+                RoundedRectangle(cornerRadius: camera.recording ? 7 : 31, style: .continuous)
+                    .fill(Color.mioru)
+                    .frame(width: camera.recording ? 30 : 62, height: camera.recording ? 30 : 62)
             }
-            .animation(.easeInOut(duration: 0.15), value: camera.recording)
+            .animation(.mioruQuick, value: camera.recording)
         }
+        .buttonStyle(PressableStyle(scale: 0.94))
         .accessibilityLabel(camera.recording ? "Stop recording" : "Record")
+    }
+}
+
+/// The look's controls, shared by the camera and the video editor: a chip for each effect and its slider.
+struct LookControls: View {
+    @Binding var look: LiveLook
+    @Binding var control: LookControl
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(LookControl.all) { c in
+                        Chip(title: c.name, on: c.id == control.id, dot: abs(c.get(look)) > 0.001) { control = c }
+                    }
+                }
+                .padding(.horizontal, Space.l)
+            }
+            .sensoryFeedback(.selection, trigger: control.id)
+            HStack(spacing: Space.s) {
+                ValueSlider(value: Binding(get: { control.get(look) }, set: { control.set(&look, $0) }), range: control.range)
+                    .accessibilityLabel(control.name)
+                Text(control.range.lowerBound < 0 ? ValueSlider.label(control.get(look)) : "\(Int((control.get(look) * 100).rounded()))")
+                    .font(.system(size: 13, weight: .medium).monospacedDigit()).foregroundStyle(Color.studioText)
+                    .frame(width: 38, alignment: .trailing)
+                ResetButton(label: "Reset \(control.name)") { withAnimation(.mioruQuick) { control.set(&look, 0) } }
+                    .disabled(abs(control.get(look)) < 0.001)
+            }
+            .padding(.leading, Space.l).padding(.trailing, Space.s)
+        }
+    }
+}
+
+/// The camera screen when access to the camera was turned off: why it's needed, and the way to Settings.
+struct CameraAccessView: View {
+    var close: () -> Void
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                StudioIconButton(icon: "xmark", label: "Close camera", action: close)
+                Spacer()
+            }
+            .padding(.horizontal, Space.s)
+            Spacer()
+            Image(systemName: "camera")
+                .font(.system(size: 26, weight: .medium))
+                .foregroundStyle(Color.mioruOnDark)
+                .frame(width: 72, height: 72)
+                .background(Color.studioRaised, in: Circle())
+            Text("Allow the camera")
+                .font(.display(26))
+                .foregroundStyle(Color.studioText)
+                .padding(.top, 20)
+            Text("Mioru films with your look applied live. Everything stays on this iPhone.")
+                .font(.system(size: 15))
+                .foregroundStyle(Color.studioSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.top, 8)
+                .padding(.horizontal, 40)
+            Spacer()
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .padding(.horizontal, 24)
+            .padding(.bottom, Space.l)
+        }
     }
 }
 

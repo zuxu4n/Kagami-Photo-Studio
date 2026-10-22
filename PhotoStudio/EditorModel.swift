@@ -62,7 +62,12 @@ final class EditorModel: ObservableObject {
     @Published var reshapeSize: Float = 0.22  // Reshape brush radius as a fraction of the face's width
     @Published var reshapeStrength: Float = 1 // how far the content moves for each point the finger moves
     @Published var timings: [(String, Double)] = []
-    @Published var info: String = ""
+    /// A short message for the person (shown as a toast); `infoID` changes with each one, so a repeat shows again.
+    @Published var info: String = "" { didSet { infoID &+= 1 } }
+    @Published private(set) var infoID = 0
+    @Published private(set) var photoDetails = ""   // the working photo's size and faces found
+    /// Changed since it was opened or last saved, so closing it asks first.
+    @Published private(set) var edited = false
 
     private(set) var working: RGBAImage?     // full resolution, after Enhance/Heal
     private(set) var preview: RGBAImage? { didSet { sourceVersion &+= 1 } }   // long side <= previewSide, for live sliders
@@ -473,8 +478,29 @@ final class EditorModel: ObservableObject {
         canUndo = false
         canRedo = false
         toolShown(tool)
-        info = "\(full.width)×\(full.height) · \(found.count) face(s)"
+        photoDetails = "\(full.width)×\(full.height) · \(found.count) face(s)"
+        edited = false
         record("Open + face landmarks", ms, peakMB: meter.stop(), extra: ["decode_ms": decodeMs])
+    }
+
+    /// Closes the photo (back to the home screen) and lets go of its pixels. Opening the next photo sets the rest.
+    func close() {
+        guard busy == nil else { return }
+        working = nil
+        preview = nil
+        display = nil
+        original = nil
+        unenhanced = nil
+        enhancedFull = nil
+        enhanceBase = nil
+        personMatte = nil
+        blurOverlay = nil
+        clearSelection()
+        history.clear()
+        canUndo = false
+        canRedo = false
+        edited = false
+        photoDetails = ""
     }
 
     // MARK: Where Smooth starts
@@ -489,7 +515,7 @@ final class EditorModel: ObservableObject {
         updateBlurOverlay()
         guard t == .smooth, !smoothOpened, hasImage else { return }
         smoothOpened = true
-        if smooth < 0.001 { smooth = smoothStart }
+        if smooth < 0.001 { smooth = smoothStart; edited = true }
     }
 
     // MARK: Enhance (Real-ESRGAN from the photo's own pixels, faces kept as they are; destructive)
@@ -677,7 +703,7 @@ final class EditorModel: ObservableObject {
             carryShapes(to: found)
             faceCount = found.count
         }
-        info = "\(img.width)×\(img.height) · \(faceCount) face(s)"
+        photoDetails = "\(img.width)×\(img.height) · \(faceCount) face(s)"
         renderPreview()
     }
 
@@ -693,6 +719,7 @@ final class EditorModel: ObservableObject {
 
     func pushUndo(_ step: UndoStep) {
         history.push(step)
+        edited = true
         canUndo = history.canUndo
         canRedo = history.canRedo
     }
@@ -718,6 +745,7 @@ final class EditorModel: ObservableObject {
         guard busy == nil, working != nil, let step = history.pop() else { return }
         let back = await restore(step, label: "Undo")
         history.pushRedo(back)
+        edited = true
         canUndo = history.canUndo
         canRedo = history.canRedo
     }
@@ -727,6 +755,7 @@ final class EditorModel: ObservableObject {
         guard busy == nil, working != nil, let step = history.popRedo() else { return }
         let back = await restore(step, label: "Redo")
         history.pushUndo(back)
+        edited = true
         canUndo = history.canUndo
         canRedo = history.canRedo
     }
@@ -939,6 +968,7 @@ final class EditorModel: ObservableObject {
                 PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil)
             }
             info = "Saved to Photos"
+            edited = false
         } catch {
             self.error = error.localizedDescription
         }

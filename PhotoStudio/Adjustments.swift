@@ -229,11 +229,6 @@ enum AdjustTool: String, CaseIterable, Identifiable {
     }
 }
 
-extension Color {
-    /// Mioru's highlight colour, as on the Face tabs.
-    static let mioru = Color(red: 0.2, green: 0.85, blue: 0.95)
-}
-
 /// The Adjust controls: a row of tools with icons, and above it the picked tool's controls.
 /// `editing` brackets every change (true before, false after) so the photo editor can make each one an undo step.
 struct AdjustPanel<Accessory: View>: View {
@@ -247,14 +242,15 @@ struct AdjustPanel<Accessory: View>: View {
     @State private var confirmed = 0                                    // bumps on Done, for its tap you can feel
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 6) {
             header
             Group {
                 switch tool {
                 case .crop: cropControls
                 case .rotate: rotateControls
                 default:
-                    TwoWaySlider(value: valueBinding(tool.value!), editing: editing)
+                    ValueSlider(value: valueBinding(tool.value!), editing: editing)
+                        .accessibilityLabel(tool.rawValue)
                 }
             }
             .frame(height: 58)
@@ -271,82 +267,79 @@ struct AdjustPanel<Accessory: View>: View {
     // MARK: Parts
 
     private var header: some View {
-        HStack(spacing: 10) {
-            Text(tool.rawValue).font(.subheadline.weight(.semibold))
+        HStack(spacing: 8) {
+            Text(tool.rawValue).font(.panelTitle).foregroundStyle(Color.studioText)
             if let path = tool.value {
-                Text(TwoWaySlider.label(adjust[keyPath: path])).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                Text(ValueSlider.label(adjust[keyPath: path])).font(.panelValue).foregroundStyle(Color.studioSecondary)
+                    .contentTransition(.numericText())
             } else if tool == .rotate, abs(adjust.straighten) > 0.001 {
-                Text(Self.degrees(adjust.straighten)).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                Text(Self.degrees(adjust.straighten)).font(.panelValue).foregroundStyle(Color.studioSecondary)
             }
-            Button { change { $0 = tool.reset($0) } } label: {
-                Image(systemName: "arrow.counterclockwise").font(.footnote.bold())
-            }
-            .buttonStyle(.borderless)
-            .disabled(!tool.isChanged(adjust))
-            .accessibilityLabel("Reset \(tool.rawValue)")
+            ResetButton(label: "Reset \(tool.rawValue)") { change { $0 = tool.reset($0) } }
+                .disabled(!tool.isChanged(adjust))
             Spacer()
             if tool == .crop {
                 // Cancel puts the crop back as it was when Crop opened; Done keeps it. Both show the cropped photo.
                 Button { cancelCrop() } label: {
-                    Image(systemName: "xmark").font(.subheadline.bold()).frame(width: 34, height: 30)
-                        .background(Color.secondary.opacity(0.15), in: Capsule())
+                    Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.studioText)
+                        .frame(width: 34, height: 34)
+                        .background(Color.studioRaised, in: Circle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle(scale: 0.9))
                 .accessibilityLabel("Cancel crop")
                 Button { confirmCrop() } label: {
-                    Label("Done", systemImage: "checkmark").font(.subheadline.bold())
-                        .padding(.horizontal, 12).frame(height: 30)
-                        .foregroundStyle(.black)
-                        .background(Color.mioru, in: Capsule())
+                    Label("Done", systemImage: "checkmark").labelStyle(.titleOnly)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PillButtonStyle())
                 .accessibilityLabel("Done cropping")
             } else {
-                Button("Reset all") { change { $0 = Adjustments() } }
-                    .font(.caption.bold())
+                PanelTextButton(title: "Reset all") { change { $0 = Adjustments() } }
                     .disabled(adjust.isOff)
                 accessory()
             }
         }
-        .frame(height: 30)
+        .frame(height: 36)
     }
 
     private func confirmCrop() {
         confirmed += 1
-        withAnimation(.easeOut(duration: 0.2)) { tool = lastTool }
+        withAnimation(.mioruQuick) { tool = lastTool }
     }
 
     private func cancelCrop() {
         if let e = cropEntry { change { $0.crop = e.crop; $0.cropRect = e.rect } }
-        withAnimation(.easeOut(duration: 0.2)) { tool = lastTool }
+        withAnimation(.mioruQuick) { tool = lastTool }
     }
 
     private var toolRow: some View {
         HStack(spacing: 0) {
             ForEach(AdjustTool.allCases) { t in
+                let on = t == tool
                 Button {
-                    withAnimation(.easeOut(duration: 0.15)) { tool = t }
+                    withAnimation(.mioruQuick) { tool = t }
                 } label: {
-                    VStack(spacing: 4) {
+                    VStack(spacing: 5) {
                         Image(systemName: t.icon)
-                            .font(.system(size: 17, weight: .medium))
-                            .frame(width: 42, height: 42)
-                            .foregroundStyle(t == tool ? Color.black : Color.primary)
-                            .background(t == tool ? Color.mioru : Color.secondary.opacity(0.15), in: Circle())
+                            .font(.system(size: 16, weight: .medium))
+                            .frame(width: 40, height: 40)
+                            .foregroundStyle(on ? Color.white : Color.studioText)
+                            .background(on ? Color.mioru : Color.studioRaised, in: Circle())
                             .overlay(alignment: .topTrailing) {
-                                if t.isChanged(adjust) && t != tool {
-                                    Circle().fill(Color.mioru).frame(width: 7, height: 7).offset(x: -1, y: 1)
+                                if t.isChanged(adjust) && !on {
+                                    Circle().fill(Color.mioruOnDark).frame(width: 7, height: 7)
+                                        .overlay(Circle().stroke(Color.studioPanel, lineWidth: 1.5))
+                                        .offset(x: -1, y: 1)
                                 }
                             }
-                        Text(t.rawValue).font(.system(size: 10, weight: t == tool ? .semibold : .regular)).lineLimit(1).minimumScaleFactor(0.8)
-                            .foregroundStyle(t == tool ? Color.primary : Color.secondary)
+                        Text(t.rawValue).font(.system(size: 10, weight: on ? .semibold : .medium)).lineLimit(1).minimumScaleFactor(0.8)
+                            .foregroundStyle(on ? Color.studioText : Color.studioSecondary)
                     }
                     .frame(maxWidth: .infinity)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle(scale: 0.92))
                 .accessibilityLabel(t.rawValue + (t.isChanged(adjust) ? ", changed" : ""))
-                .accessibilityAddTraits(t == tool ? .isSelected : [])
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
         .sensoryFeedback(.selection, trigger: tool)
@@ -366,13 +359,13 @@ struct AdjustPanel<Accessory: View>: View {
                                     if r == .free { Image(systemName: "crop").font(.system(size: 19)) } else { RatioIcon(ratio: r.value) }
                                 }
                                 .frame(width: 26, height: 26)
-                                Text(r.rawValue).font(.caption2.weight(on ? .semibold : .regular)).lineLimit(1).fixedSize()
+                                Text(r.rawValue).font(.system(size: 11, weight: on ? .semibold : .medium)).lineLimit(1).fixedSize()
                             }
-                            .foregroundStyle(on ? Color.mioru : Color.primary)
+                            .foregroundStyle(on ? Color.mioruOnDark : Color.studioText.opacity(0.85))
                             .frame(minWidth: 50).padding(.vertical, 4)
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(PressableStyle(scale: 0.92))
                         .id(r)
                         .accessibilityAddTraits(on ? .isSelected : [])
                     }
@@ -396,7 +389,7 @@ struct AdjustPanel<Accessory: View>: View {
                     change { if $0.turns % 2 == 1 { $0.flipped.toggle() } else { $0.flippedV.toggle() } }
                 }
             }
-            TwoWaySlider(value: valueBinding(\.straighten), label: Self.degrees, editing: editing)
+            ValueSlider(value: valueBinding(\.straighten), label: Self.degrees, editing: editing)
                 .accessibilityLabel("Straighten")
         }
     }
@@ -404,12 +397,13 @@ struct AdjustPanel<Accessory: View>: View {
     private func squareButton(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color.studioText)
                 .frame(width: 38, height: 38)
-                .background(Color.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 9))
+                .background(Color.studioRaised, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle(scale: 0.9))
         .accessibilityLabel(label)
     }
 
@@ -458,78 +452,96 @@ private struct RatioIcon: View {
     }
 }
 
-/// A slider from -1 to 1 that starts in the middle: the fill runs from the centre mark to the knob, the value shows
-/// above the knob while it moves, and it catches at 0 with a tap you can feel. A drag moves the value by how far the
-/// finger goes, wherever it starts, so small changes are easy; a double tap puts it back to 0.
-struct TwoWaySlider: View {
+/// Mioru's slider, used by every tool. The fill runs from the slider's origin (the middle for two-way sliders, the
+/// left end otherwise) to the knob, and the value shows above the knob while it moves. A drag moves the value by how
+/// far the finger goes, wherever it starts, so small changes are easy. Two-way sliders catch at 0 with a tap you can
+/// feel; a double tap puts the slider back to `reset`.
+struct ValueSlider: View {
     @Binding var value: Float
-    var label: (Float) -> String = TwoWaySlider.label
+    var range: ClosedRange<Float> = -1...1
+    var reset: Float?
+    var label: ((Float) -> String)?
     var editing: (Bool) -> Void = { _ in }
     @State private var start: Float?   // the value when the finger came down
 
-    private let knob: CGFloat = 26
+    private let knob: CGFloat = 24
 
+    /// −100 to +100 for two-way sliders.
     static func label(_ v: Float) -> String {
         let n = Int((v * 100).rounded())
         return n > 0 ? "+\(n)" : n < 0 ? "−\(-n)" : "0"
+    }
+
+    private var twoWay: Bool { range.lowerBound < 0 && range.upperBound > 0 }
+    private var origin: Float { twoWay ? 0 : range.lowerBound }
+    private var span: Float { max(0.0001, range.upperBound - range.lowerBound) }
+
+    private func text(_ v: Float) -> String {
+        if let label { return label(v) }
+        if twoWay { return Self.label(v / max(abs(range.lowerBound), range.upperBound)) }
+        return "\(Int(((v - range.lowerBound) / span * 100).rounded()))"
     }
 
     var body: some View {
         GeometryReader { geo in
             let run = max(1, geo.size.width - knob)
             let mid = geo.size.height / 2
-            let centre = geo.size.width / 2
-            let x = knob / 2 + CGFloat((value + 1) / 2) * run
+            let fraction = { (v: Float) in CGFloat((v - range.lowerBound) / span) }
+            let x = knob / 2 + fraction(value) * run
+            let o = knob / 2 + fraction(origin) * run
             ZStack {
-                Capsule().fill(Color.secondary.opacity(0.25)).frame(height: 4)
-                Capsule().fill(Color.secondary.opacity(0.8)).frame(width: 2, height: 12).position(x: centre, y: mid)
-                Capsule().fill(Color.mioru).frame(width: abs(x - centre), height: 4).position(x: (x + centre) / 2, y: mid)
+                Capsule().fill(Color.white.opacity(0.16)).frame(height: 3)
+                if twoWay {
+                    Capsule().fill(Color.white.opacity(0.5)).frame(width: 2, height: 10).position(x: o, y: mid)
+                }
+                Capsule().fill(Color.mioru).frame(width: abs(x - o), height: 3).position(x: (x + o) / 2, y: mid)
                 Circle().fill(Color.white)
-                    .overlay(Circle().stroke(Color.black.opacity(0.08), lineWidth: 0.5))
-                    .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
-                    .frame(width: start == nil ? knob : knob + 4, height: start == nil ? knob : knob + 4)
+                    .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                    .frame(width: knob, height: knob)
+                    .scaleEffect(start == nil ? 1 : 1.15)
                     .position(x: x, y: mid)
                 if start != nil {
-                    Text(label(value))
-                        .font(.caption.bold().monospacedDigit())
-                        .foregroundStyle(.black)
+                    Text(text(value))
+                        .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Color.mioru, in: Capsule())
+                        .background(Color.mioru, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                         .fixedSize()
-                        .position(x: min(max(x, 24), geo.size.width - 24), y: mid - 30)
-                        .transition(.opacity)
+                        .position(x: min(max(x, 24), geo.size.width - 24), y: mid - 28)
+                        .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .bottom)))
                 }
             }
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { g in
                     if start == nil {
-                        withAnimation(.easeOut(duration: 0.12)) { start = value }
+                        withAnimation(.mioruQuick) { start = value }
                         editing(true)
                     }
-                    var v = (start ?? value) + Float(g.translation.width / run * 2)
-                    v = min(1, max(-1, v))
-                    if abs(v) < 0.03 { v = 0 }   // catches at the middle
+                    var v = (start ?? value) + Float(g.translation.width / run) * span
+                    v = min(range.upperBound, max(range.lowerBound, v))
+                    if twoWay, abs(v) < 0.03 * span / 2 { v = 0 }   // catches at the middle
                     if v != value { value = v }
                 }
                 .onEnded { _ in
-                    withAnimation(.easeOut(duration: 0.2)) { start = nil }
+                    withAnimation(.mioruQuick) { start = nil }
                     editing(false)
                 })
             .simultaneousGesture(TapGesture(count: 2).onEnded {
-                guard value != 0 else { return }
+                let to = reset ?? origin
+                guard value != to else { return }
                 editing(true)
-                withAnimation(.easeOut(duration: 0.15)) { value = 0 }
+                withAnimation(.mioruQuick) { value = to }
                 editing(false)
             })
         }
         .frame(height: 44)
-        .sensoryFeedback(trigger: value == 0) { _, atZero in atZero ? .impact(weight: .light) : nil }
+        .sensoryFeedback(trigger: twoWay && value == 0) { _, atZero in atZero ? .impact(weight: .light) : nil }
         .accessibilityElement()
-        .accessibilityValue(label(value))
+        .accessibilityValue(text(value))
         .accessibilityAdjustableAction { dir in
             editing(true)
-            value = min(1, max(-1, value + (dir == .increment ? 0.05 : -0.05)))
+            value = min(range.upperBound, max(range.lowerBound, value + (dir == .increment ? 0.05 : -0.05) * span / 2))
             editing(false)
         }
     }
