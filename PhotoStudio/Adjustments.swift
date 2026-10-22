@@ -242,6 +242,9 @@ struct AdjustPanel<Accessory: View>: View {
     var editing: (Bool) -> Void = { _ in }
     var freeCrop = true   // whether Free is offered (it needs the frame's handles, which only the photo editor has)
     @ViewBuilder var accessory: () -> Accessory
+    @State private var cropEntry: (crop: CropRatio, rect: CGRect?)?   // the crop when Crop was opened, for Cancel
+    @State private var lastTool: AdjustTool = .brightness              // where Done and Cancel go back to
+    @State private var confirmed = 0                                    // bumps on Done, for its tap you can feel
 
     var body: some View {
         VStack(spacing: 10) {
@@ -257,6 +260,12 @@ struct AdjustPanel<Accessory: View>: View {
             .frame(height: 58)
             toolRow
         }
+        .onAppear { if tool == .crop { cropEntry = (adjust.crop, adjust.cropRect) } }
+        .onChange(of: tool) { old, new in
+            if new == .crop { cropEntry = (adjust.crop, adjust.cropRect) }
+            if old != .crop { lastTool = old }
+        }
+        .sensoryFeedback(.success, trigger: confirmed)
     }
 
     // MARK: Parts
@@ -276,11 +285,40 @@ struct AdjustPanel<Accessory: View>: View {
             .disabled(!tool.isChanged(adjust))
             .accessibilityLabel("Reset \(tool.rawValue)")
             Spacer()
-            Button("Reset all") { change { $0 = Adjustments() } }
-                .font(.caption.bold())
-                .disabled(adjust.isOff)
-            accessory()
+            if tool == .crop {
+                // Cancel puts the crop back as it was when Crop opened; Done keeps it. Both show the cropped photo.
+                Button { cancelCrop() } label: {
+                    Image(systemName: "xmark").font(.subheadline.bold()).frame(width: 34, height: 30)
+                        .background(Color.secondary.opacity(0.15), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Cancel crop")
+                Button { confirmCrop() } label: {
+                    Label("Done", systemImage: "checkmark").font(.subheadline.bold())
+                        .padding(.horizontal, 12).frame(height: 30)
+                        .foregroundStyle(.black)
+                        .background(Color.kagami, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Done cropping")
+            } else {
+                Button("Reset all") { change { $0 = Adjustments() } }
+                    .font(.caption.bold())
+                    .disabled(adjust.isOff)
+                accessory()
+            }
         }
+        .frame(height: 30)
+    }
+
+    private func confirmCrop() {
+        confirmed += 1
+        withAnimation(.easeOut(duration: 0.2)) { tool = lastTool }
+    }
+
+    private func cancelCrop() {
+        if let e = cropEntry { change { $0.crop = e.crop; $0.cropRect = e.rect } }
+        withAnimation(.easeOut(duration: 0.2)) { tool = lastTool }
     }
 
     private var toolRow: some View {
