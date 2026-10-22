@@ -268,12 +268,12 @@ struct AdjustPanel<Accessory: View>: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text(tool.rawValue).font(.panelTitle).foregroundStyle(Color.studioText)
+            Text(tool.rawValue).font(.panelTitle).foregroundStyle(Color.ink)
             if let path = tool.value {
-                Text(ValueSlider.label(adjust[keyPath: path])).font(.panelValue).foregroundStyle(Color.studioSecondary)
+                Text(ValueSlider.label(adjust[keyPath: path])).font(.panelValue).foregroundStyle(Color.inkSecondary)
                     .contentTransition(.numericText())
             } else if tool == .rotate, abs(adjust.straighten) > 0.001 {
-                Text(Self.degrees(adjust.straighten)).font(.panelValue).foregroundStyle(Color.studioSecondary)
+                Text(Self.degrees(adjust.straighten)).font(.panelValue).foregroundStyle(Color.inkSecondary)
             }
             ResetButton(label: "Reset \(tool.rawValue)") { change { $0 = tool.reset($0) } }
                 .disabled(!tool.isChanged(adjust))
@@ -281,9 +281,9 @@ struct AdjustPanel<Accessory: View>: View {
             if tool == .crop {
                 // Cancel puts the crop back as it was when Crop opened; Done keeps it. Both show the cropped photo.
                 Button { cancelCrop() } label: {
-                    Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.studioText)
+                    Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.ink)
                         .frame(width: 34, height: 34)
-                        .background(Color.studioRaised, in: Circle())
+                        .background(Color.fill, in: Circle())
                 }
                 .buttonStyle(PressableStyle(scale: 0.9))
                 .accessibilityLabel("Cancel crop")
@@ -311,6 +311,7 @@ struct AdjustPanel<Accessory: View>: View {
         withAnimation(.quick) { tool = lastTool }
     }
 
+    /// The tools inside Adjust; the picked one is baby blue.
     private var toolRow: some View {
         HStack(spacing: 0) {
             ForEach(AdjustTool.allCases) { t in
@@ -322,17 +323,17 @@ struct AdjustPanel<Accessory: View>: View {
                         Image(systemName: t.icon)
                             .font(.system(size: 16, weight: .medium))
                             .frame(width: 40, height: 40)
-                            .foregroundStyle(on ? Color.white : Color.studioText)
-                            .background(on ? Color.rose : Color.studioRaised, in: Circle())
+                            .foregroundStyle(on ? Color.blueInk : Color.ink)
+                            .background(on ? Color.babyBlue : Color.fill, in: Circle())
                             .overlay(alignment: .topTrailing) {
                                 if t.isChanged(adjust) && !on {
-                                    Circle().fill(Color.roseOnDark).frame(width: 7, height: 7)
-                                        .overlay(Circle().stroke(Color.studioPanel, lineWidth: 1.5))
+                                    Circle().fill(Color.pinkInk).frame(width: 7, height: 7)
+                                        .overlay(Circle().stroke(Color.surface, lineWidth: 1.5))
                                         .offset(x: -1, y: 1)
                                 }
                             }
                         Text(t.rawValue).font(.ui(10, on ? .semibold : .medium)).lineLimit(1).minimumScaleFactor(0.8)
-                            .foregroundStyle(on ? Color.studioText : Color.studioSecondary)
+                            .foregroundStyle(on ? Color.ink : Color.inkSecondary)
                     }
                     .frame(maxWidth: .infinity)
                     .contentShape(Rectangle())
@@ -361,7 +362,7 @@ struct AdjustPanel<Accessory: View>: View {
                                 .frame(width: 26, height: 26)
                                 Text(r.rawValue).font(.ui(11, on ? .semibold : .medium)).lineLimit(1).fixedSize()
                             }
-                            .foregroundStyle(on ? Color.roseOnDark : Color.studioText.opacity(0.85))
+                            .foregroundStyle(on ? Color.blueInk : Color.inkSecondary)
                             .frame(minWidth: 50).padding(.vertical, 4)
                             .contentShape(Rectangle())
                         }
@@ -398,9 +399,9 @@ struct AdjustPanel<Accessory: View>: View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.studioText)
+                .foregroundStyle(Color.ink)
                 .frame(width: 38, height: 38)
-                .background(Color.studioRaised, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                .background(Color.fill, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
                 .contentShape(Rectangle())
         }
         .buttonStyle(PressableStyle(scale: 0.9))
@@ -490,22 +491,23 @@ struct ValueSlider: View {
             let x = knob / 2 + fraction(value) * run
             let o = knob / 2 + fraction(origin) * run
             ZStack {
-                Capsule().fill(Color.white.opacity(0.16)).frame(height: 3)
+                Capsule().fill(Color.track).frame(height: 4)
                 if twoWay {
-                    Capsule().fill(Color.white.opacity(0.5)).frame(width: 2, height: 10).position(x: o, y: mid)
+                    Capsule().fill(Color.inkTertiary).frame(width: 2, height: 10).position(x: o, y: mid)
                 }
-                Capsule().fill(Color.rose).frame(width: abs(x - o), height: 3).position(x: (x + o) / 2, y: mid)
+                Capsule().fill(Color.pink).frame(width: abs(x - o), height: 4).position(x: (x + o) / 2, y: mid)
                 Circle().fill(Color.white)
-                    .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                    .overlay(Circle().stroke(Color.shade.opacity(0.06), lineWidth: 0.5))
+                    .shadow(color: Color.shade.opacity(0.22), radius: 3, y: 1)
                     .frame(width: knob, height: knob)
                     .scaleEffect(start == nil ? 1 : 1.15)
                     .position(x: x, y: mid)
                 if start != nil {
                     Text(text(value))
                         .font(.ui(12, .semibold).monospacedDigit())
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.pinkInk)
                         .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Color.rose, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .background(Color.petal, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                         .fixedSize()
                         .position(x: min(max(x, 24), geo.size.width - 24), y: mid - 28)
                         .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .bottom)))

@@ -53,7 +53,6 @@ struct ContentView: View {
         }
         .animation(.gentle, value: model.hasImage)
         .animation(.gentle, value: movie?.id)
-        .preferredColorScheme(model.hasImage || movie != nil ? .dark : nil)
         // One picker for photos and videos (two pickers on one view mix up their selections).
         .photosPicker(isPresented: $picking, selection: $pickerItem, matching: pickerFilter)
         .onChange(of: pickerItem) { _, item in
@@ -120,10 +119,10 @@ struct ContentView: View {
                 .padding(.horizontal, Space.l)
                 .padding(.vertical, Space.m)
                 .frame(maxWidth: .infinity, minHeight: 184, alignment: .center)
-                .background(Color.studioPanel)
+                .background(Color.surface)
             toolBar
         }
-        .background(Color.studio.ignoresSafeArea())
+        .background(Color.surface.ignoresSafeArea())
         .dynamicTypeSize(...DynamicTypeSize.xLarge)   // the tool panel is dense; past this it would push the photo away
         .sensoryFeedback(.success, trigger: model.info) { _, new in new == "Saved to Photos" }
         .confirmationDialog("Close this photo?", isPresented: $confirmClose, titleVisibility: .visible) {
@@ -167,7 +166,7 @@ struct ContentView: View {
         GeometryReader { geo in
             ZStack {
                 ZStack {
-                    Color.studio
+                    Color.backdrop
                     if let img = comparing ? model.original : model.display {
                         ZStack {
                             Image(uiImage: img).resizable().scaledToFit()
@@ -209,9 +208,10 @@ struct ContentView: View {
                     if comparing {
                         Text("Original")
                             .font(.ui(12, .semibold)).tracking(0.4)
-                            .foregroundStyle(Color.studioText)
+                            .foregroundStyle(Color.ink)
                             .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            .background(Color.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            .floating()
                             .frame(maxHeight: .infinity, alignment: .top).padding(.top, 10)
                             .transition(.opacity)
                             .allowsHitTesting(false)
@@ -351,9 +351,10 @@ struct ContentView: View {
         HStack(alignment: .bottom) {
             Image(systemName: "square.split.2x1")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(Color.studioText)
+                .foregroundStyle(comparing ? Color.pinkInk : Color.ink)
                 .frame(width: 40, height: 40)
-                .background(comparing ? Color.rose : Color.black.opacity(0.4), in: Circle())
+                .background(comparing ? Color.petal : Color.surface.opacity(0.92), in: Circle())
+                .floating()
                 .contentShape(Circle())
                 .onLongPressGesture(minimumDuration: 0, maximumDistance: 60, pressing: { comparing = $0 }, perform: {})
                 .accessibilityLabel("Hold to compare with the original")
@@ -370,9 +371,10 @@ struct ContentView: View {
                         Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 11, weight: .semibold))
                     }
                     .font(.ui(13, .semibold))
-                    .foregroundStyle(Color.studioText)
+                    .foregroundStyle(Color.ink)
                     .padding(.horizontal, 12).frame(height: 32)
-                    .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                    .background(Color.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                    .floating()
                 }
                 .buttonStyle(PressableStyle())
                 .accessibilityLabel("Zoom \(String(format: "%.1f", zoom)) times. Fit the photo")
@@ -485,7 +487,7 @@ struct ContentView: View {
                 HStack(spacing: 0) {
                     ForEach(Array(Tool.groups.enumerated()), id: \.offset) { i, group in
                         if i > 0 {
-                            Rectangle().fill(Color.studioHairline).frame(width: 1, height: 28).padding(.horizontal, 4)
+                            Rectangle().fill(Color.hairline).frame(width: 1, height: 28).padding(.horizontal, 4)
                         }
                         ForEach(group) { t in toolButton(t).id(t) }
                     }
@@ -496,29 +498,32 @@ struct ContentView: View {
             .onAppear { proxy.scrollTo(model.tool, anchor: .center) }
         }
         .frame(height: 66)
-        .background(Color.studioPanel)
-        .overlay(alignment: .top) { Rectangle().fill(Color.studioHairline).frame(height: 1) }
+        .background(Color.surface)
+        .overlay(alignment: .top) { Rectangle().fill(Color.hairline).frame(height: 1) }
         .sensoryFeedback(.selection, trigger: model.tool)
     }
 
+    /// A tool in the bar: the picked one is dark pink on a petal pill.
     private func toolButton(_ t: Tool) -> some View {
         let on = t == model.tool
         let changed = toolChanged(t)
         return Button {
             withAnimation(.quick) { model.tool = t }
         } label: {
-            VStack(spacing: 5) {
+            VStack(spacing: 3) {
                 Image(systemName: t.icon)
-                    .font(.system(size: 20, weight: on ? .semibold : .regular))
+                    .font(.system(size: 19, weight: on ? .semibold : .regular))
                     .frame(height: 24)
                     .overlay(alignment: .topTrailing) {
                         if changed && !on {
-                            Circle().fill(Color.roseOnDark).frame(width: 6, height: 6).offset(x: 6, y: -2)
+                            Circle().fill(Color.pinkInk).frame(width: 6, height: 6).offset(x: 6, y: -2)
                         }
                     }
+                    .padding(.horizontal, 14).padding(.vertical, 3)
+                    .background(on ? Color.petal : .clear, in: Capsule())
                 Text(t.rawValue).font(.ui(11, on ? .semibold : .medium)).lineLimit(1).fixedSize()
             }
-            .foregroundStyle(on ? Color.roseOnDark : Color.studioSecondary)
+            .foregroundStyle(on ? Color.pinkInk : Color.inkSecondary)
             .frame(minWidth: 66, minHeight: 66)
             .contentShape(Rectangle())
         }
@@ -547,8 +552,8 @@ struct ContentView: View {
             case .enhance:
                 if model.enhanceOn {
                     HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.roseOnDark)
-                        Text("Enhanced").font(.panelTitle).foregroundStyle(Color.studioText)
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.pinkInk)
+                        Text("Enhanced").font(.panelTitle).foregroundStyle(Color.ink)
                         Spacer()
                         PanelTextButton(title: "Turn off") { Task { await model.runEnhance() } }
                             .disabled(model.busy != nil)
@@ -596,7 +601,7 @@ struct ContentView: View {
                     .disabled(model.busy != nil)
                 }
                 HStack(spacing: Space.s) {
-                    Text("Refine").font(.ui(13, .medium)).foregroundStyle(Color.studioSecondary)
+                    Text("Refine").font(.ui(13, .medium)).foregroundStyle(Color.inkSecondary)
                     ModeTabs(items: BlurMode.allCases, selection: $model.blurMode, title: { $0 == .view ? "Auto" : $0.rawValue })
                 }
                 .disabled(model.personMatte == nil)
@@ -628,7 +633,7 @@ struct ContentView: View {
                 subtabChips
                 if feature == .position {
                     HStack {
-                        Text("Drag the oval around the head").font(.ui(14, .medium)).foregroundStyle(Color.studioText)
+                        Text("Drag the oval around the head").font(.ui(14, .medium)).foregroundStyle(Color.ink)
                         Spacer()
                         ResetButton(label: "Reset Position") { model.resetPosition() }
                             .disabled(!model.positionMoved || model.busy != nil)
@@ -724,7 +729,7 @@ struct ContentView: View {
         }
     }
 
-    /// The main Face tabs, underlined in rose; a dot marks the ones with a slider moved on the selected face.
+    /// The main Face tabs, underlined in pink; a dot marks the ones with a slider moved on the selected face.
     private var areaTabs: some View {
         // Scrolls sideways, as eight names don't fit across a phone at full size.
         ScrollViewReader { proxy in
@@ -736,12 +741,12 @@ struct ContentView: View {
                             VStack(spacing: 6) {
                                 HStack(spacing: 4) {
                                     Text(a.rawValue).lineLimit(1).fixedSize()
-                                    if changed(a) { Circle().fill(Color.roseOnDark).frame(width: 4, height: 4) }
+                                    if changed(a) { Circle().fill(Color.pinkInk).frame(width: 4, height: 4) }
                                 }
                                 .font(.ui(14, on ? .semibold : .medium))
-                                .foregroundStyle(on ? Color.studioText : Color.studioSecondary)
-                                Capsule().frame(height: 2)
-                                    .foregroundStyle(on ? Color.rose : .clear)
+                                .foregroundStyle(on ? Color.ink : Color.inkSecondary)
+                                Capsule().frame(height: 2.5)
+                                    .foregroundStyle(on ? Color.pink : .clear)
                             }
                             .contentShape(Rectangle())
                         }
@@ -821,7 +826,7 @@ struct ContentView: View {
         HStack(spacing: Space.s) {
             Text(title)
                 .font(.ui(13, .medium))
-                .foregroundStyle(Color.studioText)
+                .foregroundStyle(Color.ink)
                 .lineLimit(1).minimumScaleFactor(0.8)
                 .frame(width: 92, alignment: .leading)
             ValueSlider(value: value, range: range, reset: reset, editing: { editing in

@@ -17,8 +17,8 @@ struct HomeView: View {
                 header
                 hero
                 HStack(spacing: Space.m) {
-                    tile(title: "Camera", subtitle: "Film with your look", icon: "camera", tint: .powder, ink: .powderInk, action: openCamera)
-                    tile(title: "Video", subtitle: "Smooth and reshape", icon: "play.rectangle", tint: .surface, ink: .roseInk, action: openVideo)
+                    tile(title: "Camera", subtitle: "Film with your look", icon: "camera", tint: .babyBlue, ink: .blueInk, action: openCamera)
+                    tile(title: "Video", subtitle: "Smooth and reshape", icon: "play.rectangle", tint: .petal, ink: .pinkInk, action: openVideo)
                 }
                 tools
                 privacy
@@ -29,19 +29,19 @@ struct HomeView: View {
             .frame(maxWidth: .infinity)
         }
         .scrollIndicators(.hidden)
-        .background(Color.canvasWarm.ignoresSafeArea())
+        .background(Color.surface.ignoresSafeArea())
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .overlay {
             DelayedPresence(value: busy) { text in
                 ZStack {
-                    Color.black.opacity(0.15).ignoresSafeArea()
+                    Color.shade.opacity(0.12).ignoresSafeArea()
                     HStack(spacing: 10) {
-                        ProgressView().tint(Color.roseInk)
+                        ProgressView().tint(Color.pinkInk)
                         Text(text).font(.ui(15, .medium)).foregroundStyle(Color.ink)
                     }
                     .padding(.horizontal, 20).padding(.vertical, 14)
                     .background(Color.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .shadow(color: .black.opacity(0.12), radius: 20, y: 8)
+                    .floating(0.14, radius: 20, y: 8)
                 }
                 .transition(.opacity)
             }
@@ -76,7 +76,7 @@ struct HomeView: View {
         .padding(.top, Space.s)
     }
 
-    /// The main way in: a large card that opens the photo picker.
+    /// The main way in: a large white card that opens the photo picker.
     private var hero: some View {
         Button { openPhoto(nil) } label: {
             ZStack(alignment: .topLeading) {
@@ -97,16 +97,19 @@ struct HomeView: View {
                         Image(systemName: "arrow.right").font(.ui(13, .semibold))
                     }
                     .font(.ui(15, .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.pinkInk)
                     .padding(.horizontal, 18).frame(height: 44)
-                    .background(Color.rose, in: Capsule())
+                    .background(Color.petal, in: Capsule())
                 }
                 .padding(22)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .frame(minHeight: 300)
-            .background(Color.blush)
+            .background(Color.surface)
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(Color.hairline))
+            .compositingGroup()
+            .shadow(color: Color.pink.opacity(0.22), radius: 22, y: 10)   // a soft pink glow under the white card
         }
         .buttonStyle(PressableStyle(scale: 0.98))
         .accessibilityLabel("Edit a photo")
@@ -120,7 +123,7 @@ struct HomeView: View {
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(ink)
                     .frame(width: 44, height: 44)
-                    .background(tint == .surface ? Color.blush : Color.surface.opacity(0.7), in: Circle())
+                    .background(Color.surface, in: Circle())
                 Spacer(minLength: 18)
                 Text(title).font(.ui(17, .semibold)).foregroundStyle(Color.ink)
                 Text(subtitle).font(.ui(13)).foregroundStyle(Color.inkSecondary).padding(.top, 2)
@@ -128,12 +131,12 @@ struct HomeView: View {
             .padding(16)
             .frame(maxWidth: .infinity, minHeight: 148, alignment: .leading)
             .background(tint, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).stroke(tint == .surface ? Color.hairline : .clear))
         }
         .buttonStyle(PressableStyle(scale: 0.97))
     }
 
-    /// Every photo tool, so they're easy to find: each opens the photo picker and then that tool.
+    /// Every photo tool, so they're easy to find: each opens the photo picker and then that tool. The beauty tools are
+    /// pink, the ones that fix or remove are blue.
     private var tools: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Start with a tool")
@@ -146,7 +149,7 @@ struct HomeView: View {
                         VStack(spacing: 7) {
                             Image(systemName: t.icon)
                                 .font(.system(size: 20, weight: .regular))
-                                .foregroundStyle(Color.roseInk)
+                                .foregroundStyle(Tool.groups[1].contains(t) ? Color.pinkInk : Color.blueInk)
                                 .frame(width: 56, height: 56)
                                 .background(Color.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.hairline))
@@ -165,8 +168,8 @@ struct HomeView: View {
 
     private var privacy: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "lock.fill").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.powderInk)
-                .frame(width: 26, height: 26).background(Color.powder, in: Circle())
+            Image(systemName: "lock.fill").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.blueInk)
+                .frame(width: 26, height: 26).background(Color.babyBlue, in: Circle())
             Text("Everything happens on this iPhone. Your photos are never uploaded.")
                 .font(.ui(13))
                 .foregroundStyle(Color.inkSecondary)
@@ -176,14 +179,14 @@ struct HomeView: View {
     }
 }
 
-/// "miyori" set in New York, with a small rose dot: the app's name wherever it appears.
+/// "miyori" set in New York, with a small pink dot: the app's name wherever it appears.
 struct Wordmark: View {
     var size: CGFloat = 30
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: size * 0.06) {
             Text("miyori").font(.display(size, weight: .medium)).tracking(-0.5).foregroundStyle(Color.ink)
-            Circle().fill(Color.rose).frame(width: size * 0.2, height: size * 0.2)
+            Circle().fill(Color.pink).frame(width: size * 0.2, height: size * 0.2)
         }
         .accessibilityElement()
         .accessibilityLabel("Miyori")
@@ -191,7 +194,7 @@ struct Wordmark: View {
     }
 }
 
-/// Miyori's motif: an arched mirror in powder blue standing on the bottom edge, with a rose sun rising behind it.
+/// Miyori's motif: an arched mirror in baby blue standing on the bottom edge, with a pink sun rising behind it.
 /// `width` and `height` are the arch's share of the space; it sits `inset` (a share of the width) from the right.
 struct ArchArt: View {
     var width: CGFloat = 0.42
@@ -206,8 +209,8 @@ struct ArchArt: View {
             // The sun, behind the arch's shoulder.
             let sun = archW * 0.42
             ctx.fill(Path(ellipseIn: CGRect(x: arch.minX - sun * 0.45, y: arch.minY + archW * 0.12, width: sun, height: sun)),
-                     with: .color(.rose.opacity(0.9)))
-            ctx.fill(archPath(arch), with: .color(.powder))
+                     with: .color(.pink))
+            ctx.fill(archPath(arch), with: .color(.babyBlue))
             // A thin inner line, like a mirror's bevel.
             ctx.stroke(archPath(arch.insetBy(dx: archW * 0.09, dy: archW * 0.09)), with: .color(.white.opacity(0.75)), lineWidth: 1.2)
             // Two small sparkles.
@@ -255,7 +258,7 @@ struct WelcomeView: View {
                 ArchArt()
                     .frame(height: 210)
                     .frame(maxWidth: .infinity)
-                    .background(Color.blush)
+                    .background(Color.petal)
                     .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                     .padding(.top, Space.l)
                 Text("Welcome to Miyori")
@@ -267,7 +270,7 @@ struct WelcomeView: View {
                     .foregroundStyle(Color.inkSecondary)
                     .padding(.top, 6)
                 VStack(alignment: .leading, spacing: 20) {
-                    point("lock", "Private by design", "Every edit happens on this iPhone. Nothing is uploaded.")
+                    point("lock", "Private by design", "Every edit happens on this iPhone. Nothing is uploaded.", blue: true)
                     point("wand.and.stars", "Studio retouching", "Enhance, smooth skin, reshape features and remove what doesn't belong.")
                     point("heart", "Free and open source", "No subscription, no watermark, no account.")
                 }
@@ -282,20 +285,20 @@ struct WelcomeView: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .padding(.horizontal, 24)
                 .padding(.vertical, Space.s)
-                .background(Color.canvasWarm)
+                .background(Color.surface)
         }
-        .background(Color.canvasWarm.ignoresSafeArea())
+        .background(Color.surface.ignoresSafeArea())
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .presentationCornerRadius(28)
     }
 
-    private func point(_ icon: String, _ title: String, _ text: String) -> some View {
+    private func point(_ icon: String, _ title: String, _ text: String, blue: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(Color.blushInk)
+                .foregroundStyle(blue ? Color.blueInk : Color.pinkInk)
                 .frame(width: 40, height: 40)
-                .background(Color.blush, in: Circle())
+                .background(blue ? Color.babyBlue : Color.petal, in: Circle())
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.ui(16, .semibold)).foregroundStyle(Color.ink)
                 Text(text).font(.ui(14)).foregroundStyle(Color.inkSecondary).fixedSize(horizontal: false, vertical: true)
@@ -336,7 +339,8 @@ struct AboutView: View {
                 }
                 group("Privacy") {
                     row(icon: "lock", title: "On this iPhone only",
-                        text: "Miyori has no servers and no network code. Photos and videos are only read when you pick them, and saved copies go straight to Photos.")
+                        text: "Miyori has no servers and no network code. Photos and videos are only read when you pick them, and saved copies go straight to Photos.",
+                        blue: true)
                 }
                 group("Open source") {
                     Link(destination: URL(string: "https://github.com/zuxu4n/Kagami-Photo-Studio")!) {
@@ -352,7 +356,7 @@ struct AboutView: View {
                     row(icon: "face.smiling", title: "MediaPipe Face Mesh", text: "Face · Apache-2.0")
                 }
                 Button(action: showWelcome) {
-                    Text("Show the welcome again").font(.ui(15, .semibold)).foregroundStyle(Color.roseInk)
+                    Text("Show the welcome again").font(.ui(15, .semibold)).foregroundStyle(Color.pinkInk)
                         .frame(maxWidth: .infinity, minHeight: 48)
                 }
                 .buttonStyle(PressableStyle())
@@ -360,7 +364,7 @@ struct AboutView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, Space.l)
         }
-        .background(Color.canvasWarm.ignoresSafeArea())
+        .background(Color.surface.ignoresSafeArea())
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
     }
 
@@ -376,10 +380,10 @@ struct AboutView: View {
         }
     }
 
-    private func row(icon: String, title: String, text: String, trailing: String? = nil) -> some View {
+    private func row(icon: String, title: String, text: String, trailing: String? = nil, blue: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon).font(.system(size: 14, weight: .medium)).foregroundStyle(Color.blushInk)
-                .frame(width: 32, height: 32).background(Color.blush, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            Image(systemName: icon).font(.system(size: 14, weight: .medium)).foregroundStyle(blue ? Color.blueInk : Color.pinkInk)
+                .frame(width: 32, height: 32).background(blue ? Color.babyBlue : Color.petal, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.ui(15, .semibold)).foregroundStyle(Color.ink)
                 Text(text).font(.ui(13)).foregroundStyle(Color.inkSecondary).multilineTextAlignment(.leading)

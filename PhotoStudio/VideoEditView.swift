@@ -48,15 +48,15 @@ struct VideoEditView: View {
                 .overlay(alignment: .bottomLeading) { playButton.padding(Space.m) }
             controls
         }
-        .background(Color.studio.ignoresSafeArea())
+        .background(Color.surface.ignoresSafeArea())
         .overlay {
             if let saving {
                 ZStack {
-                    Color.black.opacity(0.4).ignoresSafeArea()
+                    Color.shade.opacity(0.18).ignoresSafeArea()
                     VStack(spacing: 14) {
                         ZStack {
-                            Circle().stroke(Color.white.opacity(0.15), lineWidth: 4)
-                            Circle().trim(from: 0, to: saving).stroke(Color.rose, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                            Circle().stroke(Color.track, lineWidth: 4)
+                            Circle().trim(from: 0, to: saving).stroke(Color.pink, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                                 .rotationEffect(.degrees(-90))
                                 .animation(.linear(duration: 0.2), value: saving)
                             Text("\(Int(saving * 100))%").font(.ui(14, .semibold).monospacedDigit())
@@ -64,9 +64,10 @@ struct VideoEditView: View {
                         .frame(width: 64, height: 64)
                         Text("Saving video").font(.ui(15, .medium))
                     }
-                    .foregroundStyle(Color.studioText)
+                    .foregroundStyle(Color.ink)
                     .padding(.horizontal, 32).padding(.vertical, 24)
-                    .background(Color.studioPanel, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .background(Color.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .floating(0.14, radius: 20, y: 8)
                 }
                 .transition(.opacity)
             }
@@ -83,7 +84,6 @@ struct VideoEditView: View {
         }
         .animation(.gentle, value: message)
         .animation(.quick, value: saving != nil)
-        .environment(\.colorScheme, .dark)
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .sensoryFeedback(.success, trigger: message) { _, new in new == "Saved to Photos" }
         .task { await load() }
@@ -108,7 +108,7 @@ struct VideoEditView: View {
             StudioIconButton(icon: "xmark", label: "Close video") { close() }
                 .disabled(saving != nil)
             Spacer()
-            Text("Hold the video to compare").font(.ui(13, .medium)).foregroundStyle(Color.studioSecondary)
+            Text("Hold the video to compare").font(.ui(13, .medium)).foregroundStyle(Color.inkSecondary)
             Spacer()
             Button("Save") { Task { await save() } }
                 .buttonStyle(PillButtonStyle())
@@ -123,9 +123,10 @@ struct VideoEditView: View {
         Button { togglePlay() } label: {
             Image(systemName: playing ? "pause.fill" : "play.fill")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.studioText)
+                .foregroundStyle(Color.ink)
                 .frame(width: 40, height: 40)
-                .background(Color.black.opacity(0.45), in: Circle())
+                .background(Color.surface.opacity(0.92), in: Circle())
+                .floating()
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(PressableStyle(scale: 0.9))
@@ -147,7 +148,7 @@ struct VideoEditView: View {
         .padding(.top, Space.m)
         .padding(.bottom, Space.s)
         .frame(height: 236, alignment: .top)
-        .background(Color.studioPanel.ignoresSafeArea(edges: .bottom))
+        .background(Color.surface.ignoresSafeArea(edges: .bottom))
     }
 
     private func load() async {
@@ -230,7 +231,7 @@ struct VideoEditView: View {
     }
 }
 
-/// Shows an AVPlayer's video fitted to the screen.
+/// Shows an AVPlayer's video fitted to the screen, on the soft grey backdrop.
 struct PlayerLayerView: UIViewRepresentable {
     let player: AVPlayer
 
@@ -241,7 +242,7 @@ struct PlayerLayerView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> LayerView {
         let v = LayerView()
-        v.backgroundColor = UIColor(hex: 0x0D0D0E)
+        v.backgroundColor = UIColor(Color.backdrop)
         v.playerLayer.player = player
         v.playerLayer.videoGravity = .resizeAspect
         return v

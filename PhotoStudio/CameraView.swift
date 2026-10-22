@@ -11,7 +11,7 @@ struct CameraView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            (camera.denied ? Color.surface : Color.black).ignoresSafeArea()
             if camera.denied {
                 CameraAccessView { dismiss() }
             } else {
@@ -37,7 +37,6 @@ struct CameraView: View {
             }
         }
         .animation(.gentle, value: camera.message)
-        .environment(\.colorScheme, .dark)
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .statusBarHidden()
         .sensoryFeedback(.impact(weight: .medium), trigger: camera.recording)
@@ -54,7 +53,7 @@ struct CameraView: View {
             Group {
                 if camera.recording {
                     HStack(spacing: 6) {
-                        Circle().fill(Color.roseOnDark).frame(width: 7, height: 7)
+                        Circle().fill(Color.pinkInk).frame(width: 7, height: 7)
                         Text(String(format: "%d:%02d", camera.seconds / 60, camera.seconds % 60)).monospacedDigit()
                     }
                     .font(.ui(14, .semibold))
@@ -63,9 +62,10 @@ struct CameraView: View {
                         .font(.ui(13, .medium))
                 }
             }
-            .foregroundStyle(Color.studioText)
+            .foregroundStyle(Color.ink)
             .padding(.horizontal, 12).frame(height: 30)
-            .background(Color.black.opacity(0.35), in: Capsule())
+            .background(Color.surface.opacity(0.92), in: Capsule())
+            .floating()
             .animation(.quick, value: camera.recording)
             Spacer()
             StudioIconButton(icon: "arrow.triangle.2.circlepath", label: "Switch camera", onPhoto: true) { camera.switchCamera() }
@@ -75,14 +75,21 @@ struct CameraView: View {
         .padding(.top, Space.xs)
     }
 
+    /// The effects on a white card over the picture, and the record button below it.
     private var controls: some View {
         VStack(spacing: 14) {
             LookControls(look: $look, control: $control)
+                .padding(.vertical, Space.m)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))   // the chips scroll under its corners
+                .background {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.surface)
+                        .shadow(color: Color.shade.opacity(0.16), radius: 16, y: 4)
+                }
+                .padding(.horizontal, Space.m)
             recordButton
         }
         .padding(.top, Space.l)
         .padding(.bottom, Space.s)
-        .background(LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
     }
 
     private var recordButton: some View {
@@ -91,8 +98,9 @@ struct CameraView: View {
         } label: {
             ZStack {
                 Circle().stroke(.white, lineWidth: 4).frame(width: 76, height: 76)
+                    .shadow(color: Color.shade.opacity(0.25), radius: 4, y: 1)
                 RoundedRectangle(cornerRadius: camera.recording ? 7 : 31, style: .continuous)
-                    .fill(Color.rose)
+                    .fill(Color.pink)
                     .frame(width: camera.recording ? 30 : 62, height: camera.recording ? 30 : 62)
             }
             .animation(.quick, value: camera.recording)
@@ -122,7 +130,7 @@ struct LookControls: View {
                 ValueSlider(value: Binding(get: { control.get(look) }, set: { control.set(&look, $0) }), range: control.range)
                     .accessibilityLabel(control.name)
                 Text(control.range.lowerBound < 0 ? ValueSlider.label(control.get(look)) : "\(Int((control.get(look) * 100).rounded()))")
-                    .font(.ui(13, .medium).monospacedDigit()).foregroundStyle(Color.studioText)
+                    .font(.ui(13, .medium).monospacedDigit()).foregroundStyle(Color.ink)
                     .frame(width: 38, alignment: .trailing)
                 ResetButton(label: "Reset \(control.name)") { withAnimation(.quick) { control.set(&look, 0) } }
                     .disabled(abs(control.get(look)) < 0.001)
@@ -147,16 +155,16 @@ struct CameraAccessView: View {
             Spacer()
             Image(systemName: "camera")
                 .font(.system(size: 26, weight: .medium))
-                .foregroundStyle(Color.roseOnDark)
+                .foregroundStyle(Color.pinkInk)
                 .frame(width: 72, height: 72)
-                .background(Color.studioRaised, in: Circle())
+                .background(Color.petal, in: Circle())
             Text("Allow the camera")
                 .font(.display(.title))
-                .foregroundStyle(Color.studioText)
+                .foregroundStyle(Color.ink)
                 .padding(.top, 20)
             Text("Miyori films with your look applied live. Everything stays on this iPhone.")
                 .font(.ui(15))
-                .foregroundStyle(Color.studioSecondary)
+                .foregroundStyle(Color.inkSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.top, 8)
                 .padding(.horizontal, 40)

@@ -3,39 +3,40 @@ import UIKit
 
 // MARK: Colour
 
-/// Miyori's colour tokens. Brand screens (home, welcome, About) are warm and light, with dark versions; the editing
-/// screens (photo editor, camera, video) are always a dark neutral, so nothing tints the way a photo's colours look.
+/// Miyori's colour tokens: one light look, the same with the phone in light or dark mode (the app always asks for
+/// light). Mostly white, with a sweet pink as the main colour and baby blue as the second. The light pink and blue
+/// are for fills and marks; pink or blue text, and text on them, uses the darker inks so it stays readable. The photo
+/// and video sit on a neutral grey, so nothing tints the way their colours look.
 extension Color {
-    // Brand
-    /// The rose accent for fills: buttons, the picked tool, slider fills. White text on it passes AA (5.1:1), in
-    /// light and dark alike.
-    static let rose = Color(hex: 0xC43871)
-    static let rosePressed = Color(hex: 0xA92D5F)
-    /// Rose for text and icons on brand screens (a lighter rose in dark mode, 5.4:1 on its background).
-    static let roseInk = Color(light: 0xC43871, dark: 0xEC74A3)
-    /// Rose for text and icons on the dark editing screens (5.7:1 on their panels).
-    static let roseOnDark = Color(hex: 0xEC74A3)
-    static let blush = Color(light: 0xF8DDE8, dark: 0x3A2430)
-    static let powder = Color(light: 0xDDEFFA, dark: 0x1E2F3A)
-    static let powderInk = Color(light: 0x2F6E93, dark: 0x9BCDEB)   // text and icons on powder
-    static let blushInk = Color(light: 0xA92D5F, dark: 0xF2A2C1)    // text and icons on blush
+    // Pink, the main colour
+    /// Fills and marks with no text on them: slider fills, the record button, the tab underline, the wordmark's dot.
+    static let pink = Color(hex: 0xFF85B2)
+    /// The same pink, dark enough to read: pink text and icons, and text on petal (4.6:1 on petal, 5.5:1 on white).
+    static let pinkInk = Color(hex: 0xCB1A5C)
+    /// Pale petal pink for soft backgrounds: buttons, the picked tool, the welcome art.
+    static let petal = Color(hex: 0xFFE4EE)
+    static let petalPressed = Color(hex: 0xFFD2E3)
 
-    // Brand screens
-    static let canvasWarm = Color(light: 0xFFFAFC, dark: 0x151215)
-    static let surface = Color(light: 0xFFFFFF, dark: 0x1F1B1F)
-    static let ink = Color(light: 0x29232C, dark: 0xF6F1F4)
-    static let inkSecondary = Color(light: 0x746D78, dark: 0xADA5B0)
-    static let inkTertiary = Color(light: 0xA39CA7, dark: 0x7A7280)  // decorative or disabled only, not body text
-    static let hairline = Color(light: 0xEFE4EA, dark: 0x2E282E)
+    // Baby blue, the second colour
+    /// The picked chip or mode, the Camera tile, the arch.
+    static let babyBlue = Color(hex: 0xC4E6FF)
+    /// A deeper sky blue where the blue needs more presence: outlines and marks on white.
+    static let sky = Color(hex: 0x80C4F0)
+    /// Blue text and icons, and text on baby blue (5.0:1 on baby blue, 6.5:1 on white).
+    static let blueInk = Color(hex: 0x1F6198)
 
-    // Editing screens (always dark and neutral)
-    static let studio = Color(hex: 0x0D0D0E)          // behind the photo
-    static let studioPanel = Color(hex: 0x161617)     // the tool panel and tool bar
-    static let studioRaised = Color(hex: 0x242426)    // controls on the panel
-    static let studioText = Color(hex: 0xF4F2F3)
-    static let studioSecondary = Color(hex: 0x9F9CA2) // 6.3:1 on the panel
-    static let studioHairline = Color.white.opacity(0.08)
-    static let scrim = Color.black.opacity(0.55)
+    // Neutrals
+    static let surface = Color.white                  // backgrounds, panels, bars and cards
+    static let fill = Color(hex: 0xF4F2F5)            // unpicked chips and small buttons on white
+    static let track = Color(hex: 0xE6E2E8)           // slider tracks
+    static let ink = Color(hex: 0x29232C)
+    static let inkSecondary = Color(hex: 0x655E6B)    // 6.2:1 on white, 5.2:1 on petal, 4.8:1 on baby blue
+    static let inkTertiary = Color(hex: 0xA39CA7)     // decorative or disabled only, not body text
+    static let hairline = Color(hex: 0xEEE8EC)
+    /// The soft grey behind the photo and the video.
+    static let backdrop = Color(hex: 0xEEEEF0)
+    /// For soft shadows under white things that float (with an opacity).
+    static let shade = Color(hex: 0x29232C)
 
     /// The face guides and the Position oval: cyan, so they read on any skin tone.
     static let faceGuide = Color(red: 0.2, green: 0.85, blue: 0.95)
@@ -43,10 +44,6 @@ extension Color {
     init(hex: UInt32, opacity: Double = 1) {
         self.init(.sRGB, red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255,
                   blue: Double(hex & 0xFF) / 255, opacity: opacity)
-    }
-
-    init(light: UInt32, dark: UInt32) {
-        self.init(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: dark) : UIColor(hex: light) })
     }
 }
 
@@ -104,6 +101,14 @@ extension Animation {
     static let gentle = Animation.smooth(duration: 0.35)
 }
 
+extension View {
+    /// A soft shadow under something white that floats over the photo, the camera or the page. The view is composited
+    /// first, so the text and icons on it don't cast shadows of their own.
+    func floating(_ opacity: Double = 0.18, radius: CGFloat = 6, y: CGFloat = 2) -> some View {
+        compositingGroup().shadow(color: Color.shade.opacity(opacity), radius: radius, y: y)
+    }
+}
+
 // MARK: Buttons
 
 /// Shrinks a little and dims while pressed: the feel every tappable thing in Miyori shares.
@@ -117,7 +122,8 @@ struct PressableStyle: ButtonStyle {
     }
 }
 
-/// The rose call to action (Get started, Save).
+/// The call to action (Get started, Enhance photo): dark pink text on petal, which reads where white text on the light
+/// pink would be too faint.
 struct PrimaryButtonStyle: ButtonStyle {
     var height: CGFloat = 52
     @Environment(\.isEnabled) private var enabled
@@ -125,9 +131,9 @@ struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.ui(16, .semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.pinkInk)
             .frame(maxWidth: .infinity, minHeight: height)
-            .background(configuration.isPressed ? Color.rosePressed : Color.rose,
+            .background(configuration.isPressed ? Color.petalPressed : Color.petal,
                         in: RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
             .opacity(enabled ? 1 : 0.4)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
@@ -135,24 +141,24 @@ struct PrimaryButtonStyle: ButtonStyle {
     }
 }
 
-/// A small rose button for the editing screens' top bars (Save, Done).
+/// A small petal button for the editing screens' top bars (Save, Done).
 struct PillButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.ui(15, .semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.pinkInk)
             .padding(.horizontal, 16)
             .frame(height: 34)
-            .background(configuration.isPressed ? Color.rosePressed : Color.rose, in: Capsule())
+            .background(configuration.isPressed ? Color.petalPressed : Color.petal, in: Capsule())
             .opacity(enabled ? 1 : 0.35)
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .animation(.quick, value: configuration.isPressed)
     }
 }
 
-/// A round icon button on the editing screens: plain on the panel, or on a dark disc over a photo or the camera.
+/// A round icon button on the editing screens: plain on a bar, or on a white disc over a photo or the camera.
 struct StudioIconButton: View {
     let icon: String
     let label: String
@@ -165,9 +171,10 @@ struct StudioIconButton: View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(Color.studioText)
+                .foregroundStyle(Color.ink)
                 .frame(width: 40, height: 40)
-                .background(onPhoto ? Color.black.opacity(0.35) : Color.clear, in: Circle())
+                .background(onPhoto ? Color.surface.opacity(0.92) : Color.clear, in: Circle())
+                .floating(onPhoto ? 0.18 : 0)
                 .opacity(enabled ? 1 : 0.3)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
@@ -179,7 +186,7 @@ struct StudioIconButton: View {
 
 // MARK: Panel parts
 
-/// Text tabs with a sliding highlight, for a tool's modes (Heal's Spot / People / Brush / Erase and the like).
+/// Text tabs with a sliding baby-blue highlight, for a tool's modes (Heal's Spot / People / Brush / Erase and the like).
 struct ModeTabs<Value: Hashable>: View {
     let items: [Value]
     @Binding var selection: Value
@@ -196,11 +203,11 @@ struct ModeTabs<Value: Hashable>: View {
                     Text(title(item))
                         .font(.ui(13, on ? .semibold : .medium))
                         .lineLimit(1).minimumScaleFactor(0.8)
-                        .foregroundStyle(on ? Color.studioText : Color.studioSecondary)
+                        .foregroundStyle(on ? Color.blueInk : Color.inkSecondary)
                         .frame(maxWidth: .infinity, minHeight: 32)
                         .background {
                             if on {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.14))
+                                RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.babyBlue)
                                     .matchedGeometryEffect(id: "tab", in: ns)
                             }
                         }
@@ -211,7 +218,7 @@ struct ModeTabs<Value: Hashable>: View {
             }
         }
         .padding(2)
-        .background(Color.studioRaised, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+        .background(Color.fill, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
         .sensoryFeedback(.selection, trigger: selection)
     }
 }
@@ -222,7 +229,7 @@ extension ModeTabs where Value: RawRepresentable, Value.RawValue == String {
     }
 }
 
-/// A small text chip (the Face subtabs, the camera's effects). The picked one is filled rose; `dot` marks a change.
+/// A small text chip (the Face subtabs, the camera's effects). The picked one is baby blue; `dot` marks a change.
 struct Chip: View {
     let title: String
     let on: Bool
@@ -233,13 +240,13 @@ struct Chip: View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Text(title).lineLimit(1).fixedSize()
-                if dot { Circle().fill(on ? Color.white : Color.roseOnDark).frame(width: 5, height: 5) }
+                if dot { Circle().fill(on ? Color.blueInk : Color.pinkInk).frame(width: 5, height: 5) }
             }
             .font(.chip)
-            .foregroundStyle(on ? Color.white : Color.studioText.opacity(0.85))
+            .foregroundStyle(on ? Color.blueInk : Color.ink)
             .padding(.horizontal, 12)
             .frame(height: 32)
-            .background(on ? Color.rose : Color.studioRaised, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+            .background(on ? Color.babyBlue : Color.fill, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(PressableStyle())
@@ -248,7 +255,7 @@ struct Chip: View {
     }
 }
 
-/// A small text button on the panel (Reset all, Clear, Add shadow).
+/// A small text button on the panel (Reset all, Clear, Add shadow); the prominent one (Remove) is petal.
 struct PanelTextButton: View {
     let title: String
     var icon: String?
@@ -263,10 +270,10 @@ struct PanelTextButton: View {
                 Text(title)
             }
             .font(.ui(13, .semibold))
-            .foregroundStyle(prominent ? Color.white : Color.studioText)
+            .foregroundStyle(prominent ? Color.pinkInk : Color.ink)
             .padding(.horizontal, 12)
             .frame(height: 32)
-            .background(prominent ? Color.rose : Color.studioRaised, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+            .background(prominent ? Color.petal : Color.fill, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
             .opacity(enabled ? 1 : 0.35)
         }
         .buttonStyle(PressableStyle())
@@ -283,7 +290,7 @@ struct ResetButton: View {
         Button(action: action) {
             Image(systemName: "arrow.counterclockwise")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.studioSecondary)
+                .foregroundStyle(Color.inkSecondary)
                 .opacity(enabled ? 1 : 0.35)
                 .frame(width: 36, height: 32)
                 .contentShape(Rectangle())
@@ -301,7 +308,7 @@ struct HintText: View {
     var body: some View {
         Text(text)
             .font(.hint)
-            .foregroundStyle(Color.studioSecondary)
+            .foregroundStyle(Color.inkSecondary)
             .lineLimit(2)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -318,15 +325,15 @@ struct Toast: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            if let icon { Image(systemName: icon).foregroundStyle(Color.roseOnDark) }
+            if let icon { Image(systemName: icon).foregroundStyle(Color.pinkInk) }
             Text(text).lineLimit(2).multilineTextAlignment(.leading)
         }
         .font(.ui(14, .medium))
-        .foregroundStyle(Color.studioText)
+        .foregroundStyle(Color.ink)
         .padding(.horizontal, 16).padding(.vertical, 10)
-        .background(Color.studioPanel.opacity(0.92), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.studioHairline))
-        .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
+        .background(Color.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.hairline))
+        .floating(0.14, radius: 14, y: 4)
         .padding(.horizontal, 24)
         .transition(.move(edge: .top).combined(with: .opacity))
     }
@@ -392,13 +399,13 @@ struct BusyBadge: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            ProgressView().tint(Color.studioText).controlSize(.small)
-            Text(text).font(.ui(14, .medium)).foregroundStyle(Color.studioText)
+            ProgressView().tint(Color.pinkInk).controlSize(.small)
+            Text(text).font(.ui(14, .medium)).foregroundStyle(Color.ink)
         }
         .padding(.horizontal, 16).padding(.vertical, 11)
-        .background(Color.studioPanel.opacity(0.92), in: Capsule())
-        .overlay(Capsule().stroke(Color.studioHairline))
-        .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
+        .background(Color.surface, in: Capsule())
+        .overlay(Capsule().stroke(Color.hairline))
+        .floating(0.14, radius: 14, y: 4)
         .transition(.scale(scale: 0.9).combined(with: .opacity))
     }
 }
