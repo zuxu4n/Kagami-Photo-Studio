@@ -119,7 +119,7 @@ struct VideoEditView: View {
             }
             .padding(.horizontal, 16)
             if panel == "Adjust" {
-                AdjustPanel(adjust: $adjust, tool: $adjustTool)
+                AdjustPanel(adjust: $adjust, tool: $adjustTool, freeCrop: false)
                     .environment(\.colorScheme, .dark)
                     .padding(.horizontal, 16)
             } else {

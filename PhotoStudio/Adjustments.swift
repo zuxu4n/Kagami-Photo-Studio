@@ -5,13 +5,13 @@ import SwiftUI
 
 /// The shape a photo or video is cropped to.
 enum CropRatio: String, CaseIterable, Identifiable {
-    case original = "Original", square = "1:1", fourFive = "4:5", threeFour = "3:4", twoThree = "2:3", story = "9:16", fourThree = "4:3", threeTwo = "3:2", wide = "16:9"
+    case original = "Original", free = "Free", square = "1:1", fourFive = "4:5", threeFour = "3:4", twoThree = "2:3", story = "9:16", fourThree = "4:3", threeTwo = "3:2", wide = "16:9"
     var id: String { rawValue }
 
     /// Width over height, nil for the photo's own shape.
     var value: CGFloat? {
         switch self {
-        case .original: return nil
+        case .original, .free: return nil
         case .square: return 1
         case .fourFive: return 4.0 / 5
         case .threeFour: return 3.0 / 4
@@ -31,8 +31,8 @@ struct Adjustments: Equatable {
     var saturation: Float = 0   // -1...1
     var warmth: Float = 0       // -1...1, cooler or warmer
     var crop: CropRatio = .original
-    var cropX: CGFloat = 0      // -1...1, where the crop sits in the room it has across (0 = centred)
-    var cropY: CGFloat = 0      // -1...1, and down
+    var cropRect: CGRect?       // the crop as a fraction of the turned and straightened picture (top-left origin);
+                                // nil = as large as the shape allows, centred (Free: the whole picture)
     var turns = 0               // quarter turns clockwise, 0...3
     var flipped = false         // mirrored left to right (before the turn)
     var flippedV = false        // upside down (before the turn)
@@ -47,19 +47,62 @@ struct Adjustments: Equatable {
 
     /// The size an image of `size` comes out at after the turn and crop (straightening keeps the size).
     func outputSize(for size: CGSize) -> CGSize {
-        var s = turns % 2 == 1 ? CGSize(width: size.height, height: size.width) : size
-        if let r = crop.value {
-            s = s.width / s.height > r ? CGSize(width: (s.height * r).rounded(), height: s.height) : CGSize(width: s.width, height: (s.width / r).rounded())
-        }
-        return s
+        let s = turns % 2 == 1 ? CGSize(width: size.height, height: size.width) : size
+        guard crop != .original else { return s }
+        let f = cropFrame(for: s)
+        return CGSize(width: max(1, (s.width * f.width).rounded()), height: max(1, (s.height * f.height).rounded()))
+    }
+
+    /// The largest box of the picked shape in a picture of `size`, centred, as a fraction of it.
+    static func fullFrame(_ crop: CropRatio, for size: CGSize) -> CGRect {
+        guard let r = crop.value, size.width > 0, size.height > 0 else { return CGRect(x: 0, y: 0, width: 1, height: 1) }
+        let w = min(1, r * size.height / size.width), h = min(1, size.width / r / size.height)
+        return CGRect(x: (1 - w) / 2, y: (1 - h) / 2, width: w, height: h)
     }
 
     /// The crop as a fraction of the turned and straightened picture of `size`, top-left origin.
     func cropFrame(for size: CGSize) -> CGRect {
-        guard size.width > 0, size.height > 0 else { return CGRect(x: 0, y: 0, width: 1, height: 1) }
-        let out = outputSize(for: turns % 2 == 1 ? CGSize(width: size.height, height: size.width) : size)
-        let w = min(1, out.width / size.width), h = min(1, out.height / size.height)
-        return CGRect(x: (1 - w) / 2 * (1 + cropX), y: (1 - h) / 2 * (1 + cropY), width: w, height: h)
+        cropRect ?? Adjustments.fullFrame(crop, for: size)
+    }
+
+    /// The crop frame `r0` after one of its handles moved by `d` (fractions of the picture). A shape's frame keeps its
+    /// shape when a corner moves (`keepShape`); Free's corners and edges move on their own. It stays on the picture.
+    static func dragged(_ r0: CGRect, _ handle: CropHandle, by d: CGVector, keepShape: Bool) -> CGRect {
+        let minSide: CGFloat = 0.06
+        switch handle {
+        case .move:
+            return CGRect(x: min(1 - r0.width, max(0, r0.minX + d.dx)), y: min(1 - r0.height, max(0, r0.minY + d.dy)),
+                          width: r0.width, height: r0.height)
+        case .side(let sx, let sy) where keepShape && sx != 0 && sy != 0:
+            // The opposite corner stays put; the frame grows or shrinks by whichever way the finger went further.
+            let ax = sx > 0 ? r0.minX : r0.maxX, ay = sy > 0 ? r0.minY : r0.maxY
+            var k = max((r0.width + sx * d.dx) / r0.width, (r0.height + sy * d.dy) / r0.height)
+            k = min(k, (sx > 0 ? 1 - ax : ax) / r0.width, (sy > 0 ? 1 - ay : ay) / r0.height)
+            k = max(k, minSide / min(r0.width, r0.height))
+            let w = r0.width * k, h = r0.height * k
+            return CGRect(x: sx > 0 ? ax : ax - w, y: sy > 0 ? ay : ay - h, width: w, height: h)
+        case .side(let sx, let sy):
+            var l = r0.minX, r = r0.maxX, t = r0.minY, b = r0.maxY
+            if sx < 0 { l = min(r - minSide, max(0, l + d.dx)) }
+            if sx > 0 { r = max(l + minSide, min(1, r + d.dx)) }
+            if sy < 0 { t = min(b - minSide, max(0, t + d.dy)) }
+            if sy > 0 { b = max(t + minSide, min(1, b + d.dy)) }
+            return CGRect(x: l, y: t, width: r - l, height: b - t)
+        }
+    }
+
+    /// Which part of the crop frame `f` a finger at `p` takes hold of, with `reach` the grab distance (fractions of
+    /// the picture across and down). Edges count only for Free. Nil when the finger is outside the frame.
+    static func cropHandle(at p: CGPoint, frame f: CGRect, reach: CGSize, edges: Bool) -> CropHandle? {
+        let dl = abs(p.x - f.minX), dr = abs(p.x - f.maxX), dt = abs(p.y - f.minY), db = abs(p.y - f.maxY)
+        let nearX: CGFloat = min(dl, dr) < reach.width ? (dl < dr ? -1 : 1) : 0
+        let nearY: CGFloat = min(dt, db) < reach.height ? (dt < db ? -1 : 1) : 0
+        let withinX = p.x > f.minX - reach.width && p.x < f.maxX + reach.width
+        let withinY = p.y > f.minY - reach.height && p.y < f.maxY + reach.height
+        guard withinX && withinY else { return nil }
+        if nearX != 0 && nearY != 0 { return .side(nearX, nearY) }
+        if edges && (nearX != 0 || nearY != 0) { return .side(nearX, nearY) }
+        return f.contains(p) ? .move : nil
     }
 
     /// `img` with the settings applied, its extent at the origin. `shape: false` leaves out the crop, turn, flip and
@@ -133,6 +176,12 @@ struct Adjustments: Equatable {
     }
 }
 
+/// What a finger holds of the crop frame: the whole frame, or a corner or edge (-1 left or top, 1 right or bottom, 0 neither).
+enum CropHandle: Equatable {
+    case move
+    case side(CGFloat, CGFloat)
+}
+
 /// The tools inside Adjust, in the order of the tool row.
 enum AdjustTool: String, CaseIterable, Identifiable {
     case crop = "Crop", rotate = "Rotate", brightness = "Brightness", contrast = "Contrast", saturation = "Saturation", warmth = "Warmth"
@@ -172,7 +221,7 @@ enum AdjustTool: String, CaseIterable, Identifiable {
     func reset(_ a: Adjustments) -> Adjustments {
         var a = a
         switch self {
-        case .crop: a.crop = .original; a.cropX = 0; a.cropY = 0
+        case .crop: a.crop = .original; a.cropRect = nil
         case .rotate: a.turns = 0; a.flipped = false; a.flippedV = false; a.straighten = 0
         default: a[keyPath: value!] = 0
         }
@@ -191,6 +240,7 @@ struct AdjustPanel<Accessory: View>: View {
     @Binding var adjust: Adjustments
     @Binding var tool: AdjustTool
     var editing: (Bool) -> Void = { _ in }
+    var freeCrop = true   // whether Free is offered (it needs the frame's handles, which only the photo editor has)
     @ViewBuilder var accessory: () -> Accessory
 
     var body: some View {
@@ -268,13 +318,16 @@ struct AdjustPanel<Accessory: View>: View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
-                    ForEach(CropRatio.allCases) { r in
+                    ForEach(CropRatio.allCases.filter { freeCrop || $0 != .free }) { r in
                         let on = adjust.crop == r
                         Button {
-                            change { $0.crop = r; $0.cropX = 0; $0.cropY = 0 }
+                            change { $0.crop = r; $0.cropRect = nil }
                         } label: {
                             VStack(spacing: 5) {
-                                RatioIcon(ratio: r.value).frame(width: 26, height: 26)
+                                Group {
+                                    if r == .free { Image(systemName: "crop").font(.system(size: 19)) } else { RatioIcon(ratio: r.value) }
+                                }
+                                .frame(width: 26, height: 26)
                                 Text(r.rawValue).font(.caption2.weight(on ? .semibold : .regular)).lineLimit(1).fixedSize()
                             }
                             .foregroundStyle(on ? Color.kagami : Color.primary)
@@ -295,8 +348,8 @@ struct AdjustPanel<Accessory: View>: View {
     private var rotateControls: some View {
         HStack(spacing: 12) {
             HStack(spacing: 6) {
-                squareButton("rotate.left", "Turn left") { change { $0.turns = ($0.turns + 3) % 4 } }
-                squareButton("rotate.right", "Turn right") { change { $0.turns = ($0.turns + 1) % 4 } }
+                squareButton("rotate.left", "Turn left") { change { $0.turns = ($0.turns + 3) % 4; $0.cropRect = nil } }
+                squareButton("rotate.right", "Turn right") { change { $0.turns = ($0.turns + 1) % 4; $0.cropRect = nil } }
                 // Flips are made before the turn, so after a quarter turn the other one looks right on screen.
                 squareButton("arrow.left.and.right.righttriangle.left.righttriangle.right", "Flip across") {
                     change { if $0.turns % 2 == 1 { $0.flippedV.toggle() } else { $0.flipped.toggle() } }
@@ -345,8 +398,8 @@ struct AdjustPanel<Accessory: View>: View {
 }
 
 extension AdjustPanel where Accessory == EmptyView {
-    init(adjust: Binding<Adjustments>, tool: Binding<AdjustTool>, editing: @escaping (Bool) -> Void = { _ in }) {
-        self.init(adjust: adjust, tool: tool, editing: editing, accessory: { EmptyView() })
+    init(adjust: Binding<Adjustments>, tool: Binding<AdjustTool>, editing: @escaping (Bool) -> Void = { _ in }, freeCrop: Bool = true) {
+        self.init(adjust: adjust, tool: tool, editing: editing, freeCrop: freeCrop, accessory: { EmptyView() })
     }
 }
 
@@ -449,6 +502,7 @@ struct TwoWaySlider: View {
 struct CropFrameOverlay: View {
     let frame: CGRect
     var active = false   // a finger is moving it: the grid shows more
+    var edges = false    // Free: marks in the middle of each side, which can be dragged too
 
     var body: some View {
         GeometryReader { geo in
@@ -475,6 +529,17 @@ struct CropFrameOverlay: View {
                     }
                 }
                 .stroke(Color.white, style: StrokeStyle(lineWidth: 3.5, lineCap: .square))
+                if edges {
+                    Path { p in
+                        let r = r.insetBy(dx: 1.5, dy: 1.5)
+                        let l = min(11, r.width / 8, r.height / 8)
+                        p.move(to: CGPoint(x: r.midX - l, y: r.minY)); p.addLine(to: CGPoint(x: r.midX + l, y: r.minY))
+                        p.move(to: CGPoint(x: r.midX - l, y: r.maxY)); p.addLine(to: CGPoint(x: r.midX + l, y: r.maxY))
+                        p.move(to: CGPoint(x: r.minX, y: r.midY - l)); p.addLine(to: CGPoint(x: r.minX, y: r.midY + l))
+                        p.move(to: CGPoint(x: r.maxX, y: r.midY - l)); p.addLine(to: CGPoint(x: r.maxX, y: r.midY + l))
+                    }
+                    .stroke(Color.white, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+                }
             }
             .animation(.easeOut(duration: 0.15), value: active)
         }

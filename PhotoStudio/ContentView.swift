@@ -23,7 +23,8 @@ struct ContentView: View {
     @State private var reshapeDrag: Bool?      // Reshape on: nil until the finger moves, then true (pushing a face) or false (panning)
     @State private var positionDrag: Bool?     // Position shown: nil until the finger moves, then true (moving the oval) or false (panning)
     @State private var paintDrag: Bool?        // Heal › Brush or Erase: nil until the finger moves, then true (painting) or false (panning)
-    @State private var cropDrag: (x: CGFloat, y: CGFloat)?   // Adjust › Crop: where the frame was when the finger started moving it
+    @State private var cropDrag: (frame: CGRect, handle: CropHandle)?   // Adjust › Crop: the frame when a finger took hold of it, and where
+    @State private var cropPan = false         // Adjust › Crop: this drag started off the frame, so it pans
     private let maxZoom: CGFloat = 8
 
     var body: some View {
@@ -132,7 +133,7 @@ struct ContentView: View {
                         }
                         if model.tool == .adjust, !comparing, model.display != nil {
                             if cropOn {
-                                CropFrameOverlay(frame: model.adjust.cropFrame(for: shownSize), active: cropDrag != nil)
+                                CropFrameOverlay(frame: model.adjust.cropFrame(for: shownSize), active: cropDrag != nil, edges: model.adjust.crop == .free)
                                     .aspectRatio(shownSize, contentMode: .fit)
                                     .allowsHitTesting(false)
                             } else if model.adjustTool == .rotate, sliding {
@@ -231,20 +232,29 @@ struct ContentView: View {
                         if pinchStart != nil {
                             if cropDrag != nil { model.sliderEditing(false) }
                             cropDrag = nil
-                        } else {
+                            cropPan = true
+                        } else if !cropPan {
+                            let size = shownSize, fit = fittedSize(geo.size)
+                            guard size.width > 0, let a = imagePoint(v.startLocation, in: geo.size, clamp: false),
+                                  let b = imagePoint(v.location, in: geo.size, clamp: false) else { return }
                             if cropDrag == nil {
                                 guard hypot(v.translation.width, v.translation.height) > 4 else { return }
-                                cropDrag = (model.adjust.cropX, model.adjust.cropY)
-                                model.sliderEditing(true)
+                                // A corner or edge within about 30 points resizes; inside the frame moves it; outside pans.
+                                let f = model.adjust.cropFrame(for: size)
+                                let reach = CGSize(width: 30 / (fit.width * zoom), height: 30 / (fit.height * zoom))
+                                if let h = Adjustments.cropHandle(at: CGPoint(x: a.x / size.width, y: a.y / size.height), frame: f,
+                                                                  reach: reach, edges: model.adjust.crop == .free) {
+                                    cropDrag = (f, h)
+                                    model.sliderEditing(true)
+                                } else {
+                                    cropPan = true
+                                }
                             }
-                            // The frame follows the finger; ±1 is the frame against either edge.
-                            if let start = cropDrag {
-                                let f = model.adjust.cropFrame(for: shownSize), fit = fittedSize(geo.size)
-                                let roomX = (1 - f.width) * fit.width * zoom / 2, roomY = (1 - f.height) * fit.height * zoom / 2
-                                if roomX > 0.5 { model.adjust.cropX = min(1, max(-1, start.x + v.translation.width / roomX)) }
-                                if roomY > 0.5 { model.adjust.cropY = min(1, max(-1, start.y + v.translation.height / roomY)) }
+                            if let drag = cropDrag {
+                                let d = CGVector(dx: (b.x - a.x) / size.width, dy: (b.y - a.y) / size.height)
+                                model.adjust.cropRect = Adjustments.dragged(drag.frame, drag.handle, by: d, keepShape: model.adjust.crop != .free)
+                                return
                             }
-                            return
                         }
                     }
                     if positionOn {
@@ -277,6 +287,7 @@ struct ContentView: View {
                     paintDrag = nil
                     if cropDrag != nil { model.sliderEditing(false) }
                     cropDrag = nil
+                    cropPan = false
                 })
             .gesture(PinchRecognizer { state, centre, scale in twoFingerEvent(0, state, centre, scale, view: geo.size) })
             .gesture(TwoFingerPanRecognizer { state, centre, _ in twoFingerEvent(1, state, centre, nil, view: geo.size) })
@@ -541,7 +552,7 @@ struct ContentView: View {
                 .disabled(model.busy != nil)
                 .onChange(of: model.adjust) { old, new in
                     // Moving the crop frame in Crop changes only the frame on top; the picture under it stays.
-                    var o = old; o.cropX = new.cropX; o.cropY = new.cropY
+                    var o = old; o.cropRect = new.cropRect
                     if !(o == new && model.adjustTool == .crop) { model.renderPreview() }
                 }
                 .onChange(of: model.adjustTool) { _, _ in model.renderPreview() }
