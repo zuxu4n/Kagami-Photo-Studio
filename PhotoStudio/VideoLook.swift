@@ -64,7 +64,7 @@ final class LookCompositor: NSObject, AVVideoCompositing {
             guard let ins = request.videoCompositionInstruction as? LookInstruction,
                   let src = request.sourceFrame(byTrackID: ins.trackID),
                   let upright = request.renderContext.newPixelBuffer() else {
-                request.finish(with: NSError(domain: "Mioru", code: 1)); return
+                request.finish(with: NSError(domain: "Miyori", code: 1)); return
             }
             let w = CVPixelBufferGetWidth(upright), h = CVPixelBufferGetHeight(upright)
             var img = CIImage(cvPixelBuffer: src).oriented(ins.orientation)

@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct MioruApp: App {
+struct MiyoriApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()

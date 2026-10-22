@@ -191,7 +191,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         videoQueue.async { [self] in
             let (w, h) = lastSize
             guard w > 0, writer == nil else { return }
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent("Mioru-\(UUID().uuidString).mov")
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("Miyori-\(UUID().uuidString).mov")
             guard let wr = try? AVAssetWriter(outputURL: url, fileType: .mov) else { return }
             let vIn = AVAssetWriterInput(mediaType: .video, outputSettings: [
                 AVVideoCodecKey: AVVideoCodecType.hevc, AVVideoWidthKey: w, AVVideoHeightKey: h,
@@ -260,7 +260,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     private static func saveToPhotos(_ url: URL, done: @escaping (String?) -> Void) {
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             guard status == .authorized || status == .limited else {
-                done("Mioru can't add to Photos. You can allow it in Settings › Mioru."); return
+                done("Miyori can't add to Photos. You can allow it in Settings › Miyori."); return
             }
             PHPhotoLibrary.shared().performChanges({
                 let options = PHAssetResourceCreationOptions()
