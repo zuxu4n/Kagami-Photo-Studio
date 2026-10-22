@@ -338,11 +338,9 @@ struct ContentView: View {
                 .gesture(TwoFingerPanRecognizer { state, centre, _ in twoFingerEvent(1, state, centre, nil, view: geo.size) })
                 // On top of the photo's gestures, so a tap on these never lands on the photo.
                 canvasControls
-                if let b = model.busy {
-                    BusyBadge(text: b).allowsHitTesting(false)
-                }
+                DelayedPresence(value: model.busy) { BusyBadge(text: $0) }
+                    .allowsHitTesting(false)
             }
-            .animation(.quick, value: model.busy)
         }
         .clipped()
         .toast(model.info, id: model.infoID) { $0 == "Saved to Photos" ? "checkmark.circle.fill" : nil }

@@ -8,6 +8,7 @@ struct HomeView: View {
     var openCamera: () -> Void
     var showWelcome: () -> Void
     @State private var showAbout = false
+    @State private var welcomeAfterAbout = false
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -31,12 +32,12 @@ struct HomeView: View {
         .background(Color.canvasWarm.ignoresSafeArea())
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)
         .overlay {
-            if let busy {
+            DelayedPresence(value: busy) { text in
                 ZStack {
                     Color.black.opacity(0.15).ignoresSafeArea()
                     HStack(spacing: 10) {
                         ProgressView().tint(Color.roseInk)
-                        Text(busy).font(.ui(15, .medium)).foregroundStyle(Color.ink)
+                        Text(text).font(.ui(15, .medium)).foregroundStyle(Color.ink)
                     }
                     .padding(.horizontal, 20).padding(.vertical, 14)
                     .background(Color.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -45,9 +46,11 @@ struct HomeView: View {
                 .transition(.opacity)
             }
         }
-        .animation(.quick, value: busy)
-        .sheet(isPresented: $showAbout) {
-            AboutView(showWelcome: { showAbout = false; showWelcome() })
+        // The welcome opens once About has finished closing (one sheet can't open while another closes).
+        .sheet(isPresented: $showAbout, onDismiss: {
+            if welcomeAfterAbout { welcomeAfterAbout = false; showWelcome() }
+        }) {
+            AboutView(showWelcome: { welcomeAfterAbout = true; showAbout = false })
                 .presentationDetents([.large])
                 .presentationCornerRadius(28)
         }

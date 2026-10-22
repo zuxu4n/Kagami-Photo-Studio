@@ -364,7 +364,29 @@ private struct ToastModifier: ViewModifier {
     }
 }
 
-/// Work under way on the photo: a spinner and what it's doing, over a light dimming.
+/// Shows `content` only for work that takes longer than a moment, so quick steps (an undo, a small heal) don't
+/// flash a spinner. A change of text while it shows updates it in place.
+struct DelayedPresence<Content: View>: View {
+    let value: String?
+    var delay: Duration = .milliseconds(300)
+    @ViewBuilder var content: (String) -> Content
+    @State private var shown: String?
+
+    var body: some View {
+        ZStack {
+            if let shown { content(shown) }
+        }
+        .animation(.quick, value: shown)
+        .task(id: value) {
+            guard let value else { shown = nil; return }
+            if shown != nil { shown = value; return }
+            try? await Task.sleep(for: delay)
+            if !Task.isCancelled { shown = value }
+        }
+    }
+}
+
+/// Work under way on the photo: a spinner and what it's doing.
 struct BusyBadge: View {
     let text: String
 
