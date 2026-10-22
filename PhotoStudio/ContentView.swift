@@ -358,7 +358,8 @@ struct ContentView: View {
                 .onLongPressGesture(minimumDuration: 0, maximumDistance: 60, pressing: { comparing = $0 }, perform: {})
                 .accessibilityLabel("Hold to compare with the original")
                 .accessibilityAddTraits(.isButton)
-                .opacity(model.busy == nil ? 1 : 0)
+                .opacity(model.busy == nil && !cropOn ? 1 : 0)   // in Crop the frame's corner is there
+                .allowsHitTesting(!cropOn)
             Spacer()
             if zoom > 1.01 {
                 Button {
@@ -595,7 +596,7 @@ struct ContentView: View {
                     .disabled(model.busy != nil)
                 }
                 HStack(spacing: Space.s) {
-                    Text("Edges").font(.ui(13, .medium)).foregroundStyle(Color.studioSecondary)
+                    Text("Refine").font(.ui(13, .medium)).foregroundStyle(Color.studioSecondary)
                     ModeTabs(items: BlurMode.allCases, selection: $model.blurMode, title: { $0 == .view ? "Auto" : $0.rawValue })
                 }
                 .disabled(model.personMatte == nil)
