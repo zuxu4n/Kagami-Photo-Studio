@@ -182,7 +182,7 @@ struct VideoEditView: View {
             message = "This video can't be saved."; return
         }
         export.videoComposition = composition
-        let out = FileManager.default.temporaryDirectory.appendingPathComponent("Miyori-\(UUID().uuidString).mov")
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("Yumiro-\(UUID().uuidString).mov")
         let progress = Task {
             for await state in export.states(updateInterval: 0.2) {
                 if case .exporting(let p) = state { await MainActor.run { saving = p.fractionCompleted } }
@@ -198,7 +198,7 @@ struct VideoEditView: View {
         progress.cancel()
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
-            message = "Miyori can't add to Photos. You can allow it in Settings › Miyori."; return
+            message = "Yumiro can't add to Photos. You can allow it in Settings › Yumiro."; return
         }
         do {
             try await PHPhotoLibrary.shared().performChanges {

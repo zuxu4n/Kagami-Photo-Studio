@@ -3,7 +3,7 @@ import ImageIO
 import Foundation
 import UniformTypeIdentifiers
 
-// Draws Miyori's app icon: a baby-blue arched mirror standing on a soft pink ground, a pink sun behind its shoulder,
+// Draws Yumiro's app icon: a baby-blue arched mirror standing on a soft pink ground, a pink sun behind its shoulder,
 // and two white sparkles. 1024 x 1024, no transparency. Run on a Mac:
 //   swift tools/icon/make_icon.swift PhotoStudio/Assets.xcassets/AppIcon.appiconset/AppIcon.png
 func color(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {

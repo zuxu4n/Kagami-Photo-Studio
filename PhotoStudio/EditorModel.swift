@@ -929,7 +929,7 @@ final class EditorModel: ObservableObject {
         defer { busy = nil }
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
-            error = "Allow Miyori to add photos in Settings to save."
+            error = "Allow Yumiro to add photos in Settings to save."
             return
         }
         storeShape()

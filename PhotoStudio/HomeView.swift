@@ -41,11 +41,11 @@ struct HomeView: View {
                     Text("Everything happens on this iPhone. Your photos are never uploaded.")
                 }
             }
-            .navigationTitle("Miyori")
+            .navigationTitle("Yumiro")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showAbout = true } label: { Image(systemName: "info.circle") }
-                        .accessibilityLabel("About Miyori")
+                        .accessibilityLabel("About Yumiro")
                 }
             }
             .disabled(busy != nil)
@@ -64,7 +64,7 @@ struct HomeView: View {
 
 // MARK: Welcome
 
-/// Shown once, the first time Miyori opens.
+/// Shown once, the first time Yumiro opens.
 struct WelcomeView: View {
     var done: () -> Void
 
@@ -80,7 +80,7 @@ struct WelcomeView: View {
                     Label("Free and open source. No subscription, no watermark, no account.", systemImage: "heart")
                 }
             }
-            .navigationTitle("Welcome to Miyori")
+            .navigationTitle("Welcome to Yumiro")
             .safeAreaInset(edge: .bottom) {
                 Button(action: done) {
                     Text("Get started").frame(maxWidth: .infinity)
@@ -95,7 +95,7 @@ struct WelcomeView: View {
 
 // MARK: About
 
-/// About Miyori: privacy, the source code, the open models it runs on, and the welcome again.
+/// About Yumiro: privacy, the source code, the open models it runs on, and the welcome again.
 struct AboutView: View {
     var showWelcome: () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -113,7 +113,7 @@ struct AboutView: View {
                     LabeledContent("Version", value: version)
                 }
                 Section("Privacy") {
-                    Text("Miyori has no servers and no network code. Photos and videos are only read when you pick them, and saved copies go straight to Photos.")
+                    Text("Yumiro has no servers and no network code. Photos and videos are only read when you pick them, and saved copies go straight to Photos.")
                 }
                 Section("Open source") {
                     Link("Source code on GitHub", destination: URL(string: "https://github.com/zuxu4n/Kagami-Photo-Studio")!)

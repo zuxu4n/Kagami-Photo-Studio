@@ -147,7 +147,7 @@ struct CameraAccessView: View {
             ContentUnavailableView {
                 Label("Allow the camera", systemImage: "camera")
             } description: {
-                Text("Miyori films with your look applied live. Everything stays on this iPhone.")
+                Text("Yumiro films with your look applied live. Everything stays on this iPhone.")
             } actions: {
                 Button("Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
