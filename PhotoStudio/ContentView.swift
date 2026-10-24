@@ -472,14 +472,14 @@ struct ContentView: View {
 
     // MARK: Tools
 
-    /// The tool bar along the bottom, grouped: fix the photo, then beauty, then remove and replace.
+    /// The Focus rail: a continuous strip, grouped into fix and frame, beauty, then remove and replace.
     private var toolBar: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
+                HStack(spacing: 2) {
                     ForEach(Array(Tool.groups.enumerated()), id: \.offset) { i, group in
                         if i > 0 {
-                            Divider().frame(height: 28).padding(.horizontal, 4)
+                            Divider().frame(height: 24).padding(.horizontal, 5)
                         }
                         ForEach(group) { t in toolButton(t).id(t) }
                     }
@@ -493,7 +493,7 @@ struct ContentView: View {
         .sensoryFeedback(.selection, trigger: model.tool)
     }
 
-    /// A tool in the bar: the picked one is in the accent colour; a dot marks a tool that changed the photo.
+    /// The selected tool has a soft accent backing and underline; a dot marks other tools with edits.
     private func toolButton(_ t: Tool) -> some View {
         let on = t == model.tool
         let changed = toolChanged(t)
@@ -509,10 +509,28 @@ struct ContentView: View {
                             Circle().fill(.secondary).frame(width: 6, height: 6).offset(x: 6, y: -2)
                         }
                     }
-                Text(t.rawValue).font(.caption2).lineLimit(1).fixedSize()
+                Text(t.rawValue)
+                    .font(.caption2.weight(on ? .semibold : .regular))
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .foregroundStyle(on ? Color.accentColor : Color.secondary)
-            .frame(minWidth: 66, minHeight: 66)
+            .padding(.horizontal, 6)
+            .frame(minWidth: 66)
+            .frame(height: 58)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.accentColor.opacity(on ? 0.12 : 0))
+            }
+            .overlay(alignment: .bottom) {
+                if on {
+                    Capsule()
+                        .fill(Color.accentColor)
+                        .frame(width: 14, height: 2)
+                        .padding(.bottom, 3)
+                }
+            }
+            .frame(height: 66)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
