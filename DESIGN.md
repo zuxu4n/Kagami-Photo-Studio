@@ -1,6 +1,6 @@
 # Yumiro design A handoff
 
-Updated 2026-10-24 (America/Toronto). This is the design A source of truth for approved colors, typography, spacing, component states, references, and implementation boundaries. Application status was checked against local `ui-a` and `origin/ui-a` at **5efeebaa03558c9687f4e263502bf784233a3bfa**. Retouch remains a proposal. Read this document before continuing design A.
+Updated 2026-10-24 (America/Toronto). This is the design A source of truth for approved colors, typography, spacing, component states, references, and implementation boundaries. The seven earlier approved UI changes were pushed through **5efeebaa03558c9687f4e263502bf784233a3bfa**. Face category navigation now uses the approved Stacked rails direction described below. Retouch remains a proposal. Read this document before continuing design A.
 
 ## Worktree, branch, and authorization
 
@@ -21,7 +21,7 @@ The script fetches/pulls `ui-a` and installs a separate app named **Yumiro A**, 
 
 ## Implementation status
 
-All seven approved components below are implemented and pushed through **5efeeba**. The latest commit implements the Focused slider hybrid for Brightness, Contrast, Saturation, and Warmth. No Retouch redesign is implemented, and choosing an option in a mockup alone does not approve implementation.
+All eight approved components below are implemented. The seven earlier UI changes were pushed through **5efeeba**; this change adds Face category navigation. No Retouch redesign is implemented, and choosing an option in a mockup alone does not approve implementation.
 
 | Area | Approved direction | UI commit | Status |
 |---|---|---|---|
@@ -32,6 +32,7 @@ All seven approved components below are implemented and pushed through **5efeeba
 | Photo Adjust → Crop controls | Shape rail | `48ff495` | Implemented and pushed |
 | Photo Adjust → Rotate & Straighten | Action row | `c9b55d6` | Implemented and pushed |
 | Photo Adjust → Brightness, Contrast, Saturation, Warmth | Focused slider hybrid | `5efeeba` | Implemented and pushed |
+| Face → category and subcategory navigation | Stacked rails | This change | Implemented; native validation pending |
 | Retouch panel | Compact rows preferred | None | Mockup only; latest spacing revision awaits acceptance |
 
 The first four UI changes are in [ContentView.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/ContentView.swift). Crop, Rotate, and light/color styling are in [Adjustments.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/Adjustments.swift), with explicit photo-only opt-ins (`photoCropStyle`, `photoRotateStyle`, `photoColorStyle`) at the `AdjustPanel` call in `ContentView.swift`. The shared video panel keeps its original presentation. Smoothing and retouch rendering, per-face storage, canvas gestures, camera, video editor, and home screen were not changed. Retouch still uses the original three `sliderRow` calls in app code.
@@ -80,6 +81,7 @@ Use the system font and SF Symbols in the app. Browser mockups use system-font f
 | Light/color header / active value / edited tile number | `.subheadline.weight(.medium)` (about 15 pt); numbers use monospaced digits |
 | Light/color neutral tile icons / captions | System 20 pt / `.caption2` (about 11 pt), regular; selected caption semibold |
 | Light/color slider endpoint labels | `.caption2.monospacedDigit()` (about 11 pt), secondary |
+| Face category / subcategory labels | `.subheadline` (about 15 pt) / `.footnote` (about 13 pt); selected semibold |
 
 The photo editor already caps Dynamic Type at `.xLarge`; that limit was preserved. Default browser text sizes do not establish native Dynamic Type behavior. Retouch's compact mockup labels/value badges are 13 px; check native legibility before treating that as final SwiftUI typography.
 
@@ -198,6 +200,24 @@ Mobbin references: [VSCO](https://mobbin.com/screens/adea8809-53d5-419b-9ceb-67d
 
 Mockup QA covered all-neutral icons, mixed signed values, selection independent of edits, Reset restoring an icon while preserving peer edits, disabled values, light/dark appearances, narrow scrolling, and signed endpoints. Implementation validation compares the model, shared slider, original Crop/Rotate controls, canvas, video, and rendering/undo callbacks against the previous commit. These are browser and source checks; Xcode and iOS runtime checks are unavailable on this Windows host.
 
+## Face navigation: approved Stacked rails
+
+The user explicitly selected **Stacked rails** in a written message after reviewing both editor-context mockups. Category picker remains an unselected alternative. Only category/subcategory navigation and its Face-specific layout grouping changed in `ContentView.swift`; Eyes adjustment controls have not been redesigned.
+
+- Two horizontal rails retain all eight categories and all 34 options in their original order. Each category still remembers its selected subcategory. Both rails reveal their selected item on appearance; categories center on selection, and subcategories center on selection or when their category is reopened.
+- Categories use system subheadline and subcategories use footnote, regular or selected semibold. Each button has at least a 54 pt category / 58 pt subcategory width and a 44 pt target. Its visible backing is 32 pt high with 14 pt continuous corners; item spacing is 4 pt and horizontal label padding is 12 pt.
+- Selection uses accent text, a 12% accent backing and a 14 x 2 pt underline, including at neutral. A separate 6 pt secondary-colored dot identifies applied edits, including on selected categories/options. The existing selected-face change detector is unchanged: ordinary features use `abs(value) > 0.001`, and Position uses `positionMoved`. Face/Head Size and Width continue to share model properties and changed states.
+- The native scroll views retain horizontal overflow. Small leading/trailing fades appear only where content actually continues, using iOS 18 scroll geometry (the existing project deployment target is iOS 18). Fades ignore hit testing and accessibility. No canvas gesture was added or changed.
+- The two 44 pt rails, 44 pt control slot and minimum 28 pt footer model the existing 160 pt content / 184 pt panel budget. The Face-only stack removes redundant inter-row gaps; the original slider/Position view and helper/Reset all contents are retained. The panel remains a minimum rather than a fixed height, so native text sizing may require more room. No native height measurement has been performed here.
+- The original slider/value/reset styling, effect ranges, bindings, selected-face storage, render callbacks, reset scopes, undo grouping, selection haptics, mesh availability and editor processing lock are unchanged. The shared `Chip` and `ValueSlider` implementations were not modified. Canvas, face guides, other tool panels, camera and video are unchanged.
+- VoiceOver receives the original label, selected trait, and an explicit “Edits applied” value when changed. Decorative dots/fades are hidden. Custom buttons use the approved 70% pressed opacity and 45% disabled opacity while retaining selection and edit indicators. Semantic colors support light/dark appearance, and the existing xLarge Dynamic Type cap remains.
+
+Local private mockup: `design/mockups/yumiro-face-navigation-local.html` (ignored, contains the supplied photo). The inline preview is served from the chat-owned regular-file copy at `C:/Users/Jason/.codex/visualizations/2026/10/24/01a16cbd-75e4-7df3-aa0a-c421b001d992/yumiro-face-navigation-local.html`; use that path for this chat's visualization reference. Do not force-add either private preview. Full inventory and research are in `design/face-navigation-proposals.md`.
+
+Mobbin references: [WhatsApp](https://mobbin.com/screens/a6e343ee-c1a6-419b-a22c-f962884c951d) for the two-level hierarchy, [VSCO](https://mobbin.com/screens/8aa78b87-281b-4e81-bb2e-a1d9e1d931f9) for grouped adjustments, and [Azar](https://mobbin.com/screens/8f295b8c-0d6e-4715-879d-af53d7f8352d) for independent selection/edit indicators.
+
+Validation: `git diff --check` passed. A source comparison confirmed changes are confined to the Face layout/navigation regions, with the original slider/Position controls, helper/reset behavior, Face inventory and feature mappings preserved. Everything outside those regions in `ContentView.swift`, including canvas/gestures/guides, is unchanged. No native build or XCTest run is possible on this Windows host. On the Mac, verify both appearances, narrow widths, Dynamic Type through xLarge, VoiceOver, selecting offscreen items, reopening each category's remembered option, selected-neutral/selected-edited states, shared Face/Head dots, per-face switching, busy lock, Position and unchanged slider undo/reset behavior.
+
 ## Retouch: preferred proposal, not implemented
 
 The user prefers **Compact rows**, then requested two spacing corrections. The latest revision has been shown but has not received explicit final acceptance. Do not implement or push Retouch UI merely because Compact rows is the carousel's selected preview.
@@ -239,6 +259,7 @@ Portable copies are saved in `design/mockups/`. These are interactive HTML fragm
 | [yumiro-rotate-local.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-rotate-local.html) | Action row | Selected and implemented; local-only preview contains the supplied photo and is intentionally ignored by Git |
 | [yumiro-adjust-colors-local.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-adjust-colors-local.html) | Focused slider / Value tabs | Earlier comparison; local-only and ignored because it contains the supplied photo |
 | [yumiro-focused-slider-hybrid-local.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-focused-slider-hybrid-local.html) | Focused slider with changed values | Approved and implemented; local-only and ignored because it contains the supplied photo |
+| [yumiro-face-navigation-local.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-face-navigation-local.html) | Stacked rails / Category picker | Stacked rails explicitly selected and implemented; local-only and ignored because it contains the supplied photo |
 
 Absolute portable-copy directory on this PC:
 

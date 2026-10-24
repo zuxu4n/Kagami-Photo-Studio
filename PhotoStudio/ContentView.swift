@@ -723,28 +723,34 @@ struct ContentView: View {
                 }
                 HintText(healCaption)
             case .face:
-                areaTabs
-                subtabChips
-                if feature == .position {
-                    HStack {
-                        Text("Drag the oval around the head").font(.subheadline)
-                        Spacer()
-                        ResetButton(label: "Reset Position") { model.resetPosition() }
-                            .disabled(!model.positionMoved || model.busy != nil)
+                VStack(alignment: .leading, spacing: 0) {
+                    areaTabs
+                    subtabChips
+                    Group {
+                        if feature == .position {
+                            HStack {
+                                Text("Drag the oval around the head").font(.subheadline)
+                                Spacer()
+                                ResetButton(label: "Reset Position") { model.resetPosition() }
+                                    .disabled(!model.positionMoved || model.busy != nil)
+                            }
+                            .frame(height: 44)
+                            .disabled(!model.selectedHasMesh)
+                        } else if let f = feature {
+                            sliderRow(f.title, value: Binding(get: { model[keyPath: f.value] }, set: { model[keyPath: f.value] = $0 }),
+                                      range: f.range)
+                                .disabled(f.needsMesh && !model.selectedHasMesh)
+                        } else {
+                            Color.clear.frame(height: 44)
+                        }
                     }
                     .frame(height: 44)
-                    .disabled(!model.selectedHasMesh)
-                } else if let f = feature {
-                    sliderRow(f.title, value: Binding(get: { model[keyPath: f.value] }, set: { model[keyPath: f.value] = $0 }),
-                              range: f.range)
-                        .disabled(f.needsMesh && !model.selectedHasMesh)
-                } else {
-                    Color.clear.frame(height: 44)
-                }
-                HStack(alignment: .firstTextBaseline) {
-                    HintText(faceCaption)
-                    PanelTextButton(title: "Reset all") { model.resetFaceSliders() }
-                        .disabled(!model.faceSlidersMoved || model.busy != nil)
+                    HStack(alignment: .firstTextBaseline) {
+                        HintText(faceCaption)
+                        PanelTextButton(title: "Reset all") { model.resetFaceSliders() }
+                            .disabled(!model.faceSlidersMoved || model.busy != nil)
+                    }
+                    .frame(minHeight: 28)
                 }
             case .adjust:
                 AdjustPanel(adjust: $model.adjust, tool: $model.adjustTool, editing: { e in
@@ -823,44 +829,121 @@ struct ContentView: View {
         }
     }
 
-    /// The main Face tabs; the picked one is bold, and a dot marks the ones with a slider moved on the selected face.
+    /// Stacked rails keep selection separate from edits on the selected face.
     private var areaTabs: some View {
-        // Scrolls sideways, as eight names don't fit across a phone at full size.
         ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 20) {
+            FaceNavigationRail {
+                HStack(spacing: Space.xs) {
                     ForEach(FaceArea.allCases) { a in
-                        let on = a == area
-                        Button { withAnimation { area = a } } label: {
-                            Text(changed(a) ? "\(a.rawValue) •" : a.rawValue)
-                                .lineLimit(1).fixedSize()
-                                .font(.subheadline.weight(on ? .semibold : .regular))
-                                .foregroundStyle(on ? Color.primary : Color.secondary)
-                                .frame(minHeight: 32)
-                                .contentShape(Rectangle())
+                        faceNavigationButton(a.rawValue, selected: a == area, edited: changed(a), category: true) {
+                            withAnimation { area = a }
                         }
-                        .buttonStyle(.plain)
                         .id(a)
-                        .accessibilityAddTraits(on ? .isSelected : [])
                     }
                 }
-                .padding(.horizontal, 2)
             }
+            .onAppear { proxy.scrollTo(area, anchor: .center) }
             .onChange(of: area) { _, a in withAnimation { proxy.scrollTo(a, anchor: .center) } }
         }
         .sensoryFeedback(.selection, trigger: area)
     }
 
-    /// The picked main tab's subtabs; a dot marks a moved slider.
+    /// Reopening a category reveals its remembered option, including options beyond the visible edge.
     private var subtabChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(area.subtabs, id: \.self) { sub in
-                    Chip(title: sub, on: sub == subtab, dot: changed(area, sub)) { subtabs[area] = sub }
+        ScrollViewReader { proxy in
+            FaceNavigationRail {
+                HStack(spacing: Space.xs) {
+                    ForEach(area.subtabs, id: \.self) { sub in
+                        faceNavigationButton(sub, selected: sub == subtab, edited: changed(area, sub), category: false) {
+                            subtabs[area] = sub
+                        }
+                        .id(sub)
+                    }
                 }
             }
+            .onAppear { proxy.scrollTo(subtab, anchor: .center) }
+            .onChange(of: subtab) { _, sub in withAnimation { proxy.scrollTo(sub, anchor: .center) } }
+            .id(area)
         }
         .sensoryFeedback(.selection, trigger: subtab)
+    }
+
+    private func faceNavigationButton(_ title: String, selected: Bool, edited: Bool, category: Bool,
+                                      action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(title)
+                    .font((category ? Font.subheadline : Font.footnote).weight(selected ? .semibold : .regular))
+                    .lineLimit(1).fixedSize()
+                if edited {
+                    Circle().fill(Color.secondary).frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                }
+            }
+            .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+            .padding(.horizontal, Space.m)
+            .frame(minWidth: category ? 54 : 58)
+            .frame(height: 32)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.accentColor.opacity(selected ? 0.12 : 0))
+            }
+            .overlay(alignment: .bottom) {
+                if selected {
+                    Capsule().fill(Color.accentColor).frame(width: 14, height: 2)
+                        .padding(.bottom, 3)
+                }
+            }
+            .frame(height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(FaceNavigationButtonStyle())
+        .accessibilityLabel(title)
+        .accessibilityValue(edited ? "Edits applied" : "")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private struct FaceNavigationButtonStyle: ButtonStyle {
+        @Environment(\.isEnabled) private var isEnabled
+
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label.opacity(!isEnabled ? 0.45 : configuration.isPressed ? 0.7 : 1)
+        }
+    }
+
+    private struct FaceRailEdges: Equatable {
+        var leading = false
+        var trailing = false
+    }
+
+    /// Edge fades describe actual horizontal overflow without intercepting navigation touches.
+    private struct FaceNavigationRail<Content: View>: View {
+        @State private var edges = FaceRailEdges()
+        private let content: Content
+
+        init(@ViewBuilder content: () -> Content) { self.content = content() }
+
+        var body: some View {
+            ScrollView(.horizontal, showsIndicators: false) { content }
+                .onScrollGeometryChange(for: FaceRailEdges.self) { geometry in
+                    FaceRailEdges(leading: geometry.visibleRect.minX > 1,
+                                  trailing: geometry.visibleRect.maxX < geometry.contentSize.width - 1)
+                } action: { _, new in edges = new }
+                .overlay(alignment: .leading) {
+                    if edges.leading { fade(from: .leading, to: .trailing) }
+                }
+                .overlay(alignment: .trailing) {
+                    if edges.trailing { fade(from: .trailing, to: .leading) }
+                }
+                .frame(height: 44)
+        }
+
+        private func fade(from start: UnitPoint, to end: UnitPoint) -> some View {
+            LinearGradient(colors: [Color(.systemBackground), .clear], startPoint: start, endPoint: end)
+                .frame(width: Space.l)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 
     private var faceCaption: String {
