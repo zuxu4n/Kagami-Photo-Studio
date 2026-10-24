@@ -672,8 +672,7 @@ struct ContentView: View {
                     .disabled(model.busy != nil)
                 }
             case .smooth:
-                sliderRow("Smooth skin", value: $model.smooth)
-                HintText(model.faceCount == 0 ? "No face found in this photo" : "Edges, eyes and lips stay sharp")
+                smoothPanel
             case .retouch:
                 sliderRow("Whiten teeth", value: $model.teeth)
                 sliderRow("Brighten eyes", value: $model.brightEyes)
@@ -906,6 +905,50 @@ struct ContentView: View {
         if model.blurPanel == .remove, model.background == .clear { return "Saves as a see-through PNG" }
         guard let m = model.personMatte else { return model.findingPeople ? "Finding people…" : "Blurs what's behind the people" }
         return m.hasPerson ? "Everyone found stays sharp" : "No person found, so the whole photo is blurred"
+    }
+
+    /// Smooth's Quiet row: a fixed value badge and reset above a full-width system slider.
+    private var smoothPanel: some View {
+        VStack(alignment: .leading, spacing: Space.s) {
+            HStack(spacing: Space.s) {
+                Text("Smooth skin")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(model.busy == nil ? Color.primary : Color.secondary)
+                Spacer(minLength: Space.s)
+                Text("\(Int((model.smooth * 100).rounded()))")
+                    .font(.subheadline.monospacedDigit().weight(.medium))
+                    .foregroundStyle(model.busy == nil && model.smooth >= 0.001 ? Color.accentColor : Color.secondary)
+                    .padding(.horizontal, Space.s)
+                    .frame(minWidth: 44, minHeight: 32)
+                    .background {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.accentColor.opacity(model.busy == nil && model.smooth >= 0.001 ? 0.12 : 0))
+                    }
+                    .accessibilityHidden(true)   // the slider announces its value
+                Button {
+                    model.sliderEditing(true)
+                    model.smooth = 0
+                    model.sliderEditing(false)
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                }
+                .buttonStyle(PhotoEditorTopBarButtonStyle())
+                .disabled(abs(model.smooth) < 0.001 || model.busy != nil)
+                .accessibilityLabel("Reset Smooth skin")
+            }
+            .frame(minHeight: 44)
+
+            Slider(value: $model.smooth, in: 0...1, onEditingChanged: { editing in
+                sliding = editing
+                model.sliderEditing(editing)
+            })
+            .frame(height: 44)
+            .disabled(model.busy != nil)
+            .accessibilityLabel("Smooth skin")
+
+            HintText(model.busy != nil ? "Available when processing finishes" :
+                     model.faceCount == 0 ? "No face found in this photo" : "Edges, eyes and lips stay sharp")
+        }
     }
 
     /// A labelled slider with a reset button that puts it back to `reset` (greyed out while it's already there).
