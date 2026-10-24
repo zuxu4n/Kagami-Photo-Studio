@@ -166,6 +166,98 @@ struct HintText: View {
     }
 }
 
+// MARK: Tool bar
+
+extension Color {
+    /// Tool names and group titles in the tool bar that aren't picked: darker than `.secondary`, which is about
+    /// 3.4:1 on white, so the small text keeps 4.5:1 (darker still with Increase Contrast).
+    static let toolMuted = Color(UIColor { traits in
+        let high = traits.accessibilityContrast == .high
+        return traits.userInterfaceStyle == .dark
+            ? UIColor(red: high ? 0.72 : 0.60, green: high ? 0.72 : 0.60, blue: high ? 0.75 : 0.62, alpha: 1)
+            : UIColor(red: high ? 0.33 : 0.42, green: high ? 0.33 : 0.42, blue: high ? 0.35 : 0.44, alpha: 1)
+    })
+
+    /// The tile behind the picked tool: the accent colour, faint (stronger in dark mode, where a faint tint vanishes).
+    static func toolTile(_ scheme: ColorScheme) -> Color {
+        .accentColor.opacity(scheme == .dark ? 0.24 : 0.14)
+    }
+}
+
+/// The tinted tile behind the picked tool in the tool bar.
+struct ToolTile: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.toolTile(scheme))
+    }
+}
+
+/// The dot on a tool that has changed the photo, in the accent colour. A ring in the colour behind it (the bar, or
+/// the picked tool's tile) keeps it apart from the icon it sits on.
+struct ChangedDot: View {
+    var onTile = false
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Circle()
+            .fill(Color.accentColor)
+            .frame(width: 8, height: 8)
+            .padding(2)
+            .background {
+                ZStack {
+                    Circle().fill(Color(.systemBackground))
+                    if onTile { Circle().fill(Color.toolTile(scheme)) }
+                }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+extension View {
+    /// Fades the ends of a horizontal scroll view while there's more to scroll to, so a row cut off by the screen
+    /// edge reads as one that scrolls.
+    func scrollEdgeFades(_ width: CGFloat = 24) -> some View {
+        modifier(ScrollEdgeFades(width: width))
+    }
+}
+
+private struct ScrollEdgeFades: ViewModifier {
+    let width: CGFloat
+    @State private var more = More()
+
+    /// Whether there's content past the leading and trailing ends.
+    struct More: Equatable {
+        var leading = false, trailing = false
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: More.self) { g in
+                More(leading: g.visibleRect.minX > 1, trailing: g.visibleRect.maxX < g.contentSize.width - 1)
+            } action: { _, new in
+                more = new
+            }
+            .mask {
+                HStack(spacing: 0) {
+                    end(fading: more.leading, from: .leading, to: .trailing)
+                    Color.black
+                    end(fading: more.trailing, from: .trailing, to: .leading)
+                }
+                .animation(.easeInOut(duration: 0.2), value: more)
+            }
+    }
+
+    /// One end of the mask: clear to solid where there's more to scroll to, otherwise solid.
+    private func end(fading: Bool, from start: UnitPoint, to finish: UnitPoint) -> some View {
+        ZStack {
+            Color.black.opacity(fading ? 0 : 1)
+            LinearGradient(colors: [.clear, .black], startPoint: start, endPoint: finish).opacity(fading ? 1 : 0)
+        }
+        .frame(width: width)
+    }
+}
+
 // MARK: Feedback
 
 /// A short message over the content that fades away (Saved to Photos, hints after an action).
