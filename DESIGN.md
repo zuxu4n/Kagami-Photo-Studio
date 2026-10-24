@@ -1,0 +1,237 @@
+# Yumiro design A handoff
+
+Updated 2026-10-24 (America/Toronto). This document records approved photo-editor styling, the pushed branch state, and the Retouch proposal still under review. Read it before continuing design A.
+
+## Worktree, branch, and authorization
+
+- Work only in `C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a`, on branch `ui-a`. Use absolute paths for file operations.
+- Remote: `https://github.com/zuxu4n/Yumiro.git`.
+- The user authorized committing to `ui-a` and pushing with `git push origin ui-a`. This supersedes the earlier instruction not to push until told.
+- Never merge into main or push to `main` or `ui-b`. Do not edit `C:/Users/Jason/OneDrive/Desktop/Code/js/photoStudioClaude` (main) or `C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-b` (the other design session).
+- New UI areas follow the established workflow: research with Mobbin, show two editor-context mockups, wait for the user's selection, then implement the approved area only. Do not treat switching a preview carousel as implementation approval.
+- Early exploration, before the worktree instructions, changed the separate original `C:/Users/Jason/OneDrive/Desktop/Code/js/photoStudio/Yumiro` checkout. It may retain an uncommitted duplicate Focus rail edit; its status was not rechecked for this handoff. It is not the design A worktree. No edits were made to `photoStudioClaude`.
+
+This Windows PC has no Xcode, model packages, or `Local.xcconfig`. The user builds on a Mac, from their checkout containing those local assets:
+
+```sh
+tools/install_variant.sh a
+```
+
+The script fetches/pulls `ui-a` and installs a separate app named **Yumiro A**, bundle ID `com.zuxu4n.photostudio.a`. Do not change signing, model assets, bundle IDs, or the install script for visual work.
+
+## Implementation status
+
+All four UI changes below are committed and pushed. Latest UI implementation commit: **e8d5a3d**. A later handoff/documentation commit may be HEAD without changing that UI baseline.
+
+| Area | Approved direction | UI commit | Status |
+|---|---|---|---|
+| Bottom photo-editor tool picker | Focus rail | `1799676` | Implemented and pushed |
+| Photo-editor top bar | Balanced bar | `93155a5` | Implemented and pushed |
+| Canvas Compare, Original badge, fit-to-screen | Soft controls | `63b357c` | Implemented and pushed |
+| Smooth panel | Quiet row | `e8d5a3d` | Implemented and pushed |
+| Retouch panel | Compact rows preferred | None | Mockup only; latest spacing revision awaits acceptance |
+
+All UI implementation edits are in [ContentView.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/ContentView.swift). Shared smoothing, retouch rendering, per-face storage, gestures, camera, video editor, and home screen were not changed. Retouch still uses the original three `sliderRow` calls in app code.
+
+## Visual foundations
+
+### Colors and materials
+
+Use SwiftUI semantic colors and system materials in app code. The following hex values are the browser mockups' approximate light/dark palette, not a new hardcoded application theme.
+
+| Role | Light mockup | Dark mockup | Application source of truth |
+|---|---|---|---|
+| Editor surface | `#FFFFFF` | `#000000` | System background |
+| Secondary controls/canvas backing | `#F2F2F7` | `#1C1C1E` | `Color(.secondarySystemBackground)` |
+| Primary text | `#171719` | `#F5F5F7` | `Color.primary` |
+| Secondary text/helper copy | `#696971` | `#A1A1AA` | `Color.secondary` |
+| Disabled foreground | `#B6B6BE` | `#55555D` | `Color(.tertiaryLabel)` / native disabled state |
+| Separator | `#D9D9DE` | `#38383A` | `Divider` / system separator |
+| Accent | `#007AFF` | `#0A84FF` | `Color.accentColor` |
+| Soft selected backing | `#E9F3FF` | `#092B4C` | Accent at 12% opacity |
+| Stronger blue text in previews | `#0064CC` | `#6BB5FF` | Mockup approximation; existing app uses accent color |
+| Canvas overlay backing | `#F8F8FA` | `#242426` | `.regularMaterial` |
+
+Save has a solid accent background and white text. Secondary controls use neutral surfaces. Selection combines blue with shape/underline; it should not depend on hue alone. Preview material fills are approximately 94% opaque with blur, but native material rendering is system-managed. No native color-contrast audit has been completed.
+
+### Typography and icons
+
+Use the system font and SF Symbols in the app. Browser mockups use system-font fallbacks and Lucide approximations; those icons are not assets to import into SwiftUI.
+
+| Element | Implemented typography |
+|---|---|
+| Save | `.body.weight(.semibold)` (about 17 pt at default size) |
+| Top-bar / canvas action icons | System 20 pt |
+| Focus rail icons | `.title3`, within a 24 pt icon frame |
+| Focus rail labels | `.caption2` (about 11 pt), regular; selected semibold |
+| Smooth label and value | `.subheadline.weight(.medium)` (about 15 pt); value uses monospaced digits |
+| Helper text | `.footnote` (about 13 pt), secondary foreground |
+| Original badge | `.caption.weight(.semibold)` (about 12 pt) |
+| Fit zoom value | `.footnote.weight(.medium)`, monospaced digits |
+
+The photo editor already caps Dynamic Type at `.xLarge`; that limit was preserved. Default browser text sizes do not establish native Dynamic Type behavior. Retouch's compact mockup labels/value badges are 13 px; check native legibility before treating that as final SwiftUI typography.
+
+### Spacing and geometry
+
+Existing `Space` constants: `xs = 4`, `s = 8`, `m = 12`, `l = 16`, `xl = 24`, `xxl = 32`.
+
+- Top bar: 52 pt high; 12 pt horizontal insets; icon targets at least 44 x 44 pt.
+- Save: at least 76 x 44 pt; 17 pt horizontal label padding; 14 pt continuous corner radius.
+- Primary neutral control radius: 14 pt. Value badge radius: 10 pt.
+- Bottom picker: 66 pt high. Each tool has a 58 pt visual backing inside a 66 pt target, minimum width 66 pt, 6 pt horizontal content padding.
+- Picker item spacing: 2 pt. Horizontal outer padding: 8 pt. Group dividers: 24 pt high with 5 pt horizontal padding.
+- Selected picker underline: 14 x 2 pt, 3 pt above the backing's bottom edge. Changed-tool dots: 6 x 6 pt on non-selected tools.
+- Canvas controls: bottom-left/bottom-right, 12 pt inset. Original stays top-center with a 10 pt top inset.
+- Tool panel: existing minimum 184 pt area, generally 16 pt horizontal and 12 pt vertical padding. Preserve canvas proportions when changing a panel.
+- Native sliders keep system track/thumb rendering and a 44 pt interaction frame. The mockup's 4 px track and 26 px thumb are illustrative.
+
+## Approved components and behavior
+
+### Focus rail
+
+One horizontally scrolling strip, in the existing order and groups:
+
+1. Enhance, Adjust.
+2. Smooth, Retouch, Face, Warp.
+3. Heal, Background.
+
+Selected tool: soft blue rounded backing, accent icon/text, semibold label, short underline. Other tools stay neutral; tools with edits retain their existing changed dots. Auto-centering on selection, selection haptics, accessibility labels/selected traits, and tool behavior are retained. Do not add tools or categories.
+
+### Balanced top bar
+
+Close left, Undo/Redo truly centered as a pair with 4 pt spacing, Save right. Save is the primary action. Separate neutral 44 pt rounded icon targets match the rail's geometry. Undo/Redo use the existing availability/busy guards; unavailable actions use tertiary foreground. Save's disabled backing uses accent at 35% opacity; pressed controls use 70% opacity. Existing discard confirmation and export behavior are retained. VoiceOver priorities order Close, Undo, Redo, Save.
+
+### Soft canvas controls
+
+- Compare: 44 x 44 pt, rounded rectangle radius 14; hold to compare, not a toggle. Active appearance adds accent foreground and a 12% tint.
+- Original: non-interactive top-center badge; minimum height 28 pt; horizontal padding 12 pt, vertical padding 5 pt, radius 14.
+- Fit: appears only for `zoom > 1.01`; inward arrows plus the current one-decimal zoom factor; minimum 44 pt height; horizontal padding 12 pt; icon/value spacing 7 pt. Tap resets zoom to 1 and pan to zero.
+- Shared backing: regular material, subtle 1 pt border (primary at 8%, active accent at 28%), black shadow at 8% opacity, radius 2, y-offset 1.
+
+Image aspect-fit sizing, clipping, pinch/pan calculations, photo hold behavior, and crop/busy control visibility are unchanged. Compare retains its original zero-duration press handling and 60 pt maximum distance. Native press and gesture behavior still requires device verification.
+
+### Smooth Quiet row
+
+Header has Smooth skin, a fixed blue numeric value badge, and Reset. A full-width native slider sits below, then helper text, with 8 pt vertical spacing. Header and slider have 44 pt interaction frames; value badge is at least 44 x 32 pt.
+
+Behavior that must remain intact:
+
+- Continuous internal range `0...1`, shown as rounded `0...100`.
+- First entry into Smooth on a photo starts at `0.3` (display **30**) and records the existing automatic edit. Returning to the tool does not reapply it.
+- Reset goes to **0**, not 30. It is disabled near zero (`abs(smooth) < 0.001`) or while busy.
+- Each drag is bracketed by `model.sliderEditing(editing)`; Reset brackets its assignment with `sliderEditing(true/false)`. Each actual drag/reset remains one undo step.
+- Native slider availability follows the existing busy lock. No new no-face restriction was added.
+- Helper: “Edges, eyes and lips stay sharp”; no-face: “No face found in this photo”; busy: “Available when processing finishes”.
+
+## Retouch: preferred proposal, not implemented
+
+The user prefers **Compact rows**, then requested two spacing corrections. The latest revision has been shown but has not received explicit final acceptance. Do not implement or push Retouch UI merely because Compact rows is the carousel's selected preview.
+
+Latest mockup details:
+
+- All three adjustments stay visible: Whiten Teeth, Brighten Eyes, Even Tone.
+- Each row contains label, native-style slider, value badge, and its own 44 x 44 reset button with 14 pt corners.
+- A soft row highlight and short leading accent marker identify the adjustment being edited. Nonzero values are blue; zero values are neutral. Selection and a nonzero effect are distinct concepts.
+- Rows are 44 pt high, with **4 pt gaps between rows/reset buttons**.
+- Helper text has an **8 pt gap below the last row**. This fixes the original cramped footer without merging the reset buttons.
+- Default-size panel budget: `3 * 44 + 2 * 4 + 8 + 18 = 166` pt content, plus **6 pt top / 12 pt bottom padding = 184 pt**. Horizontal padding stays 16 pt.
+- If implemented, account for the shared panel's existing vertical padding with a Retouch-specific layout change. Do not shrink the touch targets or change padding for every other tool to make it fit.
+- No-face state uses the existing message and control availability; sliders are currently not locked just because no face was detected. Zero resets stay disabled as usual. The preview simulates detection state without changing its sample photo.
+
+The alternative **Adjustment tabs** is not selected: all three values remain visible in a tab row, with one full-width slider and a reset for the selected adjustment.
+
+Retouch behavior to preserve:
+
+- Effects are color-only: Whiten Teeth, Brighten Eyes, Even Tone. Do not alter masks, shaders, rendering order, or face shape.
+- All three defaults are zero; each uses the existing continuous `0...1` range / rounded 0–100 display. Reset affects only its own adjustment and returns it to zero.
+- `teeth`, `brightEyes`, and `tone` are the selected face's settings. `FaceRetouch` is stored inside each face's shape; `storeShape()` saves them and `showSliders()` restores them when the selected face changes.
+- Face switching remains the existing tap-on-canvas interaction. With multiple faces, preserve the existing “Face N of M · tap another face to switch” caption and guides. Do not add an all-faces reset or make values global across faces.
+- Retain the existing per-drag and per-reset undo grouping, render-on-change callbacks, busy guards, and unchanged tool behavior.
+
+## Mockups and where to find them
+
+Portable copies are saved in `design/mockups/` in this branch. These are interactive HTML fragments for Codex's visualization surface, not standalone apps or native screenshots. They include sample NASA portrait imagery from an allowlisted CDN. Slider previews change controls/values, not the photo-processing pipeline.
+
+| File in `design/mockups/` | Direction to inspect | Status |
+|---|---|---|
+| `yumiro-toolbar-options.html` | Focus rail | Original approved rail; Grouped shelf is an unselected alternative |
+| `yumiro-picker-light-dark.html` | Focus rail | Light/dark rail follow-up; Labeled chips is unselected |
+| `yumiro-top-bar-options.html` | Balanced bar | Approved; Action cluster is unselected |
+| `yumiro-canvas-controls.html` | Soft controls | Approved; normal/comparing/zoomed, light/dark; Labeled controls is unselected |
+| `yumiro-smooth-panel-options.html` | Quiet row | Approved; default/adjusted/processing, light/dark; Soft card is unselected |
+| `yumiro-retouch-panel-options.html` | Compact rows | Latest preferred proposal and corrected spacing, not implemented; light/dark, adjusted/all-off/no-face |
+
+Absolute portable-copy directory on this PC:
+
+`C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/`
+
+Original conversation artifact directory (same filenames; outside Git):
+
+`C:/Users/Jason/.codex/visualizations/2026/10/24/01a16bec-b7ee-70d3-9fdf-41f62dc294d9/`
+
+No native app screenshots were provided or saved in this chat. Browser screenshots were inspected during preview QA but were not persisted as files. The mockups approximate UIKit colors/icons; native code is authoritative for the implementation.
+
+To preview a fragment locally on this Windows host, use the visualize skill's renderer, for example:
+
+```powershell
+python 'C:/Users/Jason/.codex/plugins/cache/openai-bundled/visualize/1.0.50/skills/visualize/scripts/render.py' 'C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-retouch-panel-options.html' --serve
+```
+
+The preview server reads the fragment when it starts: restart it after editing, rather than assuming a page reload picked up the file. The HTML fragments need the host/renderer for carousel, icon, and optional design-control support. Do not modify app code merely to make a mockup render.
+
+## Mobbin reference library
+
+Use the canonical links below. Expiring image-download URLs are intentionally not part of this handoff.
+
+### Bottom tool picker
+
+- [CapCut](https://mobbin.com/screens/dba73525-e68a-4540-93cf-dd839c82f16b): consistent icon/label rhythm and a partially visible next tool.
+- [VSCO](https://mobbin.com/screens/8aa78b87-281b-4e81-bb2e-a1d9e1d931f9): related-tool grouping.
+- [Unfold](https://mobbin.com/screens/1a6347cb-9ce7-4c7a-8dbb-b0604eb89e19): clear individual tool targets.
+- [Canva](https://mobbin.com/screens/6bedcf20-70f8-4c24-bbfc-96ed72eb2671): consistent icons and spacing in a long row.
+- [Instagram](https://mobbin.com/screens/142955aa-23c8-4d74-a51c-ce34919c1385): separate tool backings.
+
+### Top bar
+
+- [Pinterest](https://mobbin.com/screens/e0a593e7-f1ac-4750-aa7b-66cde5001d46): separate Close, history, and completion roles.
+- [Unfold](https://mobbin.com/screens/dde89b67-c1d2-48c8-adda-cebe19196387): paired Undo/Redo with different emphasis for availability.
+- [Photoroom](https://mobbin.com/screens/54bde2a7-8801-44a4-8c0f-fba99fd8f9fc): compact grouping of related top actions.
+
+### Canvas controls
+
+- [Apple Photos](https://mobbin.com/screens/1a3464f9-d5e6-4b3a-a8d1-1411eff8a26e): compact Original indication.
+- [Photoroom](https://mobbin.com/screens/c81968f1-67c1-4652-bd13-bf8595e8605c): explicit before/after orientation; its comparison slider is not being adopted.
+- [LinkedIn](https://mobbin.com/screens/1390e851-257b-48df-87ed-90a8e42a0b46): visible zoom magnitude.
+
+### Smooth panel
+
+- [VSCO](https://mobbin.com/screens/df9557ce-8461-4c68-a07f-823919f788ca): numeric strength close to the active slider.
+- [Shopee](https://mobbin.com/screens/e0a34c4b-29b8-4bdf-aced-9fb455d9aa09): Smooth strength with a separate Reset action.
+- [(Not Boring) Camera](https://mobbin.com/screens/4a350c13-9234-42a0-97ea-acef9019fb76): title, value, helper, and slider grouped in a compact panel.
+
+### Retouch grouping
+
+- [Azar](https://mobbin.com/screens/8f295b8c-0d6e-4715-879d-af53d7f8352d): distinguish the selected adjustment from neighboring tools.
+- [Shopee](https://mobbin.com/screens/fbda85d0-d09e-4a6c-af5d-61a00f498c00): associate the selected adjustment with strength, value, and Reset.
+- [Apple Photos](https://mobbin.com/screens/0dc105f4-8259-4396-bb88-979b3c4d9a66): compact adjustment navigation with one focused slider.
+
+These references inform layout details; they do not authorize importing application assets, features, or code.
+
+## Validation completed and remaining
+
+Completed:
+
+- `git diff --check` passed for each UI commit. Pushes to `origin/ui-a` were confirmed against the remote branch, and the worktree was clean before this documentation work.
+- Source-scope comparisons confirmed that each UI commit only changed its approved area. The Smooth check also confirmed `EditorModel.swift` was unchanged.
+- Native behavior was inspected in source: selection, undo/reset grouping, smoothing default, per-face values, busy/crop guards, gesture calculations, and fit reset. These were source checks, not runtime tests.
+- Mockup JavaScript passed syntax checks. Browser previews were visually inspected for light/dark, selected/unselected or enabled/disabled states, and the requested panel states.
+- Browser interactions confirmed Smooth reset to zero, value updates, processing locks; Retouch independent values/tab switching, reset of only one adjustment, and no-face presentation; canvas fit returning to normal; and top-bar history availability changes.
+- Latest Retouch browser geometry was measured: **184 px panel height, 44 px reset targets, 4 px reset-button gaps, 8 px helper-text gap**. Browser pixels model native points at the intended preview scale; this is not native layout validation.
+
+Still unfinished:
+
+1. Get acceptance of the latest Retouch spacing revision before implementing Compact rows. Retouch remains the original UI in the app.
+2. Build/install the pushed design A on the user's Mac with `tools/install_variant.sh a`. No Xcode build, XCTest, or phone install has been run in this chat. No compiler-success claim is justified.
+3. Run the relevant existing regression tests on a Mac; see [TESTING.md](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/TESTING.md). Smooth's automatic default/undo/redo tests are especially relevant. Do not add tests that only mirror cosmetic view code.
+4. Inspect native light/dark appearance, smaller supported phone widths, Dynamic Type through the existing xLarge cap, VoiceOver order/announcements, and real material legibility. Check Compare hold/release, pinch/pan, zoomed fit reset, Save, Undo/Redo, Smooth reset, and per-face Retouch persistence.
+5. Keep home, camera, video editor, face/crop/other tool panels, effects, and image geometry outside unsolicited redesign work. Continue one explicitly requested photo-editor area at a time.

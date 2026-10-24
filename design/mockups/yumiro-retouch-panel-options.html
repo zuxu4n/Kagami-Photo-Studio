@@ -1,0 +1,178 @@
+<div id="yumiro-retouch-review" data-appearance="light">
+ <div class="viz-controls" aria-label="Retouch panel preview settings">
+  <div class="viz-row" role="group" aria-label="Appearance">
+   <button type="button" class="btn cursor-interaction" data-theme="light" aria-pressed="true">Light</button>
+   <button type="button" class="btn cursor-interaction" data-theme="dark" aria-pressed="false">Dark</button>
+  </div>
+  <label class="form-label">Retouch state
+   <select class="form-select" aria-label="Retouch panel state">
+    <option value="adjusted">Adjusted</option>
+    <option value="off">All off</option>
+    <option value="no-face">No face detected</option>
+   </select>
+  </label>
+ </div>
+ <div class="viz-carousel viz-dotted-background" aria-label="Yumiro Retouch panel directions">
+  <section data-variant="Compact rows" aria-label="Compact rows Retouch panel direction">
+   <div class="ys-stage"><div class="ys-phone" data-direction="rows"></div></div>
+  </section>
+  <section data-variant="Adjustment tabs" aria-label="Adjustment tabs Retouch panel direction" hidden>
+   <div class="ys-stage"><div class="ys-phone" data-direction="tabs"></div></div>
+  </section>
+ </div>
+ <div class="text-small" data-feedback aria-live="polite">Values preview the selected face. Each Reset affects one adjustment.</div>
+</div>
+<style>
+#yumiro-retouch-review .ys-stage {display:flex;justify-content:center;padding:20px 8px 14px;min-height:880px;box-sizing:border-box}
+#yumiro-retouch-review .ys-phone {--ys-bg:light-dark(#fff,#000);--ys-canvas:light-dark(#f2f2f7,#1c1c1e);--ys-text:light-dark(#171719,#f5f5f7);--ys-muted:light-dark(#696971,#a1a1aa);--ys-disabled:light-dark(#b6b6be,#55555d);--ys-line:light-dark(#d9d9de,#38383a);--ys-accent:light-dark(#007aff,#0a84ff);--ys-soft:light-dark(#e9f3ff,#092b4c);--ys-ink:light-dark(#0064cc,#6bb5ff);--ys-control-bg:light-dark(#f8f8fa,#242426);width:390px;max-width:100%;height:844px;display:flex;flex-direction:column;background:var(--ys-bg);color:var(--ys-text);border:1px solid var(--ys-line);border-radius:38px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-shadow:0 10px 36px #00000014;box-sizing:border-box}
+#yumiro-retouch-review[data-appearance="light"] .ys-phone {color-scheme:light}
+#yumiro-retouch-review[data-appearance="dark"] .ys-phone {color-scheme:dark}
+#yumiro-retouch-review .ys-phone * {box-sizing:border-box}
+#yumiro-retouch-review .ys-status {height:59px;flex-shrink:0;padding:15px 26px 0;display:flex;align-items:flex-start;justify-content:space-between;font-size:14px;font-weight:600;position:relative}
+#yumiro-retouch-review .ys-island {position:absolute;top:10px;left:50%;transform:translateX(-50%);width:116px;height:31px;border-radius:24px;background:#000}
+#yumiro-retouch-review .ys-status-icons {display:flex;gap:5px;align-items:center}
+#yumiro-retouch-review .ys-status-icons svg {width:15px;height:15px}
+#yumiro-retouch-review .ys-top {height:52px;flex-shrink:0;display:flex;align-items:center;position:relative;padding:4px 12px;gap:8px}
+#yumiro-retouch-review .ys-top-control {display:flex;align-items:center;justify-content:center;flex-shrink:0;width:44px;height:44px;border-radius:14px;background:var(--ys-canvas);color:var(--ys-accent)}
+#yumiro-retouch-review .ys-top-control svg {width:20px;height:20px;stroke-width:1.8}
+#yumiro-retouch-review .ys-top .ys-close {color:var(--ys-muted)}
+#yumiro-retouch-review .ys-top .ys-disabled {color:var(--ys-disabled)}
+#yumiro-retouch-review .ys-history {position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:4px}
+#yumiro-retouch-review .ys-top .ys-save {width:76px;background:var(--ys-accent);color:#fff;margin-left:auto;font-size:17px;font-weight:600}
+#yumiro-retouch-review .ys-canvas {height:449px;flex-shrink:0;position:relative;background:var(--ys-canvas);overflow:hidden;display:flex;align-items:center;justify-content:center}
+#yumiro-retouch-review .ys-photo {width:100%;height:100%;object-fit:contain;user-select:none}
+#yumiro-retouch-review .ys-compare {position:absolute;bottom:12px;left:12px;width:44px;height:44px;display:grid;place-items:center;border:1px solid light-dark(#00000016,#ffffff24);border-radius:14px;background:light-dark(#f8f8faef,#242426ef);color:var(--ys-text);backdrop-filter:blur(14px);box-shadow:0 1px 4px #00000016}
+#yumiro-retouch-review .ys-compare svg {width:20px;height:20px;stroke-width:1.8}
+#yumiro-retouch-review .ys-panel {height:184px;flex-shrink:0;padding:12px 16px;display:flex;align-items:stretch;justify-content:center;flex-direction:column}
+#yumiro-retouch-review .ys-adjustment {--ys-adjust-radius:14px;display:flex;flex-direction:column;gap:8px}
+#yumiro-retouch-review .ys-heading {display:flex;align-items:center;min-height:44px;gap:8px}
+#yumiro-retouch-review .ys-heading label {font-size:15px;font-weight:500;margin-right:auto}
+#yumiro-retouch-review .ys-value {font-size:15px;line-height:20px;font-weight:500;font-variant-numeric:tabular-nums;display:flex;align-items:center;justify-content:center;min-width:44px;min-height:32px;padding:4px 8px;border-radius:10px;background:var(--ys-soft);color:var(--ys-ink)}
+#yumiro-retouch-review .ys-reset {flex-shrink:0;width:44px;height:44px;display:grid;place-items:center;border:0;border-radius:var(--ys-adjust-radius);background:var(--ys-canvas);color:var(--ys-ink);padding:0;cursor:inherit}
+#yumiro-retouch-review .ys-reset svg {width:20px;height:20px;stroke-width:1.8}
+#yumiro-retouch-review .ys-reset:disabled {color:var(--ys-disabled)}
+#yumiro-retouch-review .ys-range {--ys-progress:30%;--ys-range-fill:var(--ys-accent);width:100%;min-width:0;height:44px;padding:0;margin:0;appearance:none;-webkit-appearance:none;background:transparent;cursor:inherit;border-radius:3px}
+#yumiro-retouch-review .ys-range::-webkit-slider-runnable-track {height:4px;border-radius:3px;background:linear-gradient(to right,var(--ys-range-fill) 0 var(--ys-progress),var(--ys-line) var(--ys-progress) 100%)}
+#yumiro-retouch-review .ys-range::-webkit-slider-thumb {appearance:none;-webkit-appearance:none;width:26px;height:26px;margin-top:-11px;border:0;border-radius:50%;background:#fff;box-shadow:0 2px 5px #0003}
+#yumiro-retouch-review .ys-range::-moz-range-track {height:4px;border-radius:3px;background:linear-gradient(to right,var(--ys-range-fill) 0 var(--ys-progress),var(--ys-line) var(--ys-progress) 100%)}
+#yumiro-retouch-review .ys-range::-moz-range-thumb {width:26px;height:26px;border:0;border-radius:50%;background:#fff;box-shadow:0 2px 5px #0003}
+#yumiro-retouch-review .ys-range:disabled {--ys-range-fill:var(--ys-disabled)}
+#yumiro-retouch-review .ys-range:disabled::-webkit-slider-thumb {background:var(--ys-line);box-shadow:none}
+#yumiro-retouch-review .ys-range:disabled::-moz-range-thumb {background:var(--ys-line);box-shadow:none}
+#yumiro-retouch-review .ys-helper {font-size:13px;color:var(--ys-muted);line-height:18px;min-height:18px;margin:0}
+#yumiro-retouch-review .ys-slider-line {display:flex;align-items:center;gap:12px}
+#yumiro-retouch-review .ys-phone[data-direction="card"] .ys-adjustment {background:var(--ys-canvas);border-radius:var(--ys-adjust-radius);padding:12px;gap:8px}
+#yumiro-retouch-review .ys-phone[data-direction="card"] .ys-heading {min-height:32px}
+#yumiro-retouch-review .ys-phone[data-direction="card"] .ys-value {font-size:22px;line-height:28px;background:transparent;padding:0;color:var(--ys-text)}
+#yumiro-retouch-review .ys-phone[data-direction="card"] .ys-reset {background:var(--ys-bg)}
+#yumiro-retouch-review .ys-adjustment[data-disabled="true"] .ys-heading label {color:var(--ys-muted)}
+#yumiro-retouch-review .ys-adjustment[data-disabled="true"] .ys-value {background:transparent;color:var(--ys-muted)}
+#yumiro-retouch-review .ys-value[data-zero="true"] {background:var(--ys-canvas);color:var(--ys-muted)}
+#yumiro-retouch-review .ys-bottom {height:66px;flex-shrink:0;border-top:1px solid var(--ys-line)}
+#yumiro-retouch-review .ys-rail {height:65px;display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;padding:3px 8px}
+#yumiro-retouch-review .ys-rail::-webkit-scrollbar {display:none}
+#yumiro-retouch-review .ys-tool {position:relative;min-width:66px;height:58px;padding:5px 6px 4px;border-radius:14px;flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;color:var(--ys-muted)}
+#yumiro-retouch-review .ys-tool svg {width:22px;height:22px;stroke-width:1.7}
+#yumiro-retouch-review .ys-tool-label {font-size:11px;line-height:14px;white-space:nowrap}
+#yumiro-retouch-review .ys-tool[data-selected] {background:var(--ys-soft);color:var(--ys-accent)}
+#yumiro-retouch-review .ys-tool[data-selected] .ys-tool-label {font-weight:600}
+#yumiro-retouch-review .ys-tool[data-selected]::after {content:"";position:absolute;bottom:3px;width:14px;height:2px;border-radius:3px;background:var(--ys-accent)}
+#yumiro-retouch-review .ys-tool[data-changed]::before {content:"";position:absolute;width:6px;height:6px;top:5px;left:calc(50% + 13px);border-radius:50%;background:var(--ys-muted)}
+#yumiro-retouch-review .ys-group-divider {width:1px;height:24px;background:var(--ys-line);flex-shrink:0;margin:0 5px}
+#yumiro-retouch-review .ys-home {height:34px;flex-shrink:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;background:var(--ys-bg)}
+#yumiro-retouch-review .ys-home::before {content:"";height:5px;width:134px;border-radius:3px;background:var(--ys-text)}
+@media(max-width:400px){#yumiro-retouch-review .ys-stage{padding-left:0;padding-right:0}}
+#yumiro-retouch-review .yr-panel {--ys-adjust-radius:14px}
+#yumiro-retouch-review .yr-row-group {display:flex;flex-direction:column;gap:4px}
+#yumiro-retouch-review .yr-row {display:flex;align-items:center;gap:6px;min-height:44px;border-radius:var(--ys-adjust-radius,14px);position:relative}
+#yumiro-retouch-review .yr-row label {font-size:13px;font-weight:500;width:94px;flex-shrink:0;white-space:nowrap;padding-left:4px}
+#yumiro-retouch-review .yr-row .ys-value {min-width:32px;padding:4px;min-height:28px;font-size:13px}
+#yumiro-retouch-review .yr-row .ys-range {flex:1}
+#yumiro-retouch-review .yr-row[data-active="true"] {background:color-mix(in srgb,var(--ys-soft) 55%,transparent)}
+#yumiro-retouch-review .yr-row[data-active="true"]::before {content:"";position:absolute;width:2px;height:20px;left:-5px;border-radius:2px;background:var(--ys-accent)}
+#yumiro-retouch-review .yr-row[data-active="true"] label {color:var(--ys-ink)}
+#yumiro-retouch-review .yr-panel .ys-helper {margin-top:2px}
+#yumiro-retouch-review .ys-phone[data-direction="rows"] .ys-panel {padding-top:6px}
+#yumiro-retouch-review .ys-phone[data-direction="rows"] .ys-helper {margin-top:8px}
+#yumiro-retouch-review .yr-tabs {display:flex;gap:4px;height:44px;flex-shrink:0}
+#yumiro-retouch-review .yr-tab {height:44px;min-width:44px;flex:1;border:0;border-radius:var(--ys-adjust-radius,14px);background:var(--ys-canvas);color:var(--ys-text);font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:2px 4px;position:relative;cursor:inherit}
+#yumiro-retouch-review .yr-tab-name {font-size:11px;line-height:14px;white-space:nowrap}
+#yumiro-retouch-review .yr-tab-value {font-size:11px;line-height:14px;color:var(--ys-muted);font-variant-numeric:tabular-nums}
+#yumiro-retouch-review .yr-tab[data-applied="true"] .yr-tab-value {color:var(--ys-ink);font-weight:600}
+#yumiro-retouch-review .yr-tab[aria-selected="true"] {background:var(--ys-soft);color:var(--ys-ink)}
+#yumiro-retouch-review .yr-tab[aria-selected="true"]::after {content:"";position:absolute;bottom:2px;width:14px;height:2px;border-radius:2px;background:var(--ys-accent)}
+#yumiro-retouch-review .yr-tab-content {margin-top:4px}
+#yumiro-retouch-review .yr-tab-content .ys-heading {height:44px}
+#yumiro-retouch-review .yr-panel[data-no-face="true"] .ys-value {background:transparent;color:var(--ys-muted)}
+#yumiro-retouch-review .yr-panel[data-no-face="true"] .yr-row label {color:var(--ys-muted)}
+</style>
+<script>
+(() => {
+ const root=document.getElementById('yumiro-retouch-review');
+ const saved=globalThis.openai?.widgetState?.privateContent || {};
+ const validValues=value=>Array.isArray(value)&&value.length===3&&value.every(v=>typeof v==='number'&&v>=0&&v<=1);
+ const state={theme:saved.theme==='dark' ? 'dark' : 'light',mode:['adjusted','off','no-face'].includes(saved.mode) ? saved.mode : 'adjusted',values:validValues(saved.values)?saved.values:[0.25,0,0.4],noFaceValues:validValues(saved.noFaceValues)?saved.noFaceValues:[0,0,0],active:Number.isInteger(saved.active)&&saved.active>=0&&saved.active<3?saved.active:2};
+ const select=root.querySelector('select');
+ const feedback=root.querySelector('[data-feedback]');
+ const names=['Enhance','Adjust','Smooth','Retouch','Face','Warp','Heal','Background'];
+ const icons=['sparkles','sliders-horizontal','droplet','wand-sparkles','smile','hand','bandage','scan-line'];
+ const groups=[[0,1],[2,3,4,5],[6,7]];
+ const icon=name=>`<i data-lucide="${name}" aria-hidden="true"></i>`;
+ const tool=i=>`<span class="ys-tool" ${i===3 ? 'data-selected' : ''} ${i===1 ? 'data-changed' : ''} aria-label="${names[i]}${i===3 ? ', selected' : ''}${i===1 ? ', changed' : ''}">${icon(icons[i])}<span class="ys-tool-label">${names[i]}</span></span>`;
+ const effects=['Whiten Teeth','Brighten Eyes','Even Tone'];
+ const values=()=>state.mode==='no-face'?state.noFaceValues:state.values;
+ const reset=(index)=>`<button type="button" class="ys-reset cursor-interaction" data-reset="${index}" aria-label="Reset ${effects[index]} to zero">${icon('rotate-ccw')}</button>`;
+ const range=(index,key)=>`<input class="ys-range cursor-interaction" id="yr-strength-${key}-${index}" data-effect="${index}" type="range" min="0" max="1" step="any" value="0" aria-label="${effects[index]} strength" aria-describedby="yr-helper-${key}">`;
+ const output=index=>`<output class="ys-value" data-value="${index}">0</output>`;
+ root.querySelectorAll('.ys-phone').forEach(phone=>{
+  const tabs=phone.dataset.direction==='tabs';
+  const key=phone.dataset.direction;
+  const helper=`<p class="ys-helper" id="yr-helper-${key}" data-helper>Colour only; the face’s shape stays</p>`;
+  const panel=tabs ? `<div class="yr-tabs" role="tablist" aria-label="Retouch adjustments">${effects.map((name,index)=>`<button type="button" class="yr-tab cursor-interaction" id="yr-tab-${index}" role="tab" data-tab="${index}" aria-controls="yr-tab-panel" aria-selected="${index===state.active}"><span class="yr-tab-name">${name}</span><span class="yr-tab-value" data-tab-value="${index}">0</span></button>`).join('')}</div><div class="yr-tab-content" id="yr-tab-panel" role="tabpanel"><div class="ys-heading"><label data-selected-label>Even Tone</label>${output(0)}${reset(0)}</div>${range(0,key)}${helper}</div>` : `<div class="yr-row-group">${effects.map((name,index)=>`<div class="yr-row" data-row="${index}"><label for="yr-strength-${key}-${index}">${name}</label>${range(index,key)}${output(index)}${reset(index)}</div>`).join('')}</div>${helper}`;
+  phone.innerHTML=`<div class="ys-status" aria-hidden="true"><span>9:41</span><span class="ys-island"></span><span class="ys-status-icons">${icon('signal')}${icon('wifi')}${icon('battery-full')}</span></div>
+   <div class="ys-top" aria-label="Existing Balanced top bar, held fixed"><span class="ys-top-control ys-close">${icon('x')}</span><div class="ys-history"><span class="ys-top-control">${icon('undo-2')}</span><span class="ys-top-control ys-disabled">${icon('redo-2')}</span></div><span class="ys-top-control ys-save">Save</span></div>
+   <div class="ys-canvas" aria-label="Existing photo canvas and Soft controls, held fixed"><img class="ys-photo" draggable="false" src="https://cdn.jsdelivr.net/gh/scikit-image/scikit-image@v0.19.3/skimage/data/astronaut.png" alt="Sample portrait of astronaut Eileen Collins, NASA"><span class="ys-compare" aria-label="Existing Compare control">${icon('columns-2')}</span></div>
+   <section class="ys-panel" aria-label="${tabs ? 'Adjustment tabs' : 'Compact rows'} Retouch panel"><div class="yr-panel" data-adjustment>${panel}</div></section>
+   <div class="ys-bottom" aria-label="Existing Focus rail, held fixed"><div class="ys-rail">${groups.map(group=>group.map(tool).join('')).join('<span class="ys-group-divider" aria-hidden="true"></span>')}</div></div><div class="ys-home" aria-hidden="true"></div>`;
+  phone.querySelectorAll('.ys-range').forEach(input=>{
+   input.addEventListener('focus',()=>{state.active=Number(input.dataset.effect);render();});
+   input.addEventListener('input',()=>{state.active=Number(input.dataset.effect);values()[state.active]=Number(input.value);if(state.mode==='off')state.mode='adjusted';render();});
+   input.addEventListener('change',persist);
+  });
+  phone.querySelectorAll('[data-reset]').forEach(button=>button.addEventListener('click',()=>{state.active=Number(button.dataset.reset);values()[state.active]=0;if(state.mode==='off')state.mode='adjusted';render();persist();}));
+  phone.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{state.active=Number(button.dataset.tab);render();persist();}));
+  if(globalThis.Tweak){const shape={radius:14};const adjustment=phone.querySelector('[data-adjustment]');const tweak=new Tweak({container:adjustment,onChange:()=>adjustment.style.setProperty('--ys-adjust-radius',shape.radius+'px')});tweak.addSlider(shape,'radius',{label:'Panel control radius',min:10,max:20,unit:'px'});}
+ });
+ function render(){
+  const noFace=state.mode==='no-face';
+  const current=values();
+  root.dataset.appearance=state.theme;
+  root.querySelectorAll('[data-theme]').forEach(button=>button.setAttribute('aria-pressed',button.dataset.theme===state.theme));
+  root.querySelectorAll('[data-adjustment]').forEach(panel=>panel.dataset.noFace=String(noFace));
+  const tabPhone=root.querySelector('[data-direction="tabs"]');
+  const tabContent=tabPhone.querySelector('.yr-tab-content');
+  tabContent.setAttribute('aria-labelledby','yr-tab-'+state.active);
+  const tabRange=tabContent.querySelector('input');
+  tabRange.dataset.effect=String(state.active);
+  tabRange.id='yr-strength-tabs-'+state.active;
+  tabRange.setAttribute('aria-label',effects[state.active]+' strength');
+  const tabLabel=tabContent.querySelector('[data-selected-label]');tabLabel.textContent=effects[state.active];tabLabel.htmlFor=tabRange.id;
+  const tabOutput=tabContent.querySelector('[data-value]');tabOutput.dataset.value=String(state.active);tabOutput.setAttribute('for',tabRange.id);
+  const tabReset=tabContent.querySelector('[data-reset]');tabReset.dataset.reset=String(state.active);tabReset.setAttribute('aria-label','Reset '+effects[state.active]+' to zero');
+  root.querySelectorAll('.ys-range').forEach(input=>{const index=Number(input.dataset.effect);input.value=String(current[index]);input.setAttribute('aria-valuetext',Math.round(current[index]*100)+' out of 100');input.style.setProperty('--ys-progress',current[index]*100+'%');});
+  root.querySelectorAll('[data-value]').forEach(output=>{const index=Number(output.dataset.value);output.textContent=String(Math.round(current[index]*100));output.dataset.zero=String(current[index]<0.001);});
+  root.querySelectorAll('[data-reset]').forEach(button=>button.disabled=current[Number(button.dataset.reset)]<0.001);
+  root.querySelectorAll('[data-row]').forEach(row=>row.dataset.active=String(!noFace && Number(row.dataset.row)===state.active));
+  root.querySelectorAll('[data-tab]').forEach(button=>{const index=Number(button.dataset.tab);button.setAttribute('aria-selected',String(index===state.active));button.dataset.applied=String(!noFace && current[index]>=0.001);});
+  root.querySelectorAll('[data-tab-value]').forEach(output=>output.textContent=String(Math.round(current[Number(output.dataset.tabValue)]*100)));
+  root.querySelectorAll('[data-helper]').forEach(helper=>helper.textContent=noFace ? 'No face found in this photo' : 'Colour only; the face’s shape stays');
+  select.value=state.mode;
+  feedback.textContent=noFace ? 'No face detected · existing control availability retained. Photo preview remains fixed.' : effects[state.active]+' selected · blue values indicate nonzero settings; Reset affects one adjustment.';
+ }
+ function persist(){if(globalThis.openai?.setWidgetState)globalThis.openai.setWidgetState({modelContent:null,privateContent:{theme:state.theme,mode:state.mode,values:state.values,noFaceValues:state.noFaceValues,active:state.active}}).catch(()=>{});}
+ root.querySelectorAll('[data-theme]').forEach(button=>button.addEventListener('click',()=>{state.theme=button.dataset.theme;render();persist();}));
+ select.addEventListener('change',()=>{state.mode=select.value;if(state.mode==='off')state.values=[0,0,0];if(state.mode==='adjusted')state.values=[0.25,0,0.4];if(state.mode==='no-face')state.noFaceValues=[0,0,0];render();persist();});
+ render();
+ if(globalThis.lucide)lucide.createIcons({attrs:{width:20,height:20}});
+})();
+</script>

@@ -1,0 +1,137 @@
+<div id="yumiro-canvas-review" data-appearance="light">
+ <div class="viz-controls" aria-label="Canvas control preview settings">
+  <div class="viz-row" role="group" aria-label="Appearance">
+   <button type="button" class="btn cursor-interaction" data-theme="light" aria-pressed="true">Light</button>
+   <button type="button" class="btn cursor-interaction" data-theme="dark" aria-pressed="false">Dark</button>
+  </div>
+  <label class="form-label">Canvas state
+   <select class="form-select" aria-label="Canvas state">
+    <option value="normal">Normal</option>
+    <option value="comparing">Comparing · Original</option>
+    <option value="zoomed">Zoomed in · 2.0×</option>
+   </select>
+  </label>
+ </div>
+ <div class="viz-carousel viz-dotted-background" aria-label="Yumiro canvas control directions">
+  <section data-variant="Soft controls" aria-label="Soft canvas controls direction">
+   <div class="yc-stage"><div class="yc-phone" data-direction="soft"></div></div>
+  </section>
+  <section data-variant="Labeled controls" aria-label="Labeled canvas controls direction" hidden>
+   <div class="yc-stage"><div class="yc-phone" data-direction="labeled"></div></div>
+  </section>
+ </div>
+ <div class="text-small" data-feedback aria-live="polite">Normal · hold Compare to preview the Original badge.</div>
+</div>
+<style>
+#yumiro-canvas-review .yc-stage {display:flex;justify-content:center;padding:20px 8px 14px;min-height:880px;box-sizing:border-box}
+#yumiro-canvas-review .yc-phone {--yc-bg:light-dark(#fff,#000);--yc-canvas:light-dark(#f2f2f7,#1c1c1e);--yc-text:light-dark(#171719,#f5f5f7);--yc-muted:light-dark(#696971,#a1a1aa);--yc-disabled:light-dark(#b6b6be,#55555d);--yc-line:light-dark(#d9d9de,#38383a);--yc-accent:light-dark(#007aff,#0a84ff);--yc-soft:light-dark(#e9f3ff,#092b4c);--yc-ink:light-dark(#0064cc,#6bb5ff);--yc-control-bg:light-dark(#f8f8fa,#242426);--yc-control-line:light-dark(#00000016,#ffffff24);width:390px;max-width:100%;height:844px;display:flex;flex-direction:column;background:var(--yc-bg);color:var(--yc-text);border:1px solid var(--yc-line);border-radius:38px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-shadow:0 10px 36px #00000014;box-sizing:border-box}
+#yumiro-canvas-review[data-appearance="light"] .yc-phone {color-scheme:light}
+#yumiro-canvas-review[data-appearance="dark"] .yc-phone {color-scheme:dark}
+#yumiro-canvas-review .yc-phone * {box-sizing:border-box}
+#yumiro-canvas-review .yc-status {height:59px;flex-shrink:0;padding:15px 26px 0;display:flex;align-items:flex-start;justify-content:space-between;font-size:14px;font-weight:600;position:relative}
+#yumiro-canvas-review .yc-island {position:absolute;top:10px;left:50%;transform:translateX(-50%);width:116px;height:31px;border-radius:24px;background:#000}
+#yumiro-canvas-review .yc-status-icons {display:flex;gap:5px;align-items:center}
+#yumiro-canvas-review .yc-status-icons svg {width:15px;height:15px}
+#yumiro-canvas-review .yc-top {height:52px;flex-shrink:0;display:flex;align-items:center;position:relative;padding:4px 12px;gap:8px}
+#yumiro-canvas-review .yc-top-control {display:flex;align-items:center;justify-content:center;flex-shrink:0;width:44px;height:44px;border-radius:14px;background:var(--yc-canvas);color:var(--yc-accent)}
+#yumiro-canvas-review .yc-top-control svg {width:20px;height:20px;stroke-width:1.8}
+#yumiro-canvas-review .yc-top .yc-close {color:var(--yc-muted)}
+#yumiro-canvas-review .yc-top .yc-disabled {color:var(--yc-disabled)}
+#yumiro-canvas-review .yc-history {position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:4px}
+#yumiro-canvas-review .yc-top .yc-save {width:76px;background:var(--yc-accent);color:#fff;margin-left:auto;font-size:17px;font-weight:600}
+#yumiro-canvas-review .yc-canvas {--yc-control-radius:14px;--yc-fill:94%;height:449px;flex-shrink:0;position:relative;background:var(--yc-canvas);overflow:hidden}
+#yumiro-canvas-review .yc-image-layer {position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transform-origin:center}
+#yumiro-canvas-review .yc-photo {width:100%;height:100%;object-fit:contain;user-select:none}
+#yumiro-canvas-review .yc-canvas[data-zoomed="true"] .yc-image-layer {transform:scale(2)}
+#yumiro-canvas-review .yc-material {border:1px solid var(--yc-control-line);background:color-mix(in srgb,var(--yc-control-bg) var(--yc-fill),transparent);color:var(--yc-text);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 1px 4px #00000016}
+#yumiro-canvas-review .yc-canvas button {font-family:inherit;min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:center;gap:7px;position:absolute;bottom:12px;padding:0 12px;border-radius:var(--yc-control-radius);font-size:13px;font-weight:500;cursor:inherit;z-index:2}
+#yumiro-canvas-review .yc-canvas button svg {width:20px;height:20px;stroke-width:1.8;flex-shrink:0}
+#yumiro-canvas-review .yc-compare {left:12px;touch-action:none;user-select:none}
+#yumiro-canvas-review .yc-phone[data-direction="soft"] .yc-compare {width:44px;padding:0}
+#yumiro-canvas-review .yc-canvas .yc-compare[aria-pressed="true"] {background:var(--yc-soft);color:var(--yc-ink);border-color:light-dark(#007aff45,#6bb5ff65)}
+#yumiro-canvas-review .yc-fit {right:12px;font-variant-numeric:tabular-nums}
+#yumiro-canvas-review .yc-original {position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:5px;min-height:28px;padding:4px 12px;border-radius:14px;z-index:2;pointer-events:none;font-size:12px;line-height:18px;font-weight:600;white-space:nowrap}
+#yumiro-canvas-review .yc-original svg {height:14px;width:14px;stroke-width:1.8}
+#yumiro-canvas-review .yc-phone[data-direction="labeled"] .yc-canvas button {border-radius:22px}
+#yumiro-canvas-review .yc-phone[data-direction="labeled"] .yc-compare {min-width:112px}
+#yumiro-canvas-review .yc-phone[data-direction="labeled"] .yc-fit {min-width:110px}
+#yumiro-canvas-review .yc-phone[data-direction="labeled"] .yc-original {border-radius:8px;padding:4px 10px}
+#yumiro-canvas-review .yc-canvas [hidden] {display:none}
+#yumiro-canvas-review .yc-panel {height:184px;flex-shrink:0;padding:12px 16px;display:flex;justify-content:center;flex-direction:column;gap:8px}
+#yumiro-canvas-review .yc-slider-label {display:flex;align-items:center;gap:8px;font-size:15px}
+#yumiro-canvas-review .yc-spacer {flex:1}
+#yumiro-canvas-review .yc-value {color:var(--yc-muted);font-size:14px}
+#yumiro-canvas-review .yc-reset {color:var(--yc-accent);width:24px;height:24px;margin-left:10px}
+#yumiro-canvas-review .yc-slider {height:28px;display:flex;align-items:center;position:relative;margin-right:42px}
+#yumiro-canvas-review .yc-track {height:4px;background:var(--yc-line);width:100%;border-radius:4px}
+#yumiro-canvas-review .yc-fill {height:4px;width:30%;background:var(--yc-accent);border-radius:4px}
+#yumiro-canvas-review .yc-knob {position:absolute;left:calc(30% - 12px);height:26px;width:26px;border-radius:50%;background:#fff;box-shadow:0 2px 5px #0003}
+#yumiro-canvas-review .yc-hint {font-size:13px;color:var(--yc-muted);line-height:18px}
+#yumiro-canvas-review .yc-bottom {height:66px;flex-shrink:0;border-top:1px solid var(--yc-line)}
+#yumiro-canvas-review .yc-rail {height:65px;display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;padding:3px 8px}
+#yumiro-canvas-review .yc-rail::-webkit-scrollbar {display:none}
+#yumiro-canvas-review .yc-tool {position:relative;min-width:66px;height:58px;padding:5px 6px 4px;border-radius:14px;flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;color:var(--yc-muted)}
+#yumiro-canvas-review .yc-tool svg {width:22px;height:22px;stroke-width:1.7}
+#yumiro-canvas-review .yc-tool-label {font-size:11px;line-height:14px;white-space:nowrap}
+#yumiro-canvas-review .yc-tool[data-selected] {background:var(--yc-soft);color:var(--yc-accent)}
+#yumiro-canvas-review .yc-tool[data-selected] .yc-tool-label {font-weight:600}
+#yumiro-canvas-review .yc-tool[data-selected]::after {content:"";position:absolute;bottom:3px;width:14px;height:2px;border-radius:3px;background:var(--yc-accent)}
+#yumiro-canvas-review .yc-tool[data-changed]::before {content:"";position:absolute;width:6px;height:6px;top:5px;left:calc(50% + 13px);border-radius:50%;background:var(--yc-muted)}
+#yumiro-canvas-review .yc-group-divider {width:1px;height:24px;background:var(--yc-line);flex-shrink:0;margin:0 5px}
+#yumiro-canvas-review .yc-home {height:34px;flex-shrink:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;background:var(--yc-bg)}
+#yumiro-canvas-review .yc-home::before {content:"";height:5px;width:134px;border-radius:3px;background:var(--yc-text)}
+@media(max-width:400px){#yumiro-canvas-review .yc-stage{padding-left:0;padding-right:0}}
+</style>
+<script>
+(() => {
+ const root=document.getElementById('yumiro-canvas-review');
+ const saved=globalThis.openai?.widgetState?.privateContent || {};
+ const state={theme:saved.theme==='dark' ? 'dark' : 'light',mode:['normal','comparing','zoomed'].includes(saved.mode) ? saved.mode : 'normal'};
+ let holding=false;
+ const select=root.querySelector('select');
+ const feedback=root.querySelector('[data-feedback]');
+ const names=['Enhance','Adjust','Smooth','Retouch','Face','Warp','Heal','Background'];
+ const icons=['sparkles','sliders-horizontal','droplet','wand-sparkles','smile','hand','bandage','scan-line'];
+ const groups=[[0,1],[2,3,4,5],[6,7]];
+ const icon=name=>`<i data-lucide="${name}" aria-hidden="true"></i>`;
+ const tool=i=>`<span class="yc-tool" ${i===2 ? 'data-selected' : ''} ${i===1 ? 'data-changed' : ''} aria-label="${names[i]}${i===2 ? ', selected' : ''}${i===1 ? ', changed' : ''}">${icon(icons[i])}<span class="yc-tool-label">${names[i]}</span></span>`;
+ root.querySelectorAll('.yc-phone').forEach(phone=>{
+  const labeled=phone.dataset.direction==='labeled';
+  phone.innerHTML=`<div class="yc-status" aria-hidden="true"><span>9:41</span><span class="yc-island"></span><span class="yc-status-icons">${icon('signal')}${icon('wifi')}${icon('battery-full')}</span></div>
+   <div class="yc-top" aria-label="Existing Balanced top bar, held fixed"><span class="yc-top-control yc-close">${icon('x')}</span><div class="yc-history"><span class="yc-top-control">${icon('undo-2')}</span><span class="yc-top-control yc-disabled">${icon('redo-2')}</span></div><span class="yc-top-control yc-save">Save</span></div>
+   <div class="yc-canvas" aria-label="${labeled ? 'Labeled controls' : 'Soft controls'} canvas preview"><div class="yc-image-layer"><img class="yc-photo" draggable="false" src="https://cdn.jsdelivr.net/gh/scikit-image/scikit-image@v0.19.3/skimage/data/astronaut.png" alt="Sample portrait of astronaut Eileen Collins, NASA"></div><span class="yc-original yc-material" data-original hidden>${labeled ? icon('columns-2') : ''}Original</span><button type="button" class="yc-compare yc-material cursor-interaction" data-compare aria-label="Hold to compare with the original" aria-pressed="false">${icon('columns-2')}${labeled ? '<span>Compare</span>' : ''}</button><button type="button" class="yc-fit yc-material cursor-interaction" data-fit aria-label="Zoom 2.0 times. Fit the photo" hidden>${icon('minimize-2')}<span>${labeled ? 'Fit · ' : ''}2.0×</span></button></div>
+   <div class="yc-panel" aria-label="Existing Smooth tool panel, held fixed"><div class="yc-slider-label"><span>Smooth skin</span><span class="yc-spacer"></span><span class="yc-value">30</span><span class="yc-reset">${icon('rotate-ccw')}</span></div><div class="yc-slider" aria-hidden="true"><div class="yc-track"><div class="yc-fill"></div></div><span class="yc-knob"></span></div><div class="yc-hint">Edges, eyes and lips stay sharp</div></div>
+   <div class="yc-bottom" aria-label="Existing Focus rail, held fixed"><div class="yc-rail">${groups.map(group=>group.map(tool).join('')).join('<span class="yc-group-divider" aria-hidden="true"></span>')}</div></div><div class="yc-home" aria-hidden="true"></div>`;
+  const compare=phone.querySelector('[data-compare]');
+  const canvas=phone.querySelector('.yc-canvas');
+  compare.addEventListener('pointerdown',event=>{if(event.button!==0)return;event.preventDefault();compare.setPointerCapture(event.pointerId);holding=true;render();});
+  const release=()=>{if(holding){holding=false;render();}};
+  compare.addEventListener('pointerup',release);
+  compare.addEventListener('pointercancel',release);
+  compare.addEventListener('lostpointercapture',release);
+  compare.addEventListener('keydown',event=>{if(event.key===' ' || event.key==='Enter'){event.preventDefault();holding=true;render();}});
+  compare.addEventListener('keyup',event=>{if(event.key===' ' || event.key==='Enter'){event.preventDefault();release();}});
+  compare.addEventListener('blur',release);
+  phone.querySelector('[data-fit]').addEventListener('click',()=>{state.mode='normal';holding=false;render();persist();});
+  if(globalThis.Tweak){const material={opacity:94};const tweak=new Tweak({container:canvas,onChange:()=>canvas.style.setProperty('--yc-fill',material.opacity+'%')});tweak.addSlider(material,'opacity',{label:'Overlay opacity',min:88,max:100,unit:'%'});}
+ });
+ function render(){
+  const comparing=state.mode==='comparing' || holding;
+  const zoomed=state.mode==='zoomed';
+  root.dataset.appearance=state.theme;
+  root.querySelectorAll('[data-theme]').forEach(button=>button.setAttribute('aria-pressed',button.dataset.theme===state.theme));
+  root.querySelectorAll('.yc-canvas').forEach(canvas=>canvas.dataset.zoomed=String(zoomed));
+  root.querySelectorAll('[data-original]').forEach(badge=>badge.hidden=!comparing);
+  root.querySelectorAll('[data-compare]').forEach(button=>button.setAttribute('aria-pressed',String(comparing)));
+  root.querySelectorAll('[data-fit]').forEach(button=>button.hidden=!zoomed);
+  select.value=state.mode;
+  feedback.textContent=comparing ? (holding && state.mode!=='comparing' ? 'Comparing · release Compare to return.' : 'Comparing preview · Original badge visible.') : zoomed ? 'Zoomed in · 2.0×; tap the fit control to return to the whole photo.' : 'Normal · hold Compare to preview the Original badge.';
+ }
+ function persist(){if(globalThis.openai?.setWidgetState)globalThis.openai.setWidgetState({modelContent:null,privateContent:{theme:state.theme,mode:state.mode}}).catch(()=>{});}
+ root.querySelectorAll('[data-theme]').forEach(button=>button.addEventListener('click',()=>{state.theme=button.dataset.theme;render();persist();}));
+ select.addEventListener('change',()=>{state.mode=select.value;holding=false;render();persist();});
+ window.addEventListener('blur',()=>{holding=false;render();});
+ render();
+ if(globalThis.lucide)lucide.createIcons({attrs:{width:20,height:20}});
+})();
+</script>

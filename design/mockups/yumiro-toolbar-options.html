@@ -1,0 +1,122 @@
+<div id="yumiro-toolbar-study" class="viz-carousel viz-dotted-background" aria-label="Yumiro bottom toolbar options">
+  <section data-variant="Focus rail" aria-label="Focus rail toolbar proposal">
+    <div class="yu-stage"><div class="yu-phone" data-direction="rail"></div></div>
+  </section>
+  <section data-variant="Grouped shelf" aria-label="Grouped shelf toolbar proposal" hidden>
+    <div class="yu-stage"><div class="yu-phone" data-direction="shelf"></div></div>
+  </section>
+</div>
+<style>
+#yumiro-toolbar-study .yu-stage {display:flex;justify-content:center;padding:20px 8px 14px;min-height:880px;box-sizing:border-box}
+#yumiro-toolbar-study .yu-phone {--yu-bg:light-dark(#fff,#000);--yu-canvas:light-dark(#f2f2f7,#1c1c1e);--yu-text:light-dark(#171719,#f5f5f7);--yu-muted:light-dark(#696971,#a1a1aa);--yu-line:light-dark(#d9d9de,#38383a);--yu-accent:light-dark(#007aff,#0a84ff);--yu-soft:light-dark(#e9f3ff,#092b4c);width:390px;max-width:100%;height:844px;display:flex;flex-direction:column;background:var(--yu-bg);color:var(--yu-text);border:1px solid var(--yu-line);border-radius:38px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-shadow:0 10px 36px #00000014;box-sizing:border-box}
+#yumiro-toolbar-study .yu-phone * {box-sizing:border-box}
+#yumiro-toolbar-study .yu-phone button {font-family:inherit;cursor:inherit}
+#yumiro-toolbar-study .yu-status {height:59px;flex-shrink:0;padding:15px 26px 0;display:flex;align-items:flex-start;justify-content:space-between;font-size:14px;font-weight:600;position:relative}
+#yumiro-toolbar-study .yu-island {position:absolute;top:10px;left:50%;transform:translateX(-50%);width:116px;height:31px;border-radius:24px;background:#000}
+#yumiro-toolbar-study .yu-status-icons {display:flex;gap:5px;align-items:center}
+#yumiro-toolbar-study .yu-status-icons svg {width:15px;height:15px}
+#yumiro-toolbar-study .yu-top {height:52px;flex-shrink:0;display:flex;align-items:center;padding:0 16px 0 8px;gap:4px;color:var(--yu-accent)}
+#yumiro-toolbar-study .yu-top .yu-spacer {flex:1}
+#yumiro-toolbar-study .yu-static-icon {width:44px;height:44px;display:grid;place-items:center}
+#yumiro-toolbar-study .yu-static-icon svg {width:20px;height:20px}
+#yumiro-toolbar-study .yu-redo {opacity:.35}
+#yumiro-toolbar-study .yu-save {background:var(--yu-accent);color:#fff;border-radius:9px;padding:8px 14px;font-size:17px}
+#yumiro-toolbar-study .yu-canvas {height:449px;flex-shrink:0;position:relative;display:flex;align-items:center;justify-content:center;background:var(--yu-canvas)}
+#yumiro-toolbar-study .yu-photo {width:100%;height:100%;object-fit:contain}
+#yumiro-toolbar-study .yu-compare {position:absolute;bottom:12px;left:12px;width:40px;height:40px;display:grid;place-items:center;border-radius:50%;background:light-dark(#f6f6f0e8,#303030e8);color:var(--yu-text)}
+#yumiro-toolbar-study .yu-compare svg {width:21px;height:21px}
+#yumiro-toolbar-study .yu-panel {height:184px;flex-shrink:0;padding:12px 16px;display:flex;justify-content:center;flex-direction:column;gap:8px}
+#yumiro-toolbar-study .yu-slider-label {display:flex;align-items:center;gap:8px;font-size:15px}
+#yumiro-toolbar-study .yu-slider-label .yu-spacer {flex:1}
+#yumiro-toolbar-study .yu-value {color:var(--yu-muted);font-size:14px}
+#yumiro-toolbar-study .yu-reset {color:var(--yu-accent);width:24px;height:24px;margin-left:10px}
+#yumiro-toolbar-study .yu-slider {height:28px;display:flex;align-items:center;position:relative;margin-right:42px}
+#yumiro-toolbar-study .yu-track {height:4px;background:var(--yu-line);width:100%;border-radius:4px}
+#yumiro-toolbar-study .yu-fill {height:4px;width:30%;background:var(--yu-accent);border-radius:4px}
+#yumiro-toolbar-study .yu-knob {position:absolute;left:calc(30% - 12px);height:26px;width:26px;border-radius:50%;background:#fff;box-shadow:0 2px 5px #0003}
+#yumiro-toolbar-study .yu-hint {font-size:13px;color:var(--yu-muted);line-height:18px}
+#yumiro-toolbar-study .yu-bottom {height:66px;flex-shrink:0;border-top:1px solid var(--yu-line);position:relative}
+#yumiro-toolbar-study .yu-home {height:34px;flex-shrink:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;background:var(--yu-bg)}
+#yumiro-toolbar-study .yu-home::before {content:"";height:5px;width:134px;border-radius:3px;background:var(--yu-text)}
+#yumiro-toolbar-study .yu-rail {height:65px;display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;padding:3px 8px;scroll-behavior:smooth}
+#yumiro-toolbar-study .yu-rail::-webkit-scrollbar {display:none}
+#yumiro-toolbar-study .yu-tool {position:relative;min-width:66px;height:58px;padding:5px 6px 4px;border:0;border-radius:14px;flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;background:transparent;color:var(--yu-muted)}
+#yumiro-toolbar-study .yu-tool svg {width:22px;height:22px;stroke-width:1.7}
+#yumiro-toolbar-study .yu-tool-label {font-size:11px;line-height:14px;white-space:nowrap}
+#yumiro-toolbar-study .yu-tool[aria-pressed="true"] {background:var(--yu-soft);color:var(--yu-accent)}
+#yumiro-toolbar-study .yu-tool[aria-pressed="true"] .yu-tool-label {font-weight:600}
+#yumiro-toolbar-study .yu-tool[aria-pressed="true"]::after {content:"";position:absolute;bottom:3px;width:14px;height:2px;border-radius:3px;background:var(--yu-accent)}
+#yumiro-toolbar-study .yu-tool[data-changed="true"]::before {content:"";position:absolute;width:5px;height:5px;top:5px;left:calc(50% + 13px);border-radius:50%;background:var(--yu-muted)}
+#yumiro-toolbar-study .yu-group-divider {width:1px;height:24px;background:var(--yu-line);flex-shrink:0;margin:0 5px}
+#yumiro-toolbar-study .yu-rail-fade {position:absolute;right:0;top:0;width:16px;height:65px;background:linear-gradient(90deg,transparent,var(--yu-bg));pointer-events:none}
+#yumiro-toolbar-study .yu-shelf {display:flex;gap:6px;height:65px;padding:4px 8px}
+#yumiro-toolbar-study .yu-group-picker {width:66px;flex-shrink:0;border:0;border-right:1px solid var(--yu-line);padding:3px 6px 3px 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:var(--yu-bg);color:var(--yu-muted);font-size:11px;line-height:14px}
+#yumiro-toolbar-study .yu-group-picker svg {width:17px;height:17px}
+#yumiro-toolbar-study .yu-group-menu {position:absolute;bottom:69px;left:8px;width:190px;border:1px solid var(--yu-line);border-radius:13px;background:var(--yu-bg);padding:4px;box-shadow:0 4px 24px #0003;z-index:5}
+#yumiro-toolbar-study .yu-group-menu button {display:flex;align-items:center;justify-content:space-between;width:100%;min-height:44px;border:0;border-radius:8px;background:transparent;color:var(--yu-text);padding:10px;font-size:13px;text-align:left}
+#yumiro-toolbar-study .yu-group-menu button[aria-checked="true"] {background:var(--yu-soft);color:var(--yu-accent)}
+#yumiro-toolbar-study .yu-group-menu svg {width:16px;height:16px}
+#yumiro-toolbar-study .yu-group-tools {height:57px;flex:1;min-width:0;display:flex;gap:4px;align-items:stretch}
+#yumiro-toolbar-study .yu-group-tools .yu-tool {min-width:0;flex:1;height:57px;gap:4px;border-radius:11px;padding:4px 2px;color:var(--yu-text);background:var(--yu-canvas)}
+#yumiro-toolbar-study .yu-group-tools .yu-tool svg {width:21px;height:21px;flex-shrink:0}
+#yumiro-toolbar-study .yu-group-tools .yu-tool[aria-pressed="true"] {color:#fff;background:var(--yu-accent)}
+#yumiro-toolbar-study .yu-group-tools .yu-tool[aria-pressed="true"]::after {display:none}
+#yumiro-toolbar-study .yu-group-tools .yu-tool[data-changed="true"]::before {top:4px;left:auto;right:4px;width:4px;height:4px}
+#yumiro-toolbar-study .yu-live {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+@media(max-width:400px){#yumiro-toolbar-study .yu-stage{padding-left:0;padding-right:0}#yumiro-toolbar-study .yu-group-nav button{padding:0 4px}#yumiro-toolbar-study .yu-group-tools .yu-tool{gap:3px}#yumiro-toolbar-study .yu-group-tools .yu-tool svg{width:16px;height:16px}}
+@media(prefers-reduced-motion:reduce){#yumiro-toolbar-study .yu-rail{scroll-behavior:auto}}
+</style>
+<script>
+(() => {
+ const root = document.getElementById('yumiro-toolbar-study');
+ const names = ['Enhance','Adjust','Smooth','Retouch','Face','Warp','Heal','Background'];
+ const icons = ['sparkles','sliders-horizontal','droplet','wand-sparkles','smile','hand','bandage','scan-line'];
+ const groups = [[0,1],[2,3,4,5],[6,7]];
+ const groupNames = ['Fix & frame','Beauty','Remove & replace'];
+ const saved = globalThis.openai?.widgetState?.privateContent || {};
+ const states = {};
+ const icon = name => `<i data-lucide="${name}" aria-hidden="true"></i>`;
+ root.querySelectorAll('.yu-phone').forEach(phone => {
+  const direction = phone.dataset.direction;
+  const restored = saved[direction];
+  const state = states[direction] = {selected:Number.isInteger(restored?.selected) && restored.selected >= 0 && restored.selected < 8 ? restored.selected : 2, group:1, last:[0,2,6], menu:false};
+  state.group = groups.findIndex(g => g.includes(state.selected));
+  phone.innerHTML = `<div class="yu-status" aria-hidden="true"><span>9:41</span><span class="yu-island"></span><span class="yu-status-icons">${icon('signal')}${icon('wifi')}${icon('battery-full')}</span></div>
+   <div class="yu-top" aria-label="Existing top bar, shown for context"><span class="yu-static-icon">${icon('x')}</span><span class="yu-spacer"></span><span class="yu-static-icon">${icon('undo-2')}</span><span class="yu-static-icon yu-redo">${icon('redo-2')}</span><span class="yu-spacer"></span><span class="yu-save">Save</span></div>
+   <div class="yu-canvas" aria-label="Existing photo canvas layout with a sample NASA astronaut portrait"><img class="yu-photo" src="https://cdn.jsdelivr.net/gh/scikit-image/scikit-image@v0.19.3/skimage/data/astronaut.png" alt="Sample portrait of astronaut Eileen Collins, NASA"><span class="yu-compare" aria-label="Existing compare control">${icon('columns-2')}</span></div>
+   <div class="yu-panel" aria-label="Existing Smooth panel, held fixed for comparison"><div class="yu-slider-label"><span>Smooth skin</span><span class="yu-spacer"></span><span class="yu-value">30</span><span class="yu-reset">${icon('rotate-ccw')}</span></div><div class="yu-slider" aria-hidden="true"><div class="yu-track"><div class="yu-fill"></div></div><span class="yu-knob"></span></div><div class="yu-hint">Edges, eyes and lips stay sharp</div></div>
+   <nav class="yu-bottom" aria-label="${direction === 'rail' ? 'Focus rail' : 'Grouped shelf'} tool navigation preview"></nav><div class="yu-home" aria-hidden="true"></div><span class="yu-live" aria-live="polite"></span>`;
+  const nav = phone.querySelector('.yu-bottom');
+  const tool = i => `<button type="button" class="yu-tool cursor-interaction" data-tool="${i}" data-changed="${i === 1}" aria-label="${names[i]}${i === 1 ? ', changed' : ''}" aria-pressed="${state.selected === i}">${icon(icons[i])}<span class="yu-tool-label">${names[i]}</span></button>`;
+  function render() {
+   if (direction === 'rail') {
+    if (!nav.querySelector('.yu-rail')) nav.innerHTML = `<div class="yu-rail">${groups.map(g=>g.map(tool).join('')).join('<span class="yu-group-divider" aria-hidden="true"></span>')}</div><span class="yu-rail-fade"></span>`;
+    nav.querySelectorAll('[data-tool]').forEach(button=>button.setAttribute('aria-pressed',Number(button.dataset.tool)===state.selected));
+   } else {
+    nav.innerHTML = `<div class="yu-shelf"><button type="button" class="yu-group-picker cursor-interaction" data-picker aria-label="Tool group: ${groupNames[state.group]}. Choose group" aria-haspopup="menu" aria-expanded="${state.menu}">${icon('chevron-up')}<span>${groupNames[state.group]}</span></button><div class="yu-group-tools" aria-label="${groupNames[state.group]} tools">${groups[state.group].map(tool).join('')}</div></div>${state.menu ? `<div class="yu-group-menu" role="menu" aria-label="Tool groups">${groupNames.map((name,i)=>`<button type="button" role="menuitemradio" class="cursor-interaction" data-group="${i}" aria-checked="${i===state.group}">${name}${i===state.group ? icon('check') : ''}</button>`).join('')}</div>` : ''}`;
+   }
+   if (globalThis.lucide) lucide.createIcons({attrs:{width:20,height:20}});
+  }
+  function persist() {
+   if (globalThis.openai?.setWidgetState) globalThis.openai.setWidgetState({modelContent:null,privateContent:Object.fromEntries(Object.entries(states).map(([key,value])=>[key,{selected:value.selected}]))}).catch(()=>{});
+  }
+  nav.addEventListener('click',event=>{
+   const button = event.target.closest('button');
+   if (!button) return;
+   if (button.hasAttribute('data-picker')) {state.menu=!state.menu;render();return;}
+   if (button.hasAttribute('data-tool')) {state.selected=Number(button.dataset.tool);state.last[state.group]=state.selected;state.menu=false;}
+   else {state.group=Number(button.dataset.group);state.selected=state.last[state.group];state.menu=false;}
+   render();
+   if (direction === 'rail') nav.querySelector(`[data-tool="${state.selected}"]`).scrollIntoView({block:'nearest',inline:'center'});
+   phone.querySelector('.yu-live').textContent = `${names[state.selected]} selected in navigation preview. Editor context remains fixed.`;
+   persist();
+  });
+  render();
+  if (globalThis.Tweak) {
+   const design = {accent:'#007aff'};
+   const tweak = new Tweak({container:nav,onChange:()=>phone.style.setProperty('--yu-accent',design.accent)});
+   tweak.addColorPicker(design,'accent',{label:'Selection accent',reference:'--yu-accent'});
+  }
+ });
+})();
+</script>

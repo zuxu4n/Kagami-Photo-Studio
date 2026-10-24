@@ -1,0 +1,136 @@
+<div id="yumiro-top-review" data-appearance="light">
+ <div class="viz-controls" aria-label="Top bar preview settings">
+  <div class="viz-row" role="group" aria-label="Appearance">
+   <button type="button" class="btn cursor-interaction" data-theme="light" aria-pressed="true">Light</button>
+   <button type="button" class="btn cursor-interaction" data-theme="dark" aria-pressed="false">Dark</button>
+  </div>
+  <label class="form-label">Undo / Redo
+   <select class="form-select" aria-label="Undo and Redo availability">
+    <option value="undo">Undo enabled · Redo disabled</option>
+    <option value="redo">Undo disabled · Redo enabled</option>
+    <option value="both">Both enabled</option>
+    <option value="neither">Both disabled</option>
+   </select>
+  </label>
+ </div>
+ <div class="viz-carousel viz-dotted-background" aria-label="Yumiro top bar directions">
+  <section data-variant="Balanced bar" aria-label="Balanced top bar direction">
+   <div class="yt-stage"><div class="yt-phone" data-direction="balanced"></div></div>
+  </section>
+  <section data-variant="Action cluster" aria-label="Action cluster top bar direction" hidden>
+   <div class="yt-stage"><div class="yt-phone" data-direction="cluster"></div></div>
+  </section>
+ </div>
+ <div class="text-small" aria-live="polite" data-feedback>Top bar preview · photo and editing controls held fixed.</div>
+</div>
+<style>
+#yumiro-top-review .yt-stage {display:flex;justify-content:center;padding:20px 8px 14px;min-height:880px;box-sizing:border-box}
+#yumiro-top-review .yt-phone {--yt-bg:light-dark(#fff,#000);--yt-canvas:light-dark(#f2f2f7,#1c1c1e);--yt-text:light-dark(#171719,#f5f5f7);--yt-muted:light-dark(#696971,#a1a1aa);--yt-disabled:light-dark(#b6b6be,#55555d);--yt-line:light-dark(#d9d9de,#38383a);--yt-accent:light-dark(#007aff,#0a84ff);--yt-ink:light-dark(#0064cc,#6bb5ff);--yt-soft:light-dark(#e9f3ff,#092b4c);width:390px;max-width:100%;height:844px;display:flex;flex-direction:column;background:var(--yt-bg);color:var(--yt-text);border:1px solid var(--yt-line);border-radius:38px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-shadow:0 10px 36px #00000014;box-sizing:border-box}
+#yumiro-top-review[data-appearance="light"] .yt-phone {color-scheme:light}
+#yumiro-top-review[data-appearance="dark"] .yt-phone {color-scheme:dark}
+#yumiro-top-review .yt-phone * {box-sizing:border-box}
+#yumiro-top-review .yt-status {height:59px;flex-shrink:0;padding:15px 26px 0;display:flex;align-items:flex-start;justify-content:space-between;font-size:14px;font-weight:600;position:relative}
+#yumiro-top-review .yt-island {position:absolute;top:10px;left:50%;transform:translateX(-50%);width:116px;height:31px;border-radius:24px;background:#000}
+#yumiro-top-review .yt-status-icons {display:flex;gap:5px;align-items:center}
+#yumiro-top-review .yt-status-icons svg {width:15px;height:15px}
+#yumiro-top-review .yt-top {--yt-control-radius:14px;height:52px;flex-shrink:0;display:flex;align-items:center;position:relative;padding:4px 12px;gap:8px}
+#yumiro-top-review .yt-top button {display:flex;align-items:center;justify-content:center;flex-shrink:0;min-width:44px;min-height:44px;border:0;font-family:inherit;cursor:inherit;font-size:17px;font-weight:500;border-radius:var(--yt-control-radius);background:var(--yt-canvas);color:var(--yt-ink);padding:0}
+#yumiro-top-review .yt-top button svg {width:20px;height:20px;stroke-width:1.8}
+#yumiro-top-review .yt-top button:disabled {color:var(--yt-disabled)}
+#yumiro-top-review .yt-top .yt-close {width:44px;color:var(--yt-muted)}
+#yumiro-top-review .yt-history {display:flex;gap:4px}
+#yumiro-top-review .yt-history button {width:44px}
+#yumiro-top-review .yt-top .yt-save {min-width:76px;padding:0 17px;background:var(--yt-accent);color:#fff;margin-left:auto}
+#yumiro-top-review .yt-phone[data-direction="balanced"] .yt-history {position:absolute;left:50%;transform:translateX(-50%)}
+#yumiro-top-review .yt-phone[data-direction="cluster"] .yt-top {gap:10px}
+#yumiro-top-review .yt-phone[data-direction="cluster"] .yt-close {background:transparent}
+#yumiro-top-review .yt-phone[data-direction="cluster"] .yt-history {margin-left:auto;gap:0;background:var(--yt-canvas);border-radius:var(--yt-control-radius);position:relative}
+#yumiro-top-review .yt-phone[data-direction="cluster"] .yt-history::after {content:"";position:absolute;top:13px;bottom:13px;left:44px;width:1px;background:var(--yt-line);pointer-events:none}
+#yumiro-top-review .yt-phone[data-direction="cluster"] .yt-history button {background:transparent}
+#yumiro-top-review .yt-phone[data-direction="cluster"] .yt-save {margin-left:0}
+#yumiro-top-review .yt-canvas {height:449px;flex-shrink:0;position:relative;display:flex;align-items:center;justify-content:center;background:var(--yt-canvas)}
+#yumiro-top-review .yt-photo {width:100%;height:100%;object-fit:contain}
+#yumiro-top-review .yt-compare {position:absolute;bottom:12px;left:12px;width:40px;height:40px;display:grid;place-items:center;border-radius:50%;background:light-dark(#f6f6f0e8,#303030e8);color:var(--yt-text)}
+#yumiro-top-review .yt-compare svg {width:21px;height:21px}
+#yumiro-top-review .yt-panel {height:184px;flex-shrink:0;padding:12px 16px;display:flex;justify-content:center;flex-direction:column;gap:8px}
+#yumiro-top-review .yt-slider-label {display:flex;align-items:center;gap:8px;font-size:15px}
+#yumiro-top-review .yt-spacer {flex:1}
+#yumiro-top-review .yt-value {color:var(--yt-muted);font-size:14px}
+#yumiro-top-review .yt-reset {color:var(--yt-accent);width:24px;height:24px;margin-left:10px}
+#yumiro-top-review .yt-slider {height:28px;display:flex;align-items:center;position:relative;margin-right:42px}
+#yumiro-top-review .yt-track {height:4px;background:var(--yt-line);width:100%;border-radius:4px}
+#yumiro-top-review .yt-fill {height:4px;width:30%;background:var(--yt-accent);border-radius:4px}
+#yumiro-top-review .yt-knob {position:absolute;left:calc(30% - 12px);height:26px;width:26px;border-radius:50%;background:#fff;box-shadow:0 2px 5px #0003}
+#yumiro-top-review .yt-hint {font-size:13px;color:var(--yt-muted);line-height:18px}
+#yumiro-top-review .yt-bottom {height:66px;flex-shrink:0;border-top:1px solid var(--yt-line)}
+#yumiro-top-review .yt-rail {height:65px;display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;padding:3px 8px}
+#yumiro-top-review .yt-rail::-webkit-scrollbar {display:none}
+#yumiro-top-review .yt-tool {position:relative;min-width:66px;height:58px;padding:5px 6px 4px;border-radius:14px;flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;color:var(--yt-muted)}
+#yumiro-top-review .yt-tool svg {width:22px;height:22px;stroke-width:1.7}
+#yumiro-top-review .yt-tool-label {font-size:11px;line-height:14px;white-space:nowrap}
+#yumiro-top-review .yt-tool[data-selected] {background:var(--yt-soft);color:var(--yt-accent)}
+#yumiro-top-review .yt-tool[data-selected] .yt-tool-label {font-weight:600}
+#yumiro-top-review .yt-tool[data-selected]::after {content:"";position:absolute;bottom:3px;width:14px;height:2px;border-radius:3px;background:var(--yt-accent)}
+#yumiro-top-review .yt-tool[data-changed]::before {content:"";position:absolute;width:6px;height:6px;top:5px;left:calc(50% + 13px);border-radius:50%;background:var(--yt-muted)}
+#yumiro-top-review .yt-group-divider {width:1px;height:24px;background:var(--yt-line);flex-shrink:0;margin:0 5px}
+#yumiro-top-review .yt-home {height:34px;flex-shrink:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;background:var(--yt-bg)}
+#yumiro-top-review .yt-home::before {content:"";height:5px;width:134px;border-radius:3px;background:var(--yt-text)}
+@media(max-width:400px){#yumiro-top-review .yt-stage{padding-left:0;padding-right:0}}
+</style>
+<script>
+(() => {
+ const root = document.getElementById('yumiro-top-review');
+ const saved = globalThis.openai?.widgetState?.privateContent || {};
+ const state = {theme:saved.theme === 'dark' ? 'dark' : 'light', total:Number.isInteger(saved.total) && saved.total >= 0 && saved.total <= 2 ? saved.total : 1, cursor:0};
+ state.cursor = Number.isInteger(saved.cursor) && saved.cursor >= 0 && saved.cursor <= state.total ? saved.cursor : state.total;
+ const names = ['Enhance','Adjust','Smooth','Retouch','Face','Warp','Heal','Background'];
+ const icons = ['sparkles','sliders-horizontal','droplet','wand-sparkles','smile','hand','bandage','scan-line'];
+ const groups = [[0,1],[2,3,4,5],[6,7]];
+ const icon = name => `<i data-lucide="${name}" aria-hidden="true"></i>`;
+ const feedback = root.querySelector('[data-feedback]');
+ const select = root.querySelector('select');
+ const tool = i => `<span class="yt-tool" ${i===2 ? 'data-selected' : ''} ${i===1 ? 'data-changed' : ''} aria-label="${names[i]}${i===2 ? ', selected' : ''}${i===1 ? ', changed' : ''}">${icon(icons[i])}<span class="yt-tool-label">${names[i]}</span></span>`;
+ root.querySelectorAll('.yt-phone').forEach(phone=>{
+  phone.innerHTML = `<div class="yt-status" aria-hidden="true"><span>9:41</span><span class="yt-island"></span><span class="yt-status-icons">${icon('signal')}${icon('wifi')}${icon('battery-full')}</span></div>
+   <nav class="yt-top" aria-label="${phone.dataset.direction==='balanced' ? 'Balanced bar' : 'Action cluster'} preview"><button type="button" class="yt-close cursor-interaction" data-action="close" aria-label="Close photo">${icon('x')}</button><div class="yt-history" role="group" aria-label="Edit history"><button type="button" class="cursor-interaction" data-action="undo" aria-label="Undo">${icon('undo-2')}</button><button type="button" class="cursor-interaction" data-action="redo" aria-label="Redo">${icon('redo-2')}</button></div><button type="button" class="yt-save cursor-interaction" data-action="save" aria-label="Save a copy to Photos">Save</button></nav>
+   <div class="yt-canvas" aria-label="Existing photo canvas layout with a sample NASA portrait"><img class="yt-photo" src="https://cdn.jsdelivr.net/gh/scikit-image/scikit-image@v0.19.3/skimage/data/astronaut.png" alt="Sample portrait of astronaut Eileen Collins, NASA"><span class="yt-compare" aria-label="Existing compare control">${icon('columns-2')}</span></div>
+   <div class="yt-panel" aria-label="Existing Smooth tool panel, held fixed"><div class="yt-slider-label"><span>Smooth skin</span><span class="yt-spacer"></span><span class="yt-value">30</span><span class="yt-reset">${icon('rotate-ccw')}</span></div><div class="yt-slider" aria-hidden="true"><div class="yt-track"><div class="yt-fill"></div></div><span class="yt-knob"></span></div><div class="yt-hint">Edges, eyes and lips stay sharp</div></div>
+   <div class="yt-bottom" aria-label="Existing Focus rail, held fixed"><div class="yt-rail">${groups.map(group=>group.map(tool).join('')).join('<span class="yt-group-divider" aria-hidden="true"></span>')}</div></div><div class="yt-home" aria-hidden="true"></div>`;
+  const top = phone.querySelector('.yt-top');
+  const shape = {radius:phone.dataset.direction==='balanced' ? 14 : 22};
+  const renderShape = ()=>top.style.setProperty('--yt-control-radius',shape.radius+'px');
+  renderShape();
+  if (globalThis.Tweak) {
+   const tweak = new Tweak({container:top,onChange:renderShape});
+   tweak.addSlider(shape,'radius',{label:'Control corner radius',min:10,max:22,unit:'px'});
+  }
+ });
+ function render() {
+  root.dataset.appearance = state.theme;
+  root.querySelectorAll('[data-theme]').forEach(button=>button.setAttribute('aria-pressed',button.dataset.theme===state.theme));
+  root.querySelectorAll('[data-action="undo"]').forEach(button=>button.disabled=state.cursor===0);
+  root.querySelectorAll('[data-action="redo"]').forEach(button=>button.disabled=state.cursor===state.total);
+  select.value = state.total===0 ? 'neither' : state.cursor===0 ? 'redo' : state.cursor===state.total ? 'undo' : 'both';
+ }
+ function persist() {if(globalThis.openai?.setWidgetState)globalThis.openai.setWidgetState({modelContent:null,privateContent:{theme:state.theme,total:state.total,cursor:state.cursor}}).catch(()=>{});}
+ root.querySelectorAll('[data-theme]').forEach(button=>button.addEventListener('click',()=>{state.theme=button.dataset.theme;render();persist();}));
+ select.addEventListener('change',()=>{
+  const value=select.value;
+  state.total=value==='both' ? 2 : value==='neither' ? 0 : 1;
+  state.cursor=value==='undo' || value==='both' ? 1 : 0;
+  render();persist();
+ });
+ root.addEventListener('click',event=>{
+  const button=event.target.closest('[data-action]');
+  if(!button || button.disabled)return;
+  const action=button.dataset.action;
+  if(action==='undo'){state.cursor=Math.max(0,state.cursor-1);feedback.textContent='Undo state preview · photo and editing controls held fixed.';}
+  else if(action==='redo'){state.cursor=Math.min(state.total,state.cursor+1);feedback.textContent='Redo state preview · photo and editing controls held fixed.';}
+  else if(action==='save'){feedback.textContent='Save button preview · no photo exported.';}
+  else {feedback.textContent='Close button preview · editor remains open.';}
+  render();persist();
+ });
+ render();
+ if(globalThis.lucide)lucide.createIcons({attrs:{width:20,height:20}});
+})();
+</script>
