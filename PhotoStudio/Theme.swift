@@ -169,9 +169,11 @@ struct TrackItemStyle: ButtonStyle {
         RoundedRectangle(cornerRadius: backing == .chip ? 12 : 10, style: .continuous)
     }
 
-    @ViewBuilder private var tile: some View {
-        if backing == .chip { shape.fill(Color.trackFill(material)) }
-        if on { shape.fill(isEnabled ? Color.toolTile(scheme) : Color(.systemGray5)) }
+    private var tile: some View {
+        ZStack {
+            if backing == .chip { shape.fill(Color.trackFill(material)) }
+            if on { shape.fill(isEnabled ? Color.toolTile(scheme) : Color(.systemGray5)) }
+        }
     }
 }
 
