@@ -38,7 +38,7 @@ struct ContentView: View {
             // The video editor is shown in place, not as a full-screen cover: a cover that opens as the photo picker
             // closes is laid out without the screen's safe areas.
             if let movie {
-                VideoEditView(movie: movie) { withAnimation(.gentle) { self.movie = nil } }
+                VideoEditView(movie: movie) { withAnimation { self.movie = nil } }
                     .transition(.opacity)
             } else if model.hasImage {
                 editor.transition(.opacity)
@@ -51,8 +51,8 @@ struct ContentView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.gentle, value: model.hasImage)
-        .animation(.gentle, value: movie?.id)
+        .animation(.default, value: model.hasImage)
+        .animation(.default, value: movie?.id)
         // One picker for photos and videos (two pickers on one view mix up their selections).
         .photosPicker(isPresented: $picking, selection: $pickerItem, matching: pickerFilter)
         .onChange(of: pickerItem) { _, item in
@@ -119,10 +119,9 @@ struct ContentView: View {
                 .padding(.horizontal, Space.l)
                 .padding(.vertical, Space.m)
                 .frame(maxWidth: .infinity, minHeight: 184, alignment: .center)
-                .background(Color.surface)
+            Divider()
             toolBar
         }
-        .background(Color.surface.ignoresSafeArea())
         .dynamicTypeSize(...DynamicTypeSize.xLarge)   // the tool panel is dense; past this it would push the photo away
         .sensoryFeedback(.success, trigger: model.info) { _, new in new == "Saved to Photos" }
         .confirmationDialog("Close this photo?", isPresented: $confirmClose, titleVisibility: .visible) {
@@ -146,7 +145,7 @@ struct ContentView: View {
                 .disabled(!model.canRedo || model.busy != nil)
             Spacer()
             Button("Save") { Task { await model.save() } }
-                .buttonStyle(PillButtonStyle())
+                .buttonStyle(.borderedProminent)
                 .disabled(model.busy != nil)
                 .accessibilityHint("Saves a copy to Photos")
         }
@@ -156,7 +155,7 @@ struct ContentView: View {
     }
 
     private func closePhoto() {
-        withAnimation(.gentle) { model.close() }
+        withAnimation { model.close() }
         zoom = 1; pan = .zero
     }
 
@@ -166,7 +165,7 @@ struct ContentView: View {
         GeometryReader { geo in
             ZStack {
                 ZStack {
-                    Color.backdrop
+                    Color(.secondarySystemBackground)
                     if let img = comparing ? model.original : model.display {
                         ZStack {
                             Image(uiImage: img).resizable().scaledToFit()
@@ -207,17 +206,15 @@ struct ContentView: View {
                     }
                     if comparing {
                         Text("Original")
-                            .font(.ui(12, .semibold)).tracking(0.4)
-                            .foregroundStyle(Color.ink)
+                            .font(.caption.weight(.semibold))
                             .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(Color.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                            .floating()
+                            .background(.regularMaterial, in: Capsule())
                             .frame(maxHeight: .infinity, alignment: .top).padding(.top, 10)
                             .transition(.opacity)
                             .allowsHitTesting(false)
                     }
                 }
-                .animation(.quick, value: comparing)
+                .animation(.default, value: comparing)
                 .contentShape(Rectangle())
                 .onTapGesture { location in
                     guard model.busy == nil, let p = imagePoint(location, in: geo.size) else { return }
@@ -350,11 +347,9 @@ struct ContentView: View {
     private var canvasControls: some View {
         HStack(alignment: .bottom) {
             Image(systemName: "square.split.2x1")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(comparing ? Color.pinkInk : Color.ink)
+                .foregroundStyle(comparing ? Color.accentColor : Color.primary)
                 .frame(width: 40, height: 40)
-                .background(comparing ? Color.petal : Color.surface.opacity(0.92), in: Circle())
-                .floating()
+                .background(.regularMaterial, in: Circle())
                 .contentShape(Circle())
                 .onLongPressGesture(minimumDuration: 0, maximumDistance: 60, pressing: { comparing = $0 }, perform: {})
                 .accessibilityLabel("Hold to compare with the original")
@@ -364,26 +359,21 @@ struct ContentView: View {
             Spacer()
             if zoom > 1.01 {
                 Button {
-                    withAnimation(.quick) { zoom = 1; pan = .zero }
+                    withAnimation { zoom = 1; pan = .zero }
                 } label: {
-                    HStack(spacing: 4) {
-                        Text(String(format: "%.1f×", zoom)).monospacedDigit()
-                        Image(systemName: "arrow.down.right.and.arrow.up.left").font(.system(size: 11, weight: .semibold))
-                    }
-                    .font(.ui(13, .semibold))
-                    .foregroundStyle(Color.ink)
-                    .padding(.horizontal, 12).frame(height: 32)
-                    .background(Color.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-                    .floating()
+                    Label(String(format: "%.1f×", zoom), systemImage: "arrow.down.right.and.arrow.up.left")
+                        .monospacedDigit()
                 }
-                .buttonStyle(PressableStyle())
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .background(.regularMaterial, in: Capsule())
                 .accessibilityLabel("Zoom \(String(format: "%.1f", zoom)) times. Fit the photo")
                 .transition(.opacity)
             }
         }
         .padding(Space.m)
         .frame(maxHeight: .infinity, alignment: .bottom)
-        .animation(.quick, value: zoom > 1.01)
+        .animation(.default, value: zoom > 1.01)
     }
 
     /// Two fingers pinch and move the photo together: the photo point that was under the fingers' middle when they
@@ -487,47 +477,43 @@ struct ContentView: View {
                 HStack(spacing: 0) {
                     ForEach(Array(Tool.groups.enumerated()), id: \.offset) { i, group in
                         if i > 0 {
-                            Rectangle().fill(Color.hairline).frame(width: 1, height: 28).padding(.horizontal, 4)
+                            Divider().frame(height: 28).padding(.horizontal, 4)
                         }
                         ForEach(group) { t in toolButton(t).id(t) }
                     }
                 }
                 .padding(.horizontal, Space.s)
             }
-            .onChange(of: model.tool) { _, t in withAnimation(.quick) { proxy.scrollTo(t, anchor: .center) } }
+            .onChange(of: model.tool) { _, t in withAnimation { proxy.scrollTo(t, anchor: .center) } }
             .onAppear { proxy.scrollTo(model.tool, anchor: .center) }
         }
         .frame(height: 66)
-        .background(Color.surface)
-        .overlay(alignment: .top) { Rectangle().fill(Color.hairline).frame(height: 1) }
         .sensoryFeedback(.selection, trigger: model.tool)
     }
 
-    /// A tool in the bar: the picked one is dark pink on a petal pill.
+    /// A tool in the bar: the picked one is in the accent colour; a dot marks a tool that changed the photo.
     private func toolButton(_ t: Tool) -> some View {
         let on = t == model.tool
         let changed = toolChanged(t)
         return Button {
-            withAnimation(.quick) { model.tool = t }
+            model.tool = t
         } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: 4) {
                 Image(systemName: t.icon)
-                    .font(.system(size: 19, weight: on ? .semibold : .regular))
+                    .font(.title3)
                     .frame(height: 24)
                     .overlay(alignment: .topTrailing) {
                         if changed && !on {
-                            Circle().fill(Color.pinkInk).frame(width: 6, height: 6).offset(x: 6, y: -2)
+                            Circle().fill(.secondary).frame(width: 6, height: 6).offset(x: 6, y: -2)
                         }
                     }
-                    .padding(.horizontal, 14).padding(.vertical, 3)
-                    .background(on ? Color.petal : .clear, in: Capsule())
-                Text(t.rawValue).font(.ui(11, on ? .semibold : .medium)).lineLimit(1).fixedSize()
+                Text(t.rawValue).font(.caption2).lineLimit(1).fixedSize()
             }
-            .foregroundStyle(on ? Color.pinkInk : Color.inkSecondary)
+            .foregroundStyle(on ? Color.accentColor : Color.secondary)
             .frame(minWidth: 66, minHeight: 66)
             .contentShape(Rectangle())
         }
-        .buttonStyle(PressableStyle(scale: 0.92))
+        .buttonStyle(.plain)
         .accessibilityLabel(t.rawValue + (changed ? ", changed" : ""))
         .accessibilityAddTraits(on ? .isSelected : [])
     }
@@ -552,8 +538,8 @@ struct ContentView: View {
             case .enhance:
                 if model.enhanceOn {
                     HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.pinkInk)
-                        Text("Enhanced").font(.panelTitle).foregroundStyle(Color.ink)
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("Enhanced").font(.headline)
                         Spacer()
                         PanelTextButton(title: "Turn off") { Task { await model.runEnhance() } }
                             .disabled(model.busy != nil)
@@ -571,9 +557,10 @@ struct ContentView: View {
                     HintText("Sharpens detail and cleans up noise from the photo's own pixels, up to 4× for small photos. Faces stay as they are.")
                         .padding(.top, 2)
                     Button { Task { await model.runEnhance() } } label: {
-                        Label("Enhance photo", systemImage: "sparkles")
+                        Label("Enhance photo", systemImage: "sparkles").frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(PrimaryButtonStyle(height: 46))
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                     .disabled(model.busy != nil)
                 }
             case .smooth:
@@ -601,7 +588,7 @@ struct ContentView: View {
                     .disabled(model.busy != nil)
                 }
                 HStack(spacing: Space.s) {
-                    Text("Refine").font(.ui(13, .medium)).foregroundStyle(Color.inkSecondary)
+                    Text("Refine").font(.subheadline).foregroundStyle(.secondary)
                     ModeTabs(items: BlurMode.allCases, selection: $model.blurMode, title: { $0 == .view ? "Auto" : $0.rawValue })
                 }
                 .disabled(model.personMatte == nil)
@@ -633,7 +620,7 @@ struct ContentView: View {
                 subtabChips
                 if feature == .position {
                     HStack {
-                        Text("Drag the oval around the head").font(.ui(14, .medium)).foregroundStyle(Color.ink)
+                        Text("Drag the oval around the head").font(.subheadline)
                         Spacer()
                         ResetButton(label: "Reset Position") { model.resetPosition() }
                             .disabled(!model.positionMoved || model.busy != nil)
@@ -674,7 +661,7 @@ struct ContentView: View {
                 }
             }
         }
-        .animation(.quick, value: model.tool)
+        .animation(.default, value: model.tool)
         .onChange(of: model.smooth) { _, _ in model.renderPreview() }
         .onChange(of: model.enhanceStrength) { _, _ in model.dragEnhanceStrength() }
         .onChange(of: model.slim) { _, _ in model.renderPreview() }
@@ -729,7 +716,7 @@ struct ContentView: View {
         }
     }
 
-    /// The main Face tabs, underlined in pink; a dot marks the ones with a slider moved on the selected face.
+    /// The main Face tabs; the picked one is bold, and a dot marks the ones with a slider moved on the selected face.
     private var areaTabs: some View {
         // Scrolls sideways, as eight names don't fit across a phone at full size.
         ScrollViewReader { proxy in
@@ -737,18 +724,13 @@ struct ContentView: View {
                 HStack(spacing: 20) {
                     ForEach(FaceArea.allCases) { a in
                         let on = a == area
-                        Button { withAnimation(.quick) { area = a } } label: {
-                            VStack(spacing: 6) {
-                                HStack(spacing: 4) {
-                                    Text(a.rawValue).lineLimit(1).fixedSize()
-                                    if changed(a) { Circle().fill(Color.pinkInk).frame(width: 4, height: 4) }
-                                }
-                                .font(.ui(14, on ? .semibold : .medium))
-                                .foregroundStyle(on ? Color.ink : Color.inkSecondary)
-                                Capsule().frame(height: 2.5)
-                                    .foregroundStyle(on ? Color.pink : .clear)
-                            }
-                            .contentShape(Rectangle())
+                        Button { withAnimation { area = a } } label: {
+                            Text(changed(a) ? "\(a.rawValue) •" : a.rawValue)
+                                .lineLimit(1).fixedSize()
+                                .font(.subheadline.weight(on ? .semibold : .regular))
+                                .foregroundStyle(on ? Color.primary : Color.secondary)
+                                .frame(minHeight: 32)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .id(a)
@@ -757,7 +739,7 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 2)
             }
-            .onChange(of: area) { _, a in withAnimation(.quick) { proxy.scrollTo(a, anchor: .center) } }
+            .onChange(of: area) { _, a in withAnimation { proxy.scrollTo(a, anchor: .center) } }
         }
         .sensoryFeedback(.selection, trigger: area)
     }
@@ -825,8 +807,7 @@ struct ContentView: View {
                            onEditing: ((Bool) -> Void)? = nil, onReset: (() -> Void)? = nil) -> some View {
         HStack(spacing: Space.s) {
             Text(title)
-                .font(.ui(13, .medium))
-                .foregroundStyle(Color.ink)
+                .font(.subheadline)
                 .lineLimit(1).minimumScaleFactor(0.8)
                 .frame(width: 92, alignment: .leading)
             ValueSlider(value: value, range: range, reset: reset, editing: { editing in

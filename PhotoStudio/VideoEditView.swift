@@ -48,26 +48,18 @@ struct VideoEditView: View {
                 .overlay(alignment: .bottomLeading) { playButton.padding(Space.m) }
             controls
         }
-        .background(Color.surface.ignoresSafeArea())
         .overlay {
             if let saving {
                 ZStack {
-                    Color.shade.opacity(0.18).ignoresSafeArea()
-                    VStack(spacing: 14) {
-                        ZStack {
-                            Circle().stroke(Color.track, lineWidth: 4)
-                            Circle().trim(from: 0, to: saving).stroke(Color.pink, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                                .rotationEffect(.degrees(-90))
-                                .animation(.linear(duration: 0.2), value: saving)
-                            Text("\(Int(saving * 100))%").font(.ui(14, .semibold).monospacedDigit())
-                        }
-                        .frame(width: 64, height: 64)
-                        Text("Saving video").font(.ui(15, .medium))
+                    Color.black.opacity(0.2).ignoresSafeArea()
+                    ProgressView(value: saving) {
+                        Text("Saving video")
+                    } currentValueLabel: {
+                        Text("\(Int(saving * 100))%").monospacedDigit()
                     }
-                    .foregroundStyle(Color.ink)
-                    .padding(.horizontal, 32).padding(.vertical, 24)
-                    .background(Color.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .floating(0.14, radius: 20, y: 8)
+                    .frame(width: 200)
+                    .padding(24)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
                 }
                 .transition(.opacity)
             }
@@ -78,12 +70,12 @@ struct VideoEditView: View {
                     .padding(.top, 60)
                     .task(id: message) {
                         try? await Task.sleep(for: .seconds(2.5))
-                        if self.message == message { withAnimation(.gentle) { self.message = nil } }
+                        if self.message == message { withAnimation { self.message = nil } }
                     }
             }
         }
-        .animation(.gentle, value: message)
-        .animation(.quick, value: saving != nil)
+        .animation(.default, value: message)
+        .animation(.default, value: saving != nil)
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .sensoryFeedback(.success, trigger: message) { _, new in new == "Saved to Photos" }
         .task { await load() }
@@ -108,10 +100,10 @@ struct VideoEditView: View {
             StudioIconButton(icon: "xmark", label: "Close video") { close() }
                 .disabled(saving != nil)
             Spacer()
-            Text("Hold the video to compare").font(.ui(13, .medium)).foregroundStyle(Color.inkSecondary)
+            Text("Hold the video to compare").font(.footnote).foregroundStyle(.secondary)
             Spacer()
             Button("Save") { Task { await save() } }
-                .buttonStyle(PillButtonStyle())
+                .buttonStyle(.borderedProminent)
                 .disabled(saving != nil || composition == nil)
                 .accessibilityHint("Saves a copy to Photos")
         }
@@ -120,17 +112,7 @@ struct VideoEditView: View {
     }
 
     private var playButton: some View {
-        Button { togglePlay() } label: {
-            Image(systemName: playing ? "pause.fill" : "play.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.ink)
-                .frame(width: 40, height: 40)
-                .background(Color.surface.opacity(0.92), in: Circle())
-                .floating()
-                .contentTransition(.symbolEffect(.replace))
-        }
-        .buttonStyle(PressableStyle(scale: 0.9))
-        .accessibilityLabel(playing ? "Pause" : "Play")
+        StudioIconButton(icon: playing ? "pause.fill" : "play.fill", label: playing ? "Pause" : "Play", onPhoto: true) { togglePlay() }
     }
 
     private var controls: some View {
@@ -148,7 +130,7 @@ struct VideoEditView: View {
         .padding(.top, Space.m)
         .padding(.bottom, Space.s)
         .frame(height: 236, alignment: .top)
-        .background(Color.surface.ignoresSafeArea(edges: .bottom))
+        
     }
 
     private func load() async {
@@ -231,7 +213,7 @@ struct VideoEditView: View {
     }
 }
 
-/// Shows an AVPlayer's video fitted to the screen, on the soft grey backdrop.
+/// Shows an AVPlayer's video fitted to the screen.
 struct PlayerLayerView: UIViewRepresentable {
     let player: AVPlayer
 
@@ -242,7 +224,7 @@ struct PlayerLayerView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> LayerView {
         let v = LayerView()
-        v.backgroundColor = UIColor(Color.backdrop)
+        v.backgroundColor = .secondarySystemBackground
         v.playerLayer.player = player
         v.playerLayer.videoGravity = .resizeAspect
         return v

@@ -11,7 +11,7 @@ struct CameraView: View {
 
     var body: some View {
         ZStack {
-            (camera.denied ? Color.surface : Color.black).ignoresSafeArea()
+            (camera.denied ? Color(.systemBackground) : Color.black).ignoresSafeArea()
             if camera.denied {
                 CameraAccessView { dismiss() }
             } else {
@@ -32,11 +32,11 @@ struct CameraView: View {
                     .padding(.top, 64)
                     .task(id: message) {
                         try? await Task.sleep(for: .seconds(2.5))
-                        if camera.message == message { withAnimation(.gentle) { camera.message = nil } }
+                        if camera.message == message { withAnimation { camera.message = nil } }
                     }
             }
         }
-        .animation(.gentle, value: camera.message)
+        .animation(.default, value: camera.message)
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .statusBarHidden()
         .sensoryFeedback(.impact(weight: .medium), trigger: camera.recording)
@@ -53,20 +53,17 @@ struct CameraView: View {
             Group {
                 if camera.recording {
                     HStack(spacing: 6) {
-                        Circle().fill(Color.pinkInk).frame(width: 7, height: 7)
+                        Circle().fill(.red).frame(width: 7, height: 7)
                         Text(String(format: "%d:%02d", camera.seconds / 60, camera.seconds % 60)).monospacedDigit()
                     }
-                    .font(.ui(14, .semibold))
                 } else {
                     Text(camera.faceCount == 0 ? "Looking for a face" : "Hold the picture to compare")
-                        .font(.ui(13, .medium))
                 }
             }
-            .foregroundStyle(Color.ink)
+            .font(.footnote)
             .padding(.horizontal, 12).frame(height: 30)
-            .background(Color.surface.opacity(0.92), in: Capsule())
-            .floating()
-            .animation(.quick, value: camera.recording)
+            .background(.regularMaterial, in: Capsule())
+            .animation(.default, value: camera.recording)
             Spacer()
             StudioIconButton(icon: "arrow.triangle.2.circlepath", label: "Switch camera", onPhoto: true) { camera.switchCamera() }
                 .disabled(camera.recording)
@@ -75,16 +72,13 @@ struct CameraView: View {
         .padding(.top, Space.xs)
     }
 
-    /// The effects on a white card over the picture, and the record button below it.
+    /// The effects on a panel over the picture, and the record button below it.
     private var controls: some View {
         VStack(spacing: 14) {
             LookControls(look: $look, control: $control)
                 .padding(.vertical, Space.m)
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))   // the chips scroll under its corners
-                .background {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.surface)
-                        .shadow(color: Color.shade.opacity(0.16), radius: 16, y: 4)
-                }
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: 12))   // the chips scroll under its corners
                 .padding(.horizontal, Space.m)
             recordButton
         }
@@ -96,16 +90,16 @@ struct CameraView: View {
         Button {
             if camera.recording { camera.stopRecording() } else { camera.startRecording() }
         } label: {
+            // A red dot in a white ring that becomes a square while recording, like the system camera.
             ZStack {
                 Circle().stroke(.white, lineWidth: 4).frame(width: 76, height: 76)
-                    .shadow(color: Color.shade.opacity(0.25), radius: 4, y: 1)
-                RoundedRectangle(cornerRadius: camera.recording ? 7 : 31, style: .continuous)
-                    .fill(Color.pink)
+                RoundedRectangle(cornerRadius: camera.recording ? 6 : 31)
+                    .fill(.red)
                     .frame(width: camera.recording ? 30 : 62, height: camera.recording ? 30 : 62)
             }
-            .animation(.quick, value: camera.recording)
+            .animation(.default, value: camera.recording)
         }
-        .buttonStyle(PressableStyle(scale: 0.94))
+        .buttonStyle(.plain)
         .accessibilityLabel(camera.recording ? "Stop recording" : "Record")
     }
 }
@@ -129,10 +123,7 @@ struct LookControls: View {
             HStack(spacing: Space.s) {
                 ValueSlider(value: Binding(get: { control.get(look) }, set: { control.set(&look, $0) }), range: control.range)
                     .accessibilityLabel(control.name)
-                Text(control.range.lowerBound < 0 ? ValueSlider.label(control.get(look)) : "\(Int((control.get(look) * 100).rounded()))")
-                    .font(.ui(13, .medium).monospacedDigit()).foregroundStyle(Color.ink)
-                    .frame(width: 38, alignment: .trailing)
-                ResetButton(label: "Reset \(control.name)") { withAnimation(.quick) { control.set(&look, 0) } }
+                ResetButton(label: "Reset \(control.name)") { withAnimation { control.set(&look, 0) } }
                     .disabled(abs(control.get(look)) < 0.001)
             }
             .padding(.leading, Space.l).padding(.trailing, Space.s)
@@ -153,28 +144,17 @@ struct CameraAccessView: View {
             }
             .padding(.horizontal, Space.s)
             Spacer()
-            Image(systemName: "camera")
-                .font(.system(size: 26, weight: .medium))
-                .foregroundStyle(Color.pinkInk)
-                .frame(width: 72, height: 72)
-                .background(Color.petal, in: Circle())
-            Text("Allow the camera")
-                .font(.display(.title))
-                .foregroundStyle(Color.ink)
-                .padding(.top, 20)
-            Text("Miyori films with your look applied live. Everything stays on this iPhone.")
-                .font(.ui(15))
-                .foregroundStyle(Color.inkSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.top, 8)
-                .padding(.horizontal, 40)
-            Spacer()
-            Button("Open Settings") {
-                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            ContentUnavailableView {
+                Label("Allow the camera", systemImage: "camera")
+            } description: {
+                Text("Miyori films with your look applied live. Everything stays on this iPhone.")
+            } actions: {
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(PrimaryButtonStyle())
-            .padding(.horizontal, 24)
-            .padding(.bottom, Space.l)
+            Spacer()
         }
     }
 }

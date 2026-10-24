@@ -268,30 +268,20 @@ struct AdjustPanel<Accessory: View>: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text(tool.rawValue).font(.panelTitle).foregroundStyle(Color.ink)
-            if let path = tool.value {
-                Text(ValueSlider.label(adjust[keyPath: path])).font(.panelValue).foregroundStyle(Color.inkSecondary)
-                    .contentTransition(.numericText())
-            } else if tool == .rotate, abs(adjust.straighten) > 0.001 {
-                Text(Self.degrees(adjust.straighten)).font(.panelValue).foregroundStyle(Color.inkSecondary)
-            }
+            Text(tool.rawValue).font(.headline)
             ResetButton(label: "Reset \(tool.rawValue)") { change { $0 = tool.reset($0) } }
                 .disabled(!tool.isChanged(adjust))
             Spacer()
             if tool == .crop {
                 // Cancel puts the crop back as it was when Crop opened; Done keeps it. Both show the cropped photo.
-                Button { cancelCrop() } label: {
-                    Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.ink)
-                        .frame(width: 34, height: 34)
-                        .background(Color.fill, in: Circle())
-                }
-                .buttonStyle(PressableStyle(scale: 0.9))
-                .accessibilityLabel("Cancel crop")
-                Button { confirmCrop() } label: {
-                    Label("Done", systemImage: "checkmark").labelStyle(.titleOnly)
-                }
-                .buttonStyle(PillButtonStyle())
-                .accessibilityLabel("Done cropping")
+                Button("Cancel") { cancelCrop() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityLabel("Cancel crop")
+                Button("Done") { confirmCrop() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .accessibilityLabel("Done cropping")
             } else {
                 PanelTextButton(title: "Reset all") { change { $0 = Adjustments() } }
                     .disabled(adjust.isOff)
@@ -303,42 +293,37 @@ struct AdjustPanel<Accessory: View>: View {
 
     private func confirmCrop() {
         confirmed += 1
-        withAnimation(.quick) { tool = lastTool }
+        withAnimation { tool = lastTool }
     }
 
     private func cancelCrop() {
         if let e = cropEntry { change { $0.crop = e.crop; $0.cropRect = e.rect } }
-        withAnimation(.quick) { tool = lastTool }
+        withAnimation { tool = lastTool }
     }
 
-    /// The tools inside Adjust; the picked one is baby blue.
+    /// The tools inside Adjust; the picked one is in the accent colour, and a dot marks a changed one.
     private var toolRow: some View {
         HStack(spacing: 0) {
             ForEach(AdjustTool.allCases) { t in
                 let on = t == tool
                 Button {
-                    withAnimation(.quick) { tool = t }
+                    withAnimation { tool = t }
                 } label: {
-                    VStack(spacing: 5) {
+                    VStack(spacing: 4) {
                         Image(systemName: t.icon)
-                            .font(.system(size: 16, weight: .medium))
-                            .frame(width: 40, height: 40)
-                            .foregroundStyle(on ? Color.blueInk : Color.ink)
-                            .background(on ? Color.babyBlue : Color.fill, in: Circle())
+                            .frame(width: 40, height: 28)
                             .overlay(alignment: .topTrailing) {
                                 if t.isChanged(adjust) && !on {
-                                    Circle().fill(Color.pinkInk).frame(width: 7, height: 7)
-                                        .overlay(Circle().stroke(Color.surface, lineWidth: 1.5))
-                                        .offset(x: -1, y: 1)
+                                    Circle().fill(.secondary).frame(width: 6, height: 6)
                                 }
                             }
-                        Text(t.rawValue).font(.ui(10, on ? .semibold : .medium)).lineLimit(1).minimumScaleFactor(0.8)
-                            .foregroundStyle(on ? Color.ink : Color.inkSecondary)
+                        Text(t.rawValue).font(.caption2).lineLimit(1).minimumScaleFactor(0.8)
                     }
+                    .foregroundStyle(on ? Color.accentColor : Color.secondary)
                     .frame(maxWidth: .infinity)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(PressableStyle(scale: 0.92))
+                .buttonStyle(.plain)
                 .accessibilityLabel(t.rawValue + (t.isChanged(adjust) ? ", changed" : ""))
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
@@ -357,16 +342,16 @@ struct AdjustPanel<Accessory: View>: View {
                         } label: {
                             VStack(spacing: 5) {
                                 Group {
-                                    if r == .free { Image(systemName: "crop").font(.system(size: 19)) } else { RatioIcon(ratio: r.value) }
+                                    if r == .free { Image(systemName: "crop") } else { RatioIcon(ratio: r.value) }
                                 }
                                 .frame(width: 26, height: 26)
-                                Text(r.rawValue).font(.ui(11, on ? .semibold : .medium)).lineLimit(1).fixedSize()
+                                Text(r.rawValue).font(.caption2).lineLimit(1).fixedSize()
                             }
-                            .foregroundStyle(on ? Color.blueInk : Color.inkSecondary)
+                            .foregroundStyle(on ? Color.accentColor : Color.secondary)
                             .frame(minWidth: 50).padding(.vertical, 4)
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(PressableStyle(scale: 0.92))
+                        .buttonStyle(.plain)
                         .id(r)
                         .accessibilityAddTraits(on ? .isSelected : [])
                     }
@@ -397,14 +382,9 @@ struct AdjustPanel<Accessory: View>: View {
 
     private func squareButton(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.ink)
-                .frame(width: 38, height: 38)
-                .background(Color.fill, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-                .contentShape(Rectangle())
+            Image(systemName: icon).frame(width: 24, height: 24)
         }
-        .buttonStyle(PressableStyle(scale: 0.9))
+        .buttonStyle(.bordered)
         .accessibilityLabel(label)
     }
 
@@ -453,19 +433,14 @@ private struct RatioIcon: View {
     }
 }
 
-/// Miyori's slider, used by every tool. The fill runs from the slider's origin (the middle for two-way sliders, the
-/// left end otherwise) to the knob, and the value shows above the knob while it moves. A drag moves the value by how
-/// far the finger goes, wherever it starts, so small changes are easy. Two-way sliders catch at 0 with a tap you can
-/// feel; a double tap puts the slider back to `reset`.
+/// The slider every tool uses: the system slider with its value beside it. Two-way sliders (a range either side of
+/// 0) catch at 0 with a tap you can feel. `editing` brackets each drag.
 struct ValueSlider: View {
     @Binding var value: Float
     var range: ClosedRange<Float> = -1...1
     var reset: Float?
     var label: ((Float) -> String)?
     var editing: (Bool) -> Void = { _ in }
-    @State private var start: Float?   // the value when the finger came down
-
-    private let knob: CGFloat = 24
 
     /// −100 to +100 for two-way sliders.
     static func label(_ v: Float) -> String {
@@ -474,7 +449,6 @@ struct ValueSlider: View {
     }
 
     private var twoWay: Bool { range.lowerBound < 0 && range.upperBound > 0 }
-    private var origin: Float { twoWay ? 0 : range.lowerBound }
     private var span: Float { max(0.0001, range.upperBound - range.lowerBound) }
 
     private func text(_ v: Float) -> String {
@@ -484,68 +458,19 @@ struct ValueSlider: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let run = max(1, geo.size.width - knob)
-            let mid = geo.size.height / 2
-            let fraction = { (v: Float) in CGFloat((v - range.lowerBound) / span) }
-            let x = knob / 2 + fraction(value) * run
-            let o = knob / 2 + fraction(origin) * run
-            ZStack {
-                Capsule().fill(Color.track).frame(height: 4)
-                if twoWay {
-                    Capsule().fill(Color.inkTertiary).frame(width: 2, height: 10).position(x: o, y: mid)
-                }
-                Capsule().fill(Color.pink).frame(width: abs(x - o), height: 4).position(x: (x + o) / 2, y: mid)
-                Circle().fill(Color.white)
-                    .overlay(Circle().stroke(Color.shade.opacity(0.06), lineWidth: 0.5))
-                    .shadow(color: Color.shade.opacity(0.22), radius: 3, y: 1)
-                    .frame(width: knob, height: knob)
-                    .scaleEffect(start == nil ? 1 : 1.15)
-                    .position(x: x, y: mid)
-                if start != nil {
-                    Text(text(value))
-                        .font(.ui(12, .semibold).monospacedDigit())
-                        .foregroundStyle(Color.pinkInk)
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Color.petal, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                        .fixedSize()
-                        .position(x: min(max(x, 24), geo.size.width - 24), y: mid - 28)
-                        .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .bottom)))
-                }
-            }
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { g in
-                    if start == nil {
-                        withAnimation(.quick) { start = value }
-                        editing(true)
-                    }
-                    var v = (start ?? value) + Float(g.translation.width / run) * span
-                    v = min(range.upperBound, max(range.lowerBound, v))
-                    if twoWay, abs(v) < 0.03 * span / 2 { v = 0 }   // catches at the middle
-                    if v != value { value = v }
-                }
-                .onEnded { _ in
-                    withAnimation(.quick) { start = nil }
-                    editing(false)
-                })
-            .simultaneousGesture(TapGesture(count: 2).onEnded {
-                let to = reset ?? origin
-                guard value != to else { return }
-                editing(true)
-                withAnimation(.quick) { value = to }
-                editing(false)
-            })
+        HStack(spacing: Space.s) {
+            Slider(value: Binding(get: { value }, set: { v in
+                let snapped = twoWay && abs(v) < 0.03 * span / 2 ? 0 : v   // catches at the middle
+                if snapped != value { value = snapped }
+            }), in: range, onEditingChanged: editing)
+            Text(text(value))
+                .font(.footnote.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 44, alignment: .trailing)
+                .accessibilityHidden(true)
         }
         .frame(height: 44)
         .sensoryFeedback(trigger: twoWay && value == 0) { _, atZero in atZero ? .impact(weight: .light) : nil }
-        .accessibilityElement()
-        .accessibilityValue(text(value))
-        .accessibilityAdjustableAction { dir in
-            editing(true)
-            value = min(range.upperBound, max(range.lowerBound, value + (dir == .increment ? 0.05 : -0.05) * span / 2))
-            editing(false)
-        }
     }
 }
 
