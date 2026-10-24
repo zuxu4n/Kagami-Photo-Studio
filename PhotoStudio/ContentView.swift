@@ -271,8 +271,10 @@ struct ContentView: View {
                     if comparing {
                         Text("Original")
                             .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(.regularMaterial, in: Capsule())
+                            .foregroundStyle(Color.primary)
+                            .padding(.horizontal, 12).padding(.vertical, 5)
+                            .frame(minHeight: 28)
+                            .background(canvasControlBackground())
                             .frame(maxHeight: .infinity, alignment: .top).padding(.top, 10)
                             .transition(.opacity)
                             .allowsHitTesting(false)
@@ -407,14 +409,15 @@ struct ContentView: View {
         .toast(model.info, id: model.infoID) { $0 == "Saved to Photos" ? "checkmark.circle.fill" : nil }
     }
 
-    /// Hold-to-compare at the bottom left of the photo, and the zoom (tap to fit) at the bottom right.
+    /// Soft controls stay over the canvas: hold Compare at left, tap the zoom at right to fit.
     private var canvasControls: some View {
         HStack(alignment: .bottom) {
             Image(systemName: "square.split.2x1")
+                .font(.system(size: 20))
                 .foregroundStyle(comparing ? Color.accentColor : Color.primary)
-                .frame(width: 40, height: 40)
-                .background(.regularMaterial, in: Circle())
-                .contentShape(Circle())
+                .frame(width: 44, height: 44)
+                .background(canvasControlBackground(active: comparing))
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .onLongPressGesture(minimumDuration: 0, maximumDistance: 60, pressing: { comparing = $0 }, perform: {})
                 .accessibilityLabel("Hold to compare with the original")
                 .accessibilityAddTraits(.isButton)
@@ -425,12 +428,20 @@ struct ContentView: View {
                 Button {
                     withAnimation { zoom = 1; pan = .zero }
                 } label: {
-                    Label(String(format: "%.1f×", zoom), systemImage: "arrow.down.right.and.arrow.up.left")
-                        .monospacedDigit()
+                    HStack(spacing: 7) {
+                        Image(systemName: "arrow.down.right.and.arrow.up.left")
+                            .font(.system(size: 20))
+                        Text(String(format: "%.1f×", zoom))
+                            .font(.footnote.weight(.medium))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(Color.primary)
+                    .padding(.horizontal, 12)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .background(canvasControlBackground())
+                    .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .background(.regularMaterial, in: Capsule())
+                .buttonStyle(.plain)
                 .accessibilityLabel("Zoom \(String(format: "%.1f", zoom)) times. Fit the photo")
                 .transition(.opacity)
             }
@@ -438,6 +449,21 @@ struct ContentView: View {
         .padding(Space.m)
         .frame(maxHeight: .infinity, alignment: .bottom)
         .animation(.default, value: zoom > 1.01)
+    }
+
+    /// A shared material surface for the canvas controls and the non-interactive Original badge.
+    private func canvasControlBackground(active: Bool = false) -> some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(.regularMaterial)
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.accentColor.opacity(active ? 0.12 : 0))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(active ? Color.accentColor.opacity(0.28) : Color.primary.opacity(0.08), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.08), radius: 2, x: 0, y: 1)
     }
 
     /// Two fingers pinch and move the photo together: the photo point that was under the fingers' middle when they
