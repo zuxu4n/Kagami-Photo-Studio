@@ -882,22 +882,19 @@ struct ContentView: View {
         return m.hasPerson ? "Everyone found stays sharp" : "No person found, so the whole photo is blurred"
     }
 
-    /// A labelled slider with a reset button that puts it back to `reset` (greyed out while it's already there).
-    /// For undoable sliders a drag or a reset is one undo step; the others show the brush size on the photo while
-    /// they move. `onEditing` and `onReset` replace that for sliders with their own steps (Enhance's Strength).
+    /// A slider field with its name and value inside, and a reset tile that puts it back to `reset` (greyed out while
+    /// it's already there). For undoable sliders a drag or a reset is one undo step; the others show the brush size on
+    /// the photo while they move. `onEditing` and `onReset` replace that for sliders with their own steps (Enhance's
+    /// Strength).
     private func sliderRow(_ title: String, value: Binding<Float>, range: ClosedRange<Float> = 0...1, reset: Float = 0, undoable: Bool = true,
                            onEditing: ((Bool) -> Void)? = nil, onReset: (() -> Void)? = nil) -> some View {
         HStack(spacing: Space.s) {
-            Text(title)
-                .font(.subheadline)
-                .lineLimit(1).minimumScaleFactor(0.8)
-                .frame(width: 92, alignment: .leading)
-            ValueSlider(value: value, range: range, reset: reset, editing: { editing in
+            ValueSlider(value: value, range: range, reset: reset, title: title, editing: { editing in
                 sliding = editing
                 if let onEditing { onEditing(editing) } else if undoable { model.sliderEditing(editing) } else { brushRing = editing }
             })
             .accessibilityLabel(title)
-            ResetButton(label: "Reset \(title)") {
+            ResetButton(label: "Reset \(title)", tile: true) {
                 if let onReset { onReset(); return }
                 if undoable { model.sliderEditing(true) }
                 value.wrappedValue = reset
@@ -905,7 +902,7 @@ struct ContentView: View {
             }
             .disabled(abs(value.wrappedValue - reset) < 0.001 || model.busy != nil)
         }
-        .frame(height: 42)
+        .frame(height: 44)
     }
 }
 

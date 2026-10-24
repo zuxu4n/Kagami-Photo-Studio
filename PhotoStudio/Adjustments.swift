@@ -433,13 +433,15 @@ private struct RatioIcon: View {
     }
 }
 
-/// The slider every tool uses: the system slider with its value beside it. Two-way sliders (a range either side of
-/// 0) catch at 0 with a tap you can feel. `editing` brackets each drag.
+/// The slider every tool uses: the system slider with its value beside it, or, given a `title`, a field with the name
+/// and value inside (the photo editor's tool panels). Two-way sliders (a range either side of 0) catch at 0 with a tap
+/// you can feel. `editing` brackets each drag.
 struct ValueSlider: View {
     @Binding var value: Float
     var range: ClosedRange<Float> = -1...1
     var reset: Float?
     var label: ((Float) -> String)?
+    var title: String?
     var editing: (Bool) -> Void = { _ in }
 
     /// −100 to +100 for two-way sliders.
@@ -458,19 +460,139 @@ struct ValueSlider: View {
     }
 
     var body: some View {
-        HStack(spacing: Space.s) {
-            Slider(value: Binding(get: { value }, set: { v in
-                let snapped = twoWay && abs(v) < 0.03 * span / 2 ? 0 : v   // catches at the middle
-                if snapped != value { value = snapped }
-            }), in: range, onEditingChanged: editing)
-            Text(text(value))
-                .font(.footnote.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 44, alignment: .trailing)
-                .accessibilityHidden(true)
+        let snapping = Binding<Float>(get: { value }, set: { v in
+            let snapped = twoWay && abs(v) < 0.03 * span / 2 ? 0 : v   // catches at the middle
+            if snapped != value { value = snapped }
+        })
+        Group {
+            if let title {
+                SliderField(title: title, value: snapping, range: range, reset: reset ?? (twoWay ? 0 : range.lowerBound),
+                            text: text(value), editing: editing)
+                    // VoiceOver reads and adjusts it as the system slider, as before.
+                    .accessibilityRepresentation { Slider(value: snapping, in: range, onEditingChanged: editing) }
+            } else {
+                HStack(spacing: Space.s) {
+                    Slider(value: snapping, in: range, onEditingChanged: editing)
+                    Text(text(value))
+                        .font(.footnote.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, alignment: .trailing)
+                        .accessibilityHidden(true)
+                }
+                .frame(height: 44)
+            }
         }
-        .frame(height: 44)
         .sensoryFeedback(trigger: twoWay && value == 0) { _, atZero in atZero ? .impact(weight: .light) : nil }
+    }
+}
+
+/// ValueSlider's field: a rounded tile, like the top bar's buttons, with the name and value inside. It fills with a
+/// faint accent from the start (from the middle for two-way sliders) up to a thin handle at the value. A drag anywhere
+/// moves the value from where it is, so a touch never makes it jump. A mark on the bottom edge shows the default when
+/// it isn't at an end.
+private struct SliderField: View {
+    let title: String
+    @Binding var value: Float
+    let range: ClosedRange<Float>
+    let reset: Float
+    let text: String
+    let editing: (Bool) -> Void
+
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorScheme) private var scheme
+    @State private var width: CGFloat = 0
+    @State private var start: (value: Float, x: CGFloat)?   // where the drag began
+    @GestureState private var dragging = false
+
+    private var twoWay: Bool { range.lowerBound < 0 && range.upperBound > 0 }
+    private var span: Float { max(0.0001, range.upperBound - range.lowerBound) }
+    /// How far the handle travels in a field `width` wide: 6 points in from each end, less its own 3.
+    private func travel(_ width: CGFloat) -> CGFloat { max(1, width - 15) }
+
+    private func fraction(_ v: Float) -> CGFloat {
+        CGFloat(min(1, max(0, (v - range.lowerBound) / span)))
+    }
+
+    var body: some View {
+        let changed = abs(value - reset) >= 0.001
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        ZStack {
+            shape.fill(Color(.secondarySystemBackground))
+            GeometryReader { g in marks(in: g.size) }
+            HStack(spacing: Space.s) {
+                Text(title)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .foregroundStyle(isEnabled ? Color.primary : Color.secondary)
+                Spacer(minLength: 0)
+                Text(text)
+                    .monospacedDigit()
+                    .fontWeight(changed ? .semibold : .regular)
+                    .foregroundStyle(!isEnabled ? Color.secondary : changed ? Color.primary : Color.sliderMuted)
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 14)
+        }
+        .clipShape(shape)
+        .frame(height: 44)
+        .contentShape(shape)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .gesture(drag)
+        .onChange(of: dragging) { _, now in if !now { finish() } }   // a drag the system cancels gets no onEnded
+    }
+
+    /// The fill, the handle, a two-way slider's middle line and the default's mark.
+    private func marks(in size: CGSize) -> some View {
+        let height = size.height, run = travel(size.width)
+        let x = { (f: CGFloat) in 7.5 + run * f }
+        let k = fraction(value), middle = fraction(0), d = fraction(reset)
+        let left = twoWay ? x(min(k, middle)) : 0
+        let right = twoWay ? x(max(k, middle)) : x(k)
+        let tint = isEnabled ? Color.accentColor : Color(.systemGray3)
+        return ZStack(alignment: .topLeading) {
+            Rectangle()
+                .fill(tint.opacity(scheme == .dark ? 0.28 : 0.14))
+                .frame(width: right - left, height: height)
+                .offset(x: left)
+            if twoWay {
+                Rectangle()
+                    .fill(Color(.systemGray2))
+                    .frame(width: 1, height: 20)
+                    .offset(x: x(middle) - 0.5, y: (height - 20) / 2)
+            } else if d > 0.001 && d < 0.999 {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color(.systemGray2))
+                    .frame(width: 2, height: 8)
+                    .offset(x: x(d) - 1, y: height - 6)
+            }
+            Capsule()
+                .fill(tint)
+                .frame(width: 3, height: 24)
+                .offset(x: x(k) - 1.5, y: (height - 24) / 2)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var drag: some Gesture {
+        DragGesture(minimumDistance: 4)
+            .updating($dragging) { _, state, _ in state = true }
+            .onChanged { g in
+                guard isEnabled else { return }
+                if start == nil {
+                    start = (value, g.translation.width)
+                    editing(true)
+                }
+                guard let start else { return }
+                let moved = Float((g.translation.width - start.x) / travel(width)) * span
+                value = min(range.upperBound, max(range.lowerBound, start.value + moved))
+            }
+            .onEnded { _ in finish() }
+    }
+
+    /// Ends a drag once, whether the finger lifted or the system cancelled it.
+    private func finish() {
+        guard start != nil else { return }
+        start = nil
+        editing(false)
     }
 }
 

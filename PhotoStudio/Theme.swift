@@ -6,6 +6,15 @@ import SwiftUI
 extension Color {
     /// The face guides and the Position oval: cyan, so they read on any skin tone.
     static let faceGuide = Color(red: 0.2, green: 0.85, blue: 0.95)
+
+    /// A slider field's value while it's at its default: darker than `.secondary`, which is about 3.4:1 on white, so
+    /// the number keeps 4.5:1 on the field's grey (darker still with Increase Contrast).
+    static let sliderMuted = Color(UIColor { traits in
+        let high = traits.accessibilityContrast == .high
+        return traits.userInterfaceStyle == .dark
+            ? UIColor(white: high ? 0.75 : 0.60, alpha: 1)
+            : UIColor(white: high ? 0.30 : 0.42, alpha: 1)
+    })
 }
 
 enum Space {
@@ -106,17 +115,39 @@ struct PanelTextButton: View {
     }
 }
 
-/// The reset arrow beside a value.
+/// The reset arrow beside a value. `tile` puts it on a 44 point rounded tile, like the photo editor's top bar.
 struct ResetButton: View {
     let label: String
+    var tile = false
     var action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: "arrow.counterclockwise").frame(width: 36, height: 32)
+        if tile {
+            Button(action: action) { Image(systemName: "arrow.counterclockwise") }
+                .buttonStyle(ResetTileStyle())
+                .accessibilityLabel(label)
+        } else {
+            Button(action: action) {
+                Image(systemName: "arrow.counterclockwise").frame(width: 36, height: 32)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(label)
         }
-        .buttonStyle(.borderless)
-        .accessibilityLabel(label)
+    }
+}
+
+/// ResetButton's tile: the accent arrow on the grey of the top bar's buttons, greyed out when there's nothing to reset.
+private struct ResetTileStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 18))
+            .foregroundStyle(isEnabled ? Color.accentColor : Color(.tertiaryLabel))
+            .frame(width: 44, height: 44)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.secondarySystemBackground)))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 
