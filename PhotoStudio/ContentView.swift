@@ -796,29 +796,27 @@ struct ContentView: View {
         }
     }
 
-    /// The main Face tabs; the picked one is bold, and a dot marks the ones with a slider moved on the selected face.
+    /// The main Face tabs, as a grey track like ModeTabs; the picked one is on a tinted tile, and a dot marks the ones
+    /// with a slider moved on the selected face.
     private var areaTabs: some View {
         // Scrolls sideways, as eight names don't fit across a phone at full size.
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 20) {
+                HStack(spacing: 2) {
                     ForEach(FaceArea.allCases) { a in
                         let on = a == area
-                        Button { withAnimation { area = a } } label: {
-                            Text(changed(a) ? "\(a.rawValue) •" : a.rawValue)
-                                .lineLimit(1).fixedSize()
-                                .font(.subheadline.weight(on ? .semibold : .regular))
-                                .foregroundStyle(on ? Color.primary : Color.secondary)
-                                .frame(minHeight: 32)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .id(a)
-                        .accessibilityAddTraits(on ? .isSelected : [])
+                        Button(a.rawValue) { withAnimation { area = a } }
+                            .buttonStyle(TrackItemStyle(on: on, dot: changed(a), backing: .tile))
+                            .id(a)
+                            .accessibilityAddTraits(on ? .isSelected : [])
+                            .accessibilityValue(changed(a) ? "changed" : "")
                     }
                 }
-                .padding(.horizontal, 2)
+                .padding(4)
             }
+            .frame(height: 44)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))   // the names scroll under its corners
             .onChange(of: area) { _, a in withAnimation { proxy.scrollTo(a, anchor: .center) } }
         }
         .sensoryFeedback(.selection, trigger: area)

@@ -45,19 +45,53 @@ struct StudioIconButton: View {
 
 // MARK: Panel parts
 
-/// A tool's modes (Heal's Spot / People / Brush / Erase and the like), as a segmented control.
+extension Color {
+    /// The grey under a mode track or a chip, as under the slider fields. On a material (the camera's panel) it's a
+    /// see-through fill instead, as the solid grey would sit on it as a block.
+    static func trackFill(_ material: Material?) -> Color {
+        material == nil ? Color(.secondarySystemBackground) : Color(.secondarySystemFill)
+    }
+}
+
+/// A tool's modes (Heal's Spot / People / Brush / Erase and the like): a grey track the height of a slider row, with
+/// the picked mode on a tinted tile that slides across. VoiceOver gets the segmented control it stands in for.
 struct ModeTabs<Value: Hashable>: View {
     let items: [Value]
     @Binding var selection: Value
     var title: (Value) -> String
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.backgroundMaterial) private var material
 
     var body: some View {
-        Picker("Mode", selection: $selection) {
-            ForEach(items, id: \.self) { Text(title($0)).tag($0) }
+        let picked = CGFloat(items.firstIndex(of: selection) ?? 0)
+        HStack(spacing: 0) {
+            ForEach(items, id: \.self) { item in
+                Button(title(item)) { selection = item }
+                    .buttonStyle(TrackItemStyle(on: item == selection, backing: .none))
+            }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
+        .background(alignment: .leading) {
+            GeometryReader { g in
+                let width = g.size.width / CGFloat(max(items.count, 1))
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isEnabled ? Color.toolTile(scheme) : Color(.systemGray5))
+                    .frame(width: width)
+                    .offset(x: width * picked)
+            }
+        }
+        .animation(.snappy(duration: 0.25), value: selection)
+        .padding(4)
+        .frame(height: 44)
+        .background(Color.trackFill(material), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .sensoryFeedback(.selection, trigger: selection)
+        .accessibilityRepresentation {
+            Picker("Mode", selection: $selection) {
+                ForEach(items, id: \.self) { Text(title($0)).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+        }
     }
 }
 
@@ -67,7 +101,8 @@ extension ModeTabs where Value: RawRepresentable, Value.RawValue == String {
     }
 }
 
-/// A small choice button (the Face subtabs, the camera's effects). The picked one is filled; `dot` marks a change.
+/// A choice in a row of them (the Face subtabs, the Background fills, the camera's looks): a grey tile, tinted when
+/// picked; `dot` marks a change.
 struct Chip: View {
     let title: String
     let on: Bool
@@ -75,20 +110,68 @@ struct Chip: View {
     var action: () -> Void
 
     var body: some View {
+        Button(title, action: action)
+            .buttonStyle(TrackItemStyle(on: on, dot: dot, backing: .chip))
+            .accessibilityAddTraits(on ? .isSelected : [])
+            .accessibilityValue(dot ? "changed" : "")
+    }
+}
+
+/// A choice in a track, or a chip: the name, semibold when picked, with the changed dot at its top corner. `backing`
+/// is what sits behind it: nothing of its own (ModeTabs slides one tile under all of them), a tinted tile when it's
+/// picked (the Face areas), or a chip's own grey tile, tinted when it's picked.
+struct TrackItemStyle: ButtonStyle {
+    enum Backing { case none, tile, chip }
+
+    var on: Bool
+    var dot = false
+    var backing: Backing
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.backgroundMaterial) private var material
+
+    func makeBody(configuration: Configuration) -> some View {
         Group {
-            if on {
-                Button(action: action) { label }.buttonStyle(.borderedProminent)
+            if backing == .none {
+                name(configuration).minimumScaleFactor(0.75).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                Button(action: action) { label }.buttonStyle(.bordered)
+                name(configuration).fixedSize().padding(.horizontal, 14).frame(height: 36).background { tile }
             }
         }
-        .controlSize(.small)
-        .accessibilityAddTraits(on ? .isSelected : [])
-        .accessibilityValue(dot ? "changed" : "")
+        .contentShape(shape)
+        .opacity(configuration.isPressed ? 0.7 : 1)
+        .animation(.easeOut(duration: 0.2), value: on)
     }
 
-    private var label: some View {
-        Text(dot ? "\(title) •" : title).lineLimit(1).fixedSize()
+    private func name(_ configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(on ? .semibold : .regular))
+            .foregroundStyle(nameColor)
+            .lineLimit(1)
+            .overlay(alignment: .topTrailing) {
+                if dot {
+                    Circle()
+                        .fill(isEnabled ? Color.accentColor : Color(.tertiaryLabel))
+                        .frame(width: 6, height: 6)
+                        .offset(x: 9, y: -1)
+                        .accessibilityHidden(true)
+                }
+            }
+    }
+
+    /// Primary when picked or on a chip's own grey; muted on the track's grey, which keeps 4.5:1 for it.
+    private var nameColor: Color {
+        if !isEnabled { return Color(.tertiaryLabel) }
+        return on || backing == .chip ? .primary : .toolMuted
+    }
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: backing == .chip ? 12 : 10, style: .continuous)
+    }
+
+    @ViewBuilder private var tile: some View {
+        if backing == .chip { shape.fill(Color.trackFill(material)) }
+        if on { shape.fill(isEnabled ? Color.toolTile(scheme) : Color(.systemGray5)) }
     }
 }
 
