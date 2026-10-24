@@ -1,13 +1,15 @@
 import SwiftUI
 import AVFoundation
 
-/// The live camera screen: the camera with the look drawn on it, a slider for each part of the look, a record button,
-/// and hold-to-compare on the picture.
+/// The live camera screen: the camera with the look drawn on it and hold-to-compare on the picture, then a panel below
+/// it with a slider for each part of the look and the record row (Compare, Record, Switch camera).
 struct CameraView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
     @StateObject private var camera = CameraController()
     @State private var look = LiveLook()   // every effect starts at none ((a design call))
     @State private var control = LookControl.all[0]
+    @State private var comparing = false   // holding the picture or the Compare tile
 
     var body: some View {
         ZStack {
@@ -15,14 +17,15 @@ struct CameraView: View {
             if camera.denied {
                 CameraAccessView { dismiss() }
             } else {
-                CameraPreview(layer: camera.displayLayer)
-                    .ignoresSafeArea()
-                    .gesture(DragGesture(minimumDistance: 0)
-                        .onChanged { _ in if !camera.comparing { camera.comparing = true } }
-                        .onEnded { _ in camera.comparing = false })
                 VStack(spacing: 0) {
-                    topBar
-                    Spacer()
+                    ZStack(alignment: .top) {
+                        CameraPreview(layer: camera.displayLayer)
+                            .ignoresSafeArea(edges: .top)
+                            .gesture(DragGesture(minimumDistance: 0)
+                                .onChanged { _ in if !comparing { comparing = true } }
+                                .onEnded { _ in comparing = false })
+                        topBar
+                    }
                     controls
                 }
             }
@@ -43,56 +46,91 @@ struct CameraView: View {
         .onAppear { camera.look = look; camera.start() }
         .onDisappear { camera.stop() }
         .onChange(of: look) { _, new in camera.look = new }
+        .onChange(of: comparing) { _, new in camera.comparing = new }
     }
 
+    /// Close on the left of the picture and what the camera is doing in the middle.
     private var topBar: some View {
-        HStack {
-            StudioIconButton(icon: "xmark", label: "Close camera", onPhoto: true) { dismiss() }
-                .disabled(camera.recording)
-            Spacer()
-            Group {
-                if camera.recording {
-                    HStack(spacing: 6) {
-                        Circle().fill(.red).frame(width: 7, height: 7)
-                        Text(String(format: "%d:%02d", camera.seconds / 60, camera.seconds % 60)).monospacedDigit()
-                    }
-                } else {
-                    Text(camera.faceCount == 0 ? "Looking for a face" : "Hold the picture to compare")
-                }
+        ZStack {
+            HStack {
+                Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }
+                    .buttonStyle(CameraButtonStyle(fill: .material, neutral: true))
+                    .disabled(camera.recording)
+                    .accessibilityLabel("Close camera")
+                Spacer()
             }
-            .font(.footnote)
-            .padding(.horizontal, 12).frame(height: 30)
-            .background(.regularMaterial, in: Capsule())
-            .animation(.default, value: camera.recording)
-            Spacer()
-            StudioIconButton(icon: "arrow.triangle.2.circlepath", label: "Switch camera", onPhoto: true) { camera.switchCamera() }
-                .disabled(camera.recording)
+            status
         }
-        .padding(.horizontal, Space.s)
-        .padding(.top, Space.xs)
+        .padding(.horizontal, Space.m)
+        .frame(height: 52)
     }
 
-    /// The effects on a panel over the picture, and the record button below it.
-    private var controls: some View {
-        VStack(spacing: 14) {
-            LookControls(look: $look, control: $control)
-                .padding(.vertical, Space.m)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                .clipShape(RoundedRectangle(cornerRadius: 12))   // the chips scroll under its corners
-                .padding(.horizontal, Space.m)
-            recordButton
+    /// Looking for a face, the hint to compare, or the recording time in white on red.
+    private var status: some View {
+        Group {
+            if camera.recording {
+                HStack(spacing: 6) {
+                    Circle().fill(.white).frame(width: 7, height: 7)
+                    Text(String(format: "%d:%02d", camera.seconds / 60, camera.seconds % 60)).monospacedDigit()
+                }
+                .fontWeight(.semibold)
+                .foregroundStyle(.white)
+            } else {
+                Text(camera.faceCount == 0 ? "Looking for a face" : "Hold the picture to compare")
+            }
         }
-        .padding(.top, Space.l)
+        .font(.footnote)
+        .padding(.horizontal, 12).frame(height: 32)
+        .background {
+            if camera.recording { Capsule().fill(Color.recordingTime) } else { Capsule().fill(.regularMaterial) }
+        }
+        .animation(.default, value: camera.recording)
+    }
+
+    /// The effects on a panel below the picture, then the record row.
+    private var controls: some View {
+        VStack(spacing: Space.m) {
+            LookControls(look: $look, control: $control)
+            recordRow
+        }
+        .padding(.top, Space.m)
         .padding(.bottom, Space.s)
+        .background(Color(.systemBackground).ignoresSafeArea(edges: .bottom))
+    }
+
+    /// Compare, Record and Switch camera. The tiles either side are the same size, so Record stays in the middle.
+    private var recordRow: some View {
+        HStack {
+            Image(systemName: "square.split.2x1")
+                .font(.system(size: 20))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 44, height: 44)
+                .background(comparing ? Color.toolTile(scheme) : Color(.secondarySystemBackground),
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .onLongPressGesture(minimumDuration: 0, maximumDistance: 60, pressing: { comparing = $0 }, perform: {})
+                .accessibilityLabel("Hold to compare with the original")
+                .accessibilityAddTraits(.isButton)
+            Spacer()
+            recordButton
+            Spacer()
+            Button { camera.switchCamera() } label: {
+                Image(systemName: "arrow.triangle.2.circlepath").frame(width: 44, height: 44)
+            }
+            .buttonStyle(CameraButtonStyle())
+            .disabled(camera.recording)
+            .accessibilityLabel("Switch camera")
+        }
+        .padding(.horizontal, Space.l)
     }
 
     private var recordButton: some View {
         Button {
             if camera.recording { camera.stopRecording() } else { camera.startRecording() }
         } label: {
-            // A red dot in a white ring that becomes a square while recording, like the system camera.
+            // A red dot in a ring that becomes a square while recording, like the system camera.
             ZStack {
-                Circle().stroke(.white, lineWidth: 4).frame(width: 76, height: 76)
+                Circle().stroke(Color.recordRing, lineWidth: 4).frame(width: 76, height: 76)
                 RoundedRectangle(cornerRadius: camera.recording ? 6 : 31)
                     .fill(.red)
                     .frame(width: camera.recording ? 30 : 62, height: camera.recording ? 30 : 62)
@@ -104,7 +142,8 @@ struct CameraView: View {
     }
 }
 
-/// The look's controls, shared by the camera and the video editor: a chip for each effect and its slider.
+/// The look's controls, shared by the camera and the video editor: a chip for each effect, then its slider field and
+/// reset tile, like the photo editor's slider rows.
 struct LookControls: View {
     @Binding var look: LiveLook
     @Binding var control: LookControl
@@ -121,42 +160,101 @@ struct LookControls: View {
             }
             .sensoryFeedback(.selection, trigger: control.id)
             HStack(spacing: Space.s) {
-                ValueSlider(value: Binding(get: { control.get(look) }, set: { control.set(&look, $0) }), range: control.range)
+                ValueSlider(value: Binding(get: { control.get(look) }, set: { control.set(&look, $0) }), range: control.range,
+                            title: control.name)
                     .accessibilityLabel(control.name)
-                ResetButton(label: "Reset \(control.name)") { withAnimation { control.set(&look, 0) } }
+                ResetButton(label: "Reset \(control.name)", tile: true) { withAnimation { control.set(&look, 0) } }
                     .disabled(abs(control.get(look)) < 0.001)
             }
-            .padding(.leading, Space.l).padding(.trailing, Space.s)
+            .frame(height: 44)
+            .padding(.horizontal, Space.l)
         }
     }
 }
 
-/// The camera screen when access to the camera was turned off: why it's needed, and the way to Settings.
+/// The camera screen when access to the camera was turned off: why it's needed where the picture would be, and the
+/// way to Settings below it, where the panel would be.
 struct CameraAccessView: View {
     var close: () -> Void
     @Environment(\.openURL) private var openURL
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                StudioIconButton(icon: "xmark", label: "Close camera", action: close)
-                Spacer()
-            }
-            .padding(.horizontal, Space.s)
-            Spacer()
-            ContentUnavailableView {
-                Label("Allow the camera", systemImage: "camera")
-            } description: {
-                Text("Yumiro films with your look applied live. Everything stays on this iPhone.")
-            } actions: {
-                Button("Open Settings") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            ZStack(alignment: .topLeading) {
+                Color(.secondarySystemBackground).ignoresSafeArea(edges: .top)
+                VStack(spacing: 6) {
+                    Image(systemName: "camera")
+                        .font(.system(size: 40))
+                        .foregroundStyle(Color.toolMuted)
+                        .padding(.bottom, 10)
+                        .accessibilityHidden(true)
+                    Text("Allow the camera")
+                        .font(.title3.weight(.semibold))
+                        .accessibilityAddTraits(.isHeader)
+                    Text("Yumiro films with your look applied live. Everything stays on this iPhone.")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.toolMuted)
                 }
-                .buttonStyle(.borderedProminent)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Button(action: close) { Image(systemName: "xmark").frame(width: 44, height: 44) }
+                    .buttonStyle(CameraButtonStyle(fill: .background, neutral: true))
+                    .accessibilityLabel("Close camera")
+                    .padding(.horizontal, Space.m)
+                    .frame(height: 52)
             }
-            Spacer()
+            Button {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            } label: {
+                Text("Open Settings").frame(maxWidth: .infinity, minHeight: 52)
+            }
+            .buttonStyle(CameraButtonStyle(fill: .accent))
+            .padding(Space.l)
         }
     }
+}
+
+/// The camera's buttons: 44-point tiles like the photo editor's top bar (Close, Switch camera) and the filled
+/// Open Settings. `fill` is the tile: a material over the picture, grey on the panel, or the background colour on
+/// the grey of the camera-off screen.
+private struct CameraButtonStyle: ButtonStyle {
+    enum Fill { case accent, grey, background, material }
+
+    var fill: Fill = .grey
+    var neutral = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    private var foreground: Color {
+        if !isEnabled { return Color(.tertiaryLabel) }
+        if fill == .accent { return .white }
+        return neutral ? .secondary : .accentColor
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        return configuration.label
+            .font(fill == .accent ? .body.weight(.semibold) : .system(size: 20))
+            .foregroundStyle(foreground)
+            .background {
+                switch fill {
+                case .accent: shape.fill(Color.accentColor)
+                case .grey: shape.fill(Color(.secondarySystemBackground))
+                case .background: shape.fill(Color(.systemBackground))
+                case .material: shape.fill(.regularMaterial)
+                }
+            }
+            .contentShape(shape)
+            .opacity(configuration.isPressed ? 0.7 : 1)
+    }
+}
+
+private extension Color {
+    /// The recording time's pill: a darker red than the system's, so the white time keeps 4.5:1 (about 5.4:1).
+    static let recordingTime = Color(red: 0.843, green: 0, blue: 0.082)
+
+    /// The record button's ring: white on the dark panel, grey on the light one, where white wouldn't show.
+    static let recordRing = Color(UIColor { $0.userInterfaceStyle == .dark ? .white : .systemGray3 })
 }
 
 /// One slider on the camera screen: what it's called, its range and which part of the look it sets.
