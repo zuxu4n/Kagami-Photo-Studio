@@ -1,0 +1,310 @@
+# Yumiro B: design handoff
+
+This is the design record for **Yumiro B**, the `ui-b` branch. It lists what the user approved, what's built, what was only proposed, and what's left. Last updated 2026-10-24, with `ui-b` at `33ded13`.
+
+The code is the source of truth for exact values. This file says why each value is what it is, and where it lives.
+
+## How to work on ui-b
+
+These rules come from the user. A fresh session doesn't get the previous session's memory, so they're written out here.
+
+- **Work only in this folder** (`C:\Users\Jason\OneDrive\Desktop\Code\js\yumiro-ui-b`, branch `ui-b`). Don't read, diff, log or check out `main`, `ui-a` or any other branch. If something seems to need another branch, ask first.
+- **Push with `git push origin ui-b`.** Never force-push: the install script on the Mac uses `git pull --ff-only`. Never merge into, edit or push `main` or `ui-a`.
+- **Nothing builds on this PC.** It has no Xcode, models or `Local.xcconfig`. The user builds on their Mac with `tools/install_variant.sh b`, which installs the branch as its own app, "Yumiro B", and prints `ui-b at <sha>`. After each push, tell the user the commit is ready to install.
+- **One part at a time.** Each round redesigns one part of the UI and leaves the rest alone:
+  1. Research the part on Mobbin. Use the Mobbin connector's `search_screens` with platform `ios`, and cite each result by its `mobbin_url`.
+  2. Propose **3 options** as mockups on a Design canvas Artifact. Each option sits in the editor screen, matches what's already in ui-b, and comes in light and dark.
+  3. The user picks **one** option. Never offer to build two, and never create a new branch or worktree.
+  4. Build the pick in ui-b. Keep everything the code does now: haptics, undo steps, accessibility labels and traits, disabled states, scrolling to the picked item.
+  5. Commit with a subject line, a blank line, then the body. Push, then tell the user it's ready for `tools/install_variant.sh b`.
+- **Clean room** (README, "Clean room"). Nothing comes from Facetune, Remini, Photoroom, Meitu or BeautyPlus. Learn patterns on Mobbin, but design Yumiro's own version: never copy layouts, icons or assets. Mobbin doesn't seem to have dedicated beauty editors (a Facetune search returned unrelated apps), so the beauty patterns come from beauty cameras such as Shopee and Azar.
+
+## Approved decisions
+
+| Part | Approved option | In ui-b | Mockup canvas |
+|---|---|---|---|
+| Top bar | Design A, "Balanced" (won the A/B test) | `93155a5`, merged in at `e025bfb` | made in the design A session; no canvas in this record |
+| Bottom tool bar | Option 1, "Labelled strip" | `575d86a` (first built as `62567b2`) | [Yumiro Editor Toolbar](https://claude.ai/artifact/WNMhe9Lez6KHvwpZ5nRroz) |
+| Slider row | Option 3, "Fill field" | `b3f53c5` | [Yumiro Slider Row](https://claude.ai/artifact/HhNV7Z7EAWJt8dTne6YnuR) |
+| Mode tabs and chips | Option 1, "Track", in every use | `6da010a` and `33ded13` | [Yumiro Tabs and Chips](https://claude.ai/artifact/R5cCo1VDvFfZjpcSPMzX3U) |
+
+ui-b's tool bar is **not** design A's "Focus rail" from main. The user asked for the labelled strip in ui-b on purpose.
+
+### Approved mockups
+
+The canvases are private claude.ai Artifacts owned by the user. Open them with the Artifact tool's `read` action, not a web fetch. The approved boards in each are:
+
+- **Tool bar:** `DirectionA.dc.html` and `DirectionADark.dc.html` on the Options page. The canvas calls them "Direction A"; they became Option 1. That canvas predates design A, so only its tool bar is approved, not its top bar or panels.
+- **Slider row:** `Option3.dc.html` and `Option3Dark.dc.html` on the Options page, and `Panels3.dc.html` on the Panels page. That canvas draws design A's Focus rail tool bar. ui-b has the labelled strip instead.
+- **Tabs and chips:** `Editor1.dc.html` on the "Face in the editor" page, and `Uses1.dc.html` on the "Every use" page (Heal, both Background modes, the disabled Refine switch, the camera, the video editor). This canvas already shows ui-b's top bar, tool bar and slider fields.
+
+Local copies of the canvas sources are in the previous session's scratchpad. They are temporary and may be deleted:
+
+- `C:\Users\Jason\AppData\Local\Temp\claude\C--Users-Jason-OneDrive-Desktop-Code-js-photoStudioClaude\d9da43b8-b25d-4a98-a1fd-c3e284618932\scratchpad\toolbar\project\`
+- `C:\Users\Jason\AppData\Local\Temp\claude\C--Users-Jason-OneDrive-Desktop-Code-js-photoStudioClaude\d9da43b8-b25d-4a98-a1fd-c3e284618932\scratchpad\slider\project\`
+- `C:\Users\Jason\AppData\Local\Temp\claude\C--Users-Jason-OneDrive-Desktop-Code-js-photoStudioClaude\d9da43b8-b25d-4a98-a1fd-c3e284618932\scratchpad\tabs\project\`
+
+The `tabs` folder has reusable mockup parts for the next canvas: `Main.dc.html` (the editor with ui-b's bars), `Panel.dc.html`, `Tabs.dc.html`, `Chips.dc.html`, `Camera.dc.html`, `Video.dc.html` and `Icon.dc.html`.
+
+**There are no device screenshots.** Nothing has been captured from a phone or simulator.
+
+## Colours
+
+The app uses system colours, so light mode, dark mode and Increase Contrast come for free. The `AccentColor` asset has no value set, so the accent is system blue: #007AFF in light mode and #0A84FF in dark mode.
+
+| Role | Value | Used by |
+|---|---|---|
+| Accent | `Color.accentColor` | Save fill, Undo/Redo icons, picked tool icon, reset arrow, slider fill and handle, changed dots |
+| Control grey | `Color(.secondarySystemBackground)`: #F2F2F7 light, #1C1C1E dark | top bar buttons, slider fields, reset tiles, mode tracks, chips, Face area track |
+| Grey on a material | `Color(.secondarySystemFill)`, via `Color.trackFill(material)` | chips and tracks on `.regularMaterial` (the camera's look panel) |
+| Picked tint | `Color.toolTile(scheme)`: accent at 0.14 light, 0.24 dark | picked tool tile, picked mode tile, picked chip, picked Face area |
+| Slider fill | accent at 0.14 light, 0.28 dark | slider field fill (`SliderField.marks`) |
+| Muted text | `Color.toolMuted`: rgb(0.42, 0.42, 0.44) light, (0.60, 0.60, 0.62) dark; Increase Contrast (0.33, 0.33, 0.35) and (0.72, 0.72, 0.75) | unpicked tool names, icons and group titles; unpicked mode names on a track |
+| Muted value | `Color.sliderMuted`: white 0.42 light, 0.60 dark; Increase Contrast 0.30 and 0.75 | a slider's value while it's at its default |
+| Slider marks | `Color(.systemGray2)` | a two-way slider's middle line; the default mark |
+| Disabled | text `Color(.tertiaryLabel)`; picked tile `Color(.systemGray5)`; slider tint `Color(.systemGray3)`; Save fill at 0.35 opacity | every control with `.disabled` |
+| Close icon | `.secondary` | the top bar's neutral button |
+
+`toolMuted` and `sliderMuted` exist because `.secondary` (#8A8A8E) is only about 3.4:1 on white, below the 4.5:1 needed for small text. The contrast results are under [Validation](#validation).
+
+Hex values used in the mockups:
+
+- **Light:** background #FFFFFF, grey #F2F2F7, secondary #8A8A8E, muted #6C6C70, accent #007AFF, track #E5E5EA, tick #AEAEB2, tint #D9EBFF.
+- **Dark:** background #000000, grey #1C1C1E, secondary #8D8D93, muted #98989F, accent #0A84FF, track #39393D, tick #636366.
+
+## Typography
+
+The font is the system font (SF Pro), always set with Dynamic Type text styles. The editor caps Dynamic Type at `.xLarge` because the tool panel is dense.
+
+| Element | Style |
+|---|---|
+| Top bar: Save | `.body.weight(.semibold)`, white |
+| Top bar: icons | `.system(size: 20)` |
+| Tool bar: group titles | `.caption2.weight(.semibold)`, `toolMuted`, read as headers by VoiceOver |
+| Tool bar: icons | `.title3`, in a 24 pt tall frame |
+| Tool bar: names | `.caption2`; semibold and `.primary` when picked, otherwise `toolMuted` |
+| Slider field: name and value | `.subheadline`; the value uses `.monospacedDigit()` and turns semibold and `.primary` once moved |
+| Mode tabs, Face areas, chips | `.subheadline`; semibold when picked |
+| Reset tile arrow | `.system(size: 18)` |
+| Hints under a panel | `.footnote`, `.secondary`, at most 2 lines |
+| Panel headings ("Enhanced") | `.headline` |
+
+Slider values show two-way ranges as −100 to +100 with a sign, using a real minus sign (−). One-way ranges show 0 to 100.
+
+## Spacing, sizes and shape
+
+- **Spacing scale** (`Space` in `Theme.swift`): xs 4, s 8, m 12, l 16, xl 24, xxl 32.
+- **Touch targets:** every control is at least 44 pt. Rows of controls are 44 pt tall. Chips are 36 pt, and a tile inside a track is 36 pt (44 minus 4 pt of padding on each side).
+- **Corner radii** (`style: .continuous` on every redesigned control; the toast and the camera's panel use plain corners):
+
+  | Radius | Used for |
+  |---|---|
+  | 14 | 44 pt controls: top bar buttons, slider fields, reset tiles, mode tracks, the Face area track |
+  | 12 | tool bar tiles, chips, the camera's material panel |
+  | 10 | the tile inside a track; toasts |
+
+- **Editor layout, top to bottom:**
+  - top bar: 52 pt tall, 12 pt side padding;
+  - photo canvas: fills the rest;
+  - tool panel: 16 pt sides, 12 pt top and bottom, at least 184 pt tall, rows 8 pt apart;
+  - a divider;
+  - tool bar: 84 pt tall.
+- **Press and motion:**
+  - every custom button fades to 0.7 opacity while pressed;
+  - a track's tile slides with `.snappy(duration: 0.25)`;
+  - picked-state changes use `.easeOut(duration: 0.2)`;
+  - scroll edge fades use `.easeInOut(duration: 0.2)`.
+
+## Components
+
+### Top bar: "Balanced" (`ContentView.topBar`, `PhotoEditorTopBarButtonStyle`)
+
+- **Close:** an `xmark` on the left, in a grey 44 pt tile with a `.secondary` icon. It asks before discarding edits.
+- **Undo and Redo:** centred, 4 pt apart, accent icons on grey tiles.
+- **Save:** on the right. White semibold text on an accent fill, at least 76 pt wide, with 17 pt side padding.
+- **Disabled:** icons turn `tertiaryLabel` and Save's fill drops to 0.35. Everything is disabled while the app is busy.
+- **VoiceOver order:** Close, Undo, Redo, then Save.
+
+### Bottom tool bar: "Labelled strip" (`ContentView.toolBar`, `toolButton`; the "Tool bar" section of `Theme.swift`)
+
+- **Layout:** one row that scrolls sideways, with three named groups:
+  - **Fix:** Enhance, Adjust;
+  - **Beauty:** Smooth, Retouch, Face, Warp;
+  - **Remove:** Heal, Background.
+
+  The names are `Tool.groupTitles`, shown above each group (8 pt leading inset) instead of divider lines. Groups are 12 pt apart and tools 4 pt apart. The row has 12 pt side padding, 8 pt on top and 4 pt below.
+- **Tool button:** the icon over its name, 3 pt apart. At least 64 × 56 pt, with 6 pt side padding.
+- **Picked tool:** sits on a `ToolTile` (radius 12, `toolTile`). Its icon is accent, and its name is semibold and `.primary`.
+- **Changed dot (`ChangedDot`):** 8 pt in the accent colour, with a 2 pt ring in the colour behind it (the bar, or the tile). It sits at offset (7, −5) from the icon's top-right corner, and it also shows on the picked tool.
+- **Scroll edges:** `scrollEdgeFades()` fades each end over 24 pt while there's more to scroll that way.
+- **Behaviour:** picking a tool scrolls it to the centre (also on appear) and plays the selection haptic.
+- **VoiceOver:** each tool reads its name plus ", changed" if it has changed the photo, and has the selected trait when picked. Group titles are headers.
+- **Cost:** 84 pt tall instead of the old 66, so the photo is 18 pt shorter.
+
+### Slider row: "Fill field" (`ContentView.sliderRow`; `ValueSlider` and the private `SliderField` in `Adjustments.swift`; `ResetButton(tile: true)` in `Theme.swift`)
+
+- **Row:** a field and a 44 × 44 reset tile, 8 pt apart, 44 pt tall.
+- **Field:** a 44 pt grey tile (radius 14) with the name on the left and the value on the right, 14 pt in from the sides. Long names shrink to 80%.
+- **Fill:** a faint accent fill runs from the start of the range up to a 3 × 24 pt accent handle. On a two-way slider it runs out from the middle instead, and a 1 × 20 pt `systemGray2` line marks the middle. The handle travels between 6 pt from each end.
+- **Default mark:** when the default isn't at either end (Enhance's Strength, the brush sizes), a 2 pt `systemGray2` mark on the bottom edge shows where it is.
+- **Value:** shown in `sliderMuted` at the default; semibold and `.primary` once moved.
+- **Drag:** a drag anywhere moves the value from where it is (`DragGesture(minimumDistance: 4)`, relative), so a touch never makes it jump, and a plain tap does nothing. A drag the system cancels still ends cleanly.
+- **Catch at zero:** two-way sliders snap to 0 within 3% of half the range, with a light impact haptic.
+- **Undo, ring and Strength:** one undo step per drag and per reset. Non-undoable brush sliders show the brush ring on the photo while dragging. Enhance's Strength uses its own `onEditing` and `onReset` steps.
+- **VoiceOver:** reads and adjusts the field as the system `Slider`, through `accessibilityRepresentation`. The reset tile reads "Reset <name>".
+- **Reset tile:** an accent arrow on a grey 44 pt tile (radius 14). It turns `tertiaryLabel` when the slider is at its default or the app is busy.
+- **Scope:** only through `sliderRow`, which covers the photo editor's tool panels. With no `title`, `ValueSlider` still draws the system slider, which the Adjust panel (photo and video editors) and the camera use.
+
+### Mode tabs: "Track" (`ModeTabs`, `TrackItemStyle` with `.none` backing, in `Theme.swift`)
+
+- **Shape:** one 44 pt grey track (radius 14, `trackFill`) with 4 pt of padding inside.
+- **Modes:** share the width equally. Names shrink to 75% if needed.
+- **Picked mode:** a radius 10 `toolTile` tile slides under it (`systemGray5` when disabled). Its name is semibold and `.primary`; the others are `toolMuted`.
+- **Used by:**
+  - Heal: Spot, People, Brush, Erase;
+  - Background: Blur, Remove;
+  - Background's Refine row: Auto, Brush, Erase;
+  - the video editor: Face, Adjust.
+- **Refine's disabled state:** Refine is off until people are found (`.disabled(model.personMatte == nil)`). The text then turns `tertiaryLabel`.
+- **Behaviour:** selection haptic on every change.
+- **VoiceOver:** gets the original segmented `Picker` through `accessibilityRepresentation`, so it still reads "Spot, 1 of 4".
+
+### Chips (`Chip`, `TrackItemStyle` with `.chip` backing)
+
+- **Shape:** a 36 pt grey tile (radius 12, `trackFill`) with 14 pt side padding. The name never truncates.
+- **Picked chip:** gets the `toolTile` tint on top of the grey, and its name turns semibold. Names are `.primary` on a chip's own grey.
+- **Changed dot:** 6 pt in the accent colour, at the top-right corner of the name (offset 9, −1); `tertiaryLabel` when disabled. It replaced the old "•" after the name. VoiceOver reads it as the value "changed".
+- **VoiceOver:** the selected trait when picked.
+- **Rows:**
+  - **Face subtabs:** a scrolling row, 6 pt apart.
+  - **Background fills (Off, Clear, White, Black):** 8 pt apart in a 44 pt row, disabled while the app is busy.
+  - **Camera looks (`LookControls`, also in the video editor's Face panel):** a scrolling row, 6 pt apart, with 16 pt side padding. In the camera it sits on `.regularMaterial`, so the grey becomes the see-through `secondarySystemFill`.
+- **Behaviour:** every row plays the selection haptic.
+
+### Face areas (`ContentView.areaTabs`, `TrackItemStyle` with `.tile` backing)
+
+- **Shape:** the eight areas (Face, Head, Jaw, Nose, Eyes, Lips, Eyebrows, Forehead) in a 44 pt grey track that scrolls sideways. The names scroll under its rounded corners.
+- **Items:** 2 pt apart. The picked area gets its own radius 10 `toolTile` tile.
+- **Behaviour:** picking an area scrolls it to the centre and plays the selection haptic.
+- **Changed dot:** marks an area with a slider moved on the selected face, read as "changed".
+- **VoiceOver:** the selected trait when picked.
+- **Panel order:** areas, then subtab chips, then the slider field. That's the tabs → chips → slider order the Mobbin references use.
+
+### Unchanged parts (not redesigned yet)
+
+These still have their original look:
+
+- `PanelTextButton` (system bordered, small);
+- `StudioIconButton`, `HintText`, `Toast`, `BusyBadge`;
+- the Face Position row's plain `ResetButton`;
+- everything under "Not built yet" below.
+
+## Mobbin references
+
+All references are iOS screens and patterns only.
+
+**Bottom tool bar**
+
+- [Apple Photos](https://mobbin.com/screens/cfdedea1-b462-42ae-b794-606e9f4ef2c0): the picked tool shown with weight, not colour alone.
+- [VSCO](https://mobbin.com/screens/78fc1651-3c0b-42c5-93cf-bcd084ec7048) and [Halide](https://mobbin.com/screens/d6030ecf-e191-489a-903b-8ab937087023): short group names above the tools.
+- [Google Photos](https://mobbin.com/screens/a0afe998-b52c-4db2-91a2-10ece845da10): groups as tabs on the bottom row. This informed Option 2, which wasn't picked.
+- [Azar](https://mobbin.com/screens/47ec2e21-dd91-4046-b091-dd9a99baf491): a bright dot on tools that have been used.
+- [Shopee](https://mobbin.com/screens/fbda85d0-d09e-4a6c-af5d-61a00f498c00) and [CapCut](https://mobbin.com/screens/3ffa0696-70f6-46d3-9303-9f6552e28768): a tile behind the picked tool, and a row cut off at the edge so it reads as scrolling.
+- [Depop](https://mobbin.com/screens/2a3e86d3-c7a1-481b-adb5-7db4492358a4): a few modes shown together with no scrolling.
+
+**Slider row**
+
+- [VSCO](https://mobbin.com/screens/62d0dba7-72e7-4dfb-a691-a986a789b5df), [Shopee](https://mobbin.com/screens/e0a34c4b-29b8-4bdf-aced-9fb455d9aa09) and [Azar](https://mobbin.com/screens/47ec2e21-dd91-4046-b091-dd9a99baf491): no label on the slider when a tile or chip already names it.
+- [Telegram](https://mobbin.com/screens/dc3a6820-6750-4363-9f63-be2ad3b6e17b) and [VSCO HSL](https://mobbin.com/screens/9b5f4b29-caa9-4443-a8dd-2900a717dd19): the label above the track in stacks of sliders; the value at the end of the row.
+- [CapCut](https://mobbin.com/screens/0fce915d-55c0-45d7-b1d1-d9ce6565240e): a label on the left, which is rare.
+- [Apple Photos](https://mobbin.com/screens/1eb1d98a-3c9e-4145-80e8-abb2a8ced824): the value in a ring around the tool button.
+- [Meta's avatar editor](https://mobbin.com/screens/267cb0c8-2255-4ab8-aac1-658606ec4b53) and [Halide](https://mobbin.com/screens/a0c1c665-0576-435e-af2b-20bf9ac03972): two-way sliders that fill out from a centre mark.
+- [Shopee](https://mobbin.com/screens/fbda85d0-d09e-4a6c-af5d-61a00f498c00): a dot marking a default that isn't at the start.
+- [Depop](https://mobbin.com/screens/6ddbe876-edc9-4d7b-ba12-90646da8aa7f): tabs, then chips, then the slider.
+
+**Mode tabs and chips**
+
+- [Depop](https://mobbin.com/screens/6ddbe876-edc9-4d7b-ba12-90646da8aa7f): a segmented control for 2 or 3 short modes.
+- [CapCut](https://mobbin.com/screens/0fce915d-55c0-45d7-b1d1-d9ce6565240e) and [Unfold](https://mobbin.com/screens/e32f526c-2d35-40d4-b0b1-a70bd5e1183c): text tabs with an underline; CapCut also has Brush/Erase tiles.
+- [Shopee's beauty camera](https://mobbin.com/screens/328ab298-7eb2-4525-b60e-27fb311d3a30): icon-and-label tiles with the picked one highlighted.
+- [Google Photos](https://mobbin.com/screens/7b06c8c8-7a19-4e32-9c34-89092bdb72d7): two opposite modes (Add, Subtract) as a pair of pills.
+- [Instagram's avatar editor](https://mobbin.com/screens/adbe0d6b-fdf6-4e81-8acd-a2148454d069): tabs on top and chips below, both running off the edge.
+- [Lovi](https://mobbin.com/screens/e6316517-0b99-428f-a07c-93cf5e8be244): the picked chip gets a fill and heavier text.
+- [CapCut](https://mobbin.com/screens/b7019626-a811-45c9-8a49-9024827b99c3): swatches on visual choices, with ⊘ for "none".
+- [Azar](https://mobbin.com/screens/8f295b8c-0d6e-4715-879d-af53d7f8352d): a small coloured dot at the top-right of changed features.
+
+## Proposed but not picked
+
+These are on the canvases, but they're not approved. Don't build them unless the user picks one.
+
+- **Tool bar, Option 2 "Group tabs":** Fix, Beauty and Remove as bottom tabs, with the group's tools spread above them. 100 pt tall.
+- **Slider row, Option 1 "Tuned inline":** today's layout with the new track, value and reset.
+- **Slider row, Option 2 "Label on top":** the name and value on a line above a full-width track. About 14 pt taller per slider.
+- **Tabs, Option 2 "Tabs and pills":** text tabs with an accent underline; outlined pills.
+- **Tabs, Option 3 "Tool tiles":** icon-over-name mode tiles like the tool bar; swatches on the Background fills.
+
+## Not built yet
+
+**Remaining parts, in the user's planned order:** home screen → camera → video editor. None has been researched or mocked up.
+
+**Leftovers in the old style, to settle when their part comes up:**
+
+- **Adjust panel** (`AdjustPanel` in `Adjustments.swift`, used by the photo editor's Adjust tool and the video editor). It keeps:
+  - the system slider;
+  - a plain `ResetButton` in its header;
+  - its own tool row: accent icon over a `.caption2` name, a 6 pt `.secondary` changed dot, and no tile.
+
+  It doesn't match the labelled strip, the fill field or the chips.
+- **Camera and video look sliders** (`LookControls`): the chips are new, but the slider below them is still the system slider with a plain reset arrow.
+- **Panel buttons:** `PanelTextButton` (Reset all, Clear, Add shadow, Remove, Turn off) is still the system bordered style, which no new part uses.
+- **Changed dots:** there are three sizes. The tool bar uses 8 pt with a ring, chips and tracks use 6 pt accent, and the Adjust row uses a 6 pt grey dot.
+
+**Known flaw:** commit `62567b2`'s message has no blank line after its subject, so `git log --oneline` shows it as one long line. Fixing it needs a force-push, so leave it.
+
+## Validation
+
+**Builds and tests:**
+
+- **Nothing in ui-b has been compiled.** This PC can't build, and the user hasn't reported a build result for `62567b2`, `b3f53c5`, `575d86a`, `6da010a` or `33ded13` yet.
+- **Each change was reviewed by reading the diff** for Swift and SwiftUI correctness. Every API used is available on iOS 18, the deployment target.
+- **The tests in `PhotoStudioTests`** (`EditorRegressionTests`, `VideoLookTests`) cover editing, undo and video looks, not these views. `TESTING.md` explains how to run them on a Mac.
+
+**Contrast**, calculated with the WCAG formula from the colour values above. The `toolMuted` and `sliderMuted` rows are text and need 4.5:1. The picked tool's accent icon is a graphic and needs 3:1.
+
+| Foreground on background | Ratio |
+|---|---|
+| `toolMuted` on white (tool bar, light) | 5.29 |
+| `toolMuted` on black (tool bar, dark) | 7.41 |
+| `toolMuted` on #F2F2F7 (a track, light) | 4.74 |
+| `toolMuted` on #1C1C1E (a track, dark) | 6.00 |
+| `sliderMuted` on #F2F2F7 (slider field, light) | 4.77 |
+| `sliderMuted` on #1C1C1E (slider field, dark) | 5.97 |
+| `.secondary` #8A8A8E on white (the old labels) | 3.44 |
+| Accent icon on the picked tile, light | 3.35 |
+| Accent icon on the picked tile, dark | 4.52 |
+| `.primary` text on the picked tile | 12.5 or more |
+
+**Layout arithmetic** (from the code, not measured on a device):
+
+- **Video editor controls:** they need about 227 of their 236 pt with the 44 pt mode track and the Adjust panel. Very large text could make that tight.
+- **Taller panels:** the Face panel grows about 20 pt (areas 44 pt instead of 32, chips 36 instead of 28). Heal and Background grow about 12 pt for each mode track.
+- **Background fills:** the four fills fit across a 375 pt phone (343 pt inside the panel).
+
+**Still to check on the phone:**
+
+- **Tool bar:** where the dot sits on each icon; the edge fades as you scroll; the tile in dark mode.
+- **Slider fields:** how a drag feels (it's a custom control); the click at zero on Face's two-way sliders; Enhance's Strength applying when you lift your finger.
+- **Tracks:** the tile slide; the Face area track scrolling under its corners; the Refine track while disabled.
+- **Camera chips:** the see-through grey on the material panel.
+- **Video editor:** the Adjust panel's fit.
+
+## Where things live
+
+| Thing | File and symbol |
+|---|---|
+| Colours, spacing, buttons, mode tabs, chips, tool bar parts | `PhotoStudio/Theme.swift`: `Space`, `Color.sliderMuted`, `Color.trackFill`, `ModeTabs`, `Chip`, `TrackItemStyle`, `ResetButton`, `Color.toolMuted`, `Color.toolTile`, `ToolTile`, `ChangedDot`, `scrollEdgeFades` |
+| Editor layout, top bar, tool bar, panels, slider row, Face areas | `PhotoStudio/ContentView.swift`: `editor`, `topBar`, `PhotoEditorTopBarButtonStyle`, `toolBar`, `toolButton`, `toolPanel`, `areaTabs`, `subtabChips`, `sliderRow`, `Tool.groups`, `Tool.groupTitles` |
+| Slider field, Adjust panel | `PhotoStudio/Adjustments.swift`: `ValueSlider`, `SliderField`, `AdjustPanel` |
+| Camera look chips (shared with video) | `PhotoStudio/CameraView.swift`: `LookControls` |
+| Video editor controls | `PhotoStudio/VideoEditView.swift`: `controls` |
+| Install a branch on the phone | `tools/install_variant.sh b` (run on the Mac) |
