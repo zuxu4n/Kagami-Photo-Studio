@@ -237,6 +237,7 @@ struct AdjustPanel<Accessory: View>: View {
     var editing: (Bool) -> Void = { _ in }
     var freeCrop = true   // whether Free is offered (it needs the frame's handles, which only the photo editor has)
     var photoCropStyle = false   // approved Shape rail, local to the photo editor
+    var photoRotateStyle = false // approved Action row, local to the photo editor
     @ViewBuilder var accessory: () -> Accessory
     @State private var cropEntry: (crop: CropRatio, rect: CGRect?)?   // the crop when Crop was opened, for Cancel
     @State private var lastTool: AdjustTool = .brightness              // where Done and Cancel go back to
@@ -244,18 +245,25 @@ struct AdjustPanel<Accessory: View>: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            if photoCropStyle && tool == .crop { photoCropHeader } else { header }
-            Group {
-                switch tool {
-                case .crop:
-                    if photoCropStyle { photoCropControls } else { cropControls }
-                case .rotate: rotateControls
-                default:
-                    ValueSlider(value: valueBinding(tool.value!), editing: editing)
-                        .accessibilityLabel(tool.rawValue)
+            if photoRotateStyle && tool == .rotate {
+                ViewThatFits(in: .horizontal) {
+                    photoRotateRows(compact: false)
+                    photoRotateRows(compact: true)
                 }
+            } else {
+                if photoCropStyle && tool == .crop { photoCropHeader } else { header }
+                Group {
+                    switch tool {
+                    case .crop:
+                        if photoCropStyle { photoCropControls } else { cropControls }
+                    case .rotate: rotateControls
+                    default:
+                        ValueSlider(value: valueBinding(tool.value!), editing: editing)
+                            .accessibilityLabel(tool.rawValue)
+                    }
+                }
+                .frame(height: 58)
             }
-            .frame(height: 58)
             toolRow
         }
         .onAppear { if tool == .crop { cropEntry = (adjust.crop, adjust.cropRect) } }
@@ -462,6 +470,126 @@ struct AdjustPanel<Accessory: View>: View {
         }
     }
 
+    /// Photo-editor-only Action row. The compact layout keeps every target at least 44 points.
+    private func photoRotateRows(compact: Bool) -> some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 4) {
+                photoTransformButton("rotate.left", "Left", "Turn left 90 degrees") {
+                    change { $0.turns = ($0.turns + 3) % 4; $0.cropRect = nil }
+                }
+                photoTransformButton("rotate.right", "Right", "Turn right 90 degrees") {
+                    change { $0.turns = ($0.turns + 1) % 4; $0.cropRect = nil }
+                }
+                photoTransformButton("arrow.left.and.right.righttriangle.left.righttriangle.right", "Across", "Flip across",
+                                     selected: adjust.turns % 2 == 1 ? adjust.flippedV : adjust.flipped) {
+                    change { if $0.turns % 2 == 1 { $0.flippedV.toggle() } else { $0.flipped.toggle() } }
+                }
+                photoTransformButton("arrow.up.and.down.righttriangle.up.righttriangle.down", "Up/down", "Flip upside down",
+                                     selected: adjust.turns % 2 == 1 ? adjust.flipped : adjust.flippedV) {
+                    change { if $0.turns % 2 == 1 { $0.flipped.toggle() } else { $0.flippedV.toggle() } }
+                }
+                Spacer(minLength: 0)
+                Button {
+                    change { $0 = AdjustTool.rotate.reset($0) }
+                } label: {
+                    Image(systemName: "arrow.counterclockwise").font(.system(size: 20))
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(PhotoRotateButtonStyle(accent: true))
+                .disabled(!AdjustTool.rotate.isChanged(adjust))
+                .accessibilityLabel("Reset Rotate and Straighten")
+                .accessibilityHint("Clears turns, flips and the straighten angle")
+                if !compact { photoResetAll(compact: false) }
+            }
+            .frame(height: 44)
+            HStack(spacing: 8) {
+                if compact {
+                    VStack(spacing: -4) {
+                        HStack(spacing: 4) {
+                            Text("Straighten").font(.footnote.weight(.medium)).fixedSize()
+                            Spacer(minLength: 0)
+                            Text(Self.degrees(adjust.straighten))
+                                .font(.footnote.monospacedDigit())
+                                .foregroundStyle(straightenAtZero ? Color.secondary : Color.accentColor)
+                                .accessibilityHidden(true)
+                        }
+                        .frame(minHeight: 18)
+                        photoStraightenSlider
+                    }
+                    photoResetAll(compact: true)
+                } else {
+                    Text("Straighten").font(.subheadline.weight(.medium)).fixedSize()
+                    photoStraightenSlider
+                    Text(Self.degrees(adjust.straighten))
+                        .font(.subheadline.weight(.medium).monospacedDigit())
+                        .foregroundStyle(straightenAtZero ? Color.secondary : Color.accentColor)
+                        .frame(width: 60, height: 32)
+                        .background {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(straightenAtZero ? Color(.secondarySystemBackground) : Color.accentColor.opacity(0.12))
+                        }
+                        .accessibilityHidden(true)
+                }
+            }
+            .frame(height: 58)
+        }
+    }
+
+    private var straightenAtZero: Bool { abs(Double(adjust.straighten) * Adjustments.maxStraighten) < 0.05 }
+
+    private var photoStraightenSlider: some View {
+        ValueSlider(value: valueBinding(\.straighten), label: Self.degrees, editing: editing, showsValue: false)
+            .accessibilityLabel("Straighten")
+    }
+
+    private func photoResetAll(compact: Bool) -> some View {
+        Button {
+            change { $0 = Adjustments() }
+        } label: {
+            Text("Reset\nall").font(.footnote).multilineTextAlignment(.center)
+                .frame(width: compact ? 46 : 64, height: 44)
+        }
+        .buttonStyle(PhotoRotateButtonStyle(accent: true))
+        .disabled(adjust.isOff)
+        .accessibilityLabel("Reset all Adjust settings")
+    }
+
+    private func photoTransformButton(_ icon: String, _ title: String, _ label: String, selected: Bool? = nil,
+                                      action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: icon).font(.system(size: 20)).frame(height: 20)
+                Text(title).font(.caption2).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .frame(width: 44, height: 44)
+            .overlay(alignment: .bottom) {
+                if selected == true {
+                    Capsule().fill(Color.accentColor).frame(width: 12, height: 2).padding(.bottom, 2)
+                }
+            }
+        }
+        .buttonStyle(PhotoRotateButtonStyle(selected: selected == true))
+        .accessibilityLabel(label)
+        .accessibilityValue(selected.map { $0 ? "On" : "Off" } ?? "")
+    }
+
+    private struct PhotoRotateButtonStyle: ButtonStyle {
+        @Environment(\.isEnabled) private var isEnabled
+        var accent = false
+        var selected = false
+
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .foregroundStyle(!isEnabled ? Color(.tertiaryLabel) : accent || selected ? Color.accentColor : Color.primary)
+                .background {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(selected ? Color.accentColor.opacity(0.12) : Color(.secondarySystemBackground))
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .opacity(configuration.isPressed ? 0.7 : 1)
+        }
+    }
+
     private var rotateControls: some View {
         HStack(spacing: 12) {
             HStack(spacing: 6) {
@@ -511,8 +639,8 @@ struct AdjustPanel<Accessory: View>: View {
 }
 
 extension AdjustPanel where Accessory == EmptyView {
-    init(adjust: Binding<Adjustments>, tool: Binding<AdjustTool>, editing: @escaping (Bool) -> Void = { _ in }, freeCrop: Bool = true, photoCropStyle: Bool = false) {
-        self.init(adjust: adjust, tool: tool, editing: editing, freeCrop: freeCrop, photoCropStyle: photoCropStyle, accessory: { EmptyView() })
+    init(adjust: Binding<Adjustments>, tool: Binding<AdjustTool>, editing: @escaping (Bool) -> Void = { _ in }, freeCrop: Bool = true, photoCropStyle: Bool = false, photoRotateStyle: Bool = false) {
+        self.init(adjust: adjust, tool: tool, editing: editing, freeCrop: freeCrop, photoCropStyle: photoCropStyle, photoRotateStyle: photoRotateStyle, accessory: { EmptyView() })
     }
 }
 
@@ -541,6 +669,7 @@ struct ValueSlider: View {
     var reset: Float?
     var label: ((Float) -> String)?
     var editing: (Bool) -> Void = { _ in }
+    var showsValue = true
 
     /// −100 to +100 for two-way sliders.
     static func label(_ v: Float) -> String {
@@ -563,11 +692,13 @@ struct ValueSlider: View {
                 let snapped = twoWay && abs(v) < 0.03 * span / 2 ? 0 : v   // catches at the middle
                 if snapped != value { value = snapped }
             }), in: range, onEditingChanged: editing)
-            Text(text(value))
-                .font(.footnote.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 44, alignment: .trailing)
-                .accessibilityHidden(true)
+            if showsValue {
+                Text(text(value))
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, alignment: .trailing)
+                    .accessibilityHidden(true)
+            }
         }
         .frame(height: 44)
         .sensoryFeedback(trigger: twoWay && value == 0) { _, atZero in atZero ? .impact(weight: .light) : nil }

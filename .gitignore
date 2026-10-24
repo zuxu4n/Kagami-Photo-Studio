@@ -9,3 +9,5 @@ build-*/
 # Your signing team; see Signing.xcconfig
 Local.xcconfig
 tools/models/cache/
+# Local design previews can contain user-supplied photos.
+/design/mockups/*-local.html

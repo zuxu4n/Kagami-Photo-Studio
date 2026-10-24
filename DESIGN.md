@@ -29,7 +29,8 @@ The first four UI changes below are committed and pushed through **e8d5a3d**. Ad
 | Photo-editor top bar | Balanced bar | `93155a5` | Implemented and pushed |
 | Canvas Compare, Original badge, fit-to-screen | Soft controls | `63b357c` | Implemented and pushed |
 | Smooth panel | Quiet row | `e8d5a3d` | Implemented and pushed |
-| Photo Adjust → Crop controls | Shape rail | See branch history | Implemented after explicit selection |
+| Photo Adjust → Crop controls | Shape rail | `48ff495` | Implemented and pushed |
+| Photo Adjust → Rotate & Straighten | Action row | See branch history | Implemented after explicit selection |
 | Retouch panel | Compact rows preferred | None | Mockup only; latest spacing revision awaits acceptance |
 
 The first four UI changes are in [ContentView.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/ContentView.swift). Crop styling is in `Adjustments.swift`, with an explicit photo-editor opt-in at the `AdjustPanel` call in `ContentView.swift`; the shared video panel keeps its original presentation. Shared smoothing, retouch rendering, per-face storage, gestures, camera, video editor, and home screen were not changed. Retouch still uses the original three `sliderRow` calls in app code.
@@ -137,6 +138,23 @@ The user explicitly selected **Shape rail** after reviewing two editor-context p
 
 The approved review includes light/dark, Original/reset unavailable, changed/reset available, existing crop/Cancel restore, and busy states. The browser mockup is illustrative; no native screenshot, Xcode build, or iOS runtime verification has been completed on this Windows host. JavaScript syntax validation passed; the browser could not reach the local preview server for visual QA in this chat.
 
+## Adjust → Rotate & Straighten: approved Action row
+
+The user explicitly selected **Action row** after reviewing Action row and Split controls. This styling is enabled only for the photo editor (`photoRotateStyle: true`); video and the other Adjust sections keep their existing controls.
+
+- Four 44 × 44 pt controls show Turn left, Turn right, Flip across, and Flip upside down. Their short captions are Left, Right, Across, and Up/down. Turns are momentary actions; active flips have soft accent fill and a short underline, computed in the displayed orientation.
+- Reset Rotate clears turns, both flips and straighten through the original `AdjustTool.rotate.reset` and undo callback. It does not clear crop or color settings. Reset all retains its existing scope over all Adjust settings. Existing availability and busy guards remain.
+- A labeled native straighten slider and a 60 × 32 pt signed angle badge occupy the next row. The slider still uses the existing `ValueSlider` binding, continuous -1...1 range (±15°), zero catch, haptics, drag callbacks and degree formatter. `showsValue: false` hides only the duplicate inline output for this use; every existing caller retains the default output.
+- Controls retain semantic colors, 14 pt action radii and a 10 pt value-badge radius. The angle is neutral at displayed zero and accented otherwise.
+- `ViewThatFits` provides a compact version: the five transform/reset controls remain in the first row, Reset all moves beside the slider, and the angle moves beside the Straighten label. Both layouts retain 44 pt touch targets, the 44 + 6 + 58 pt control budget, existing subtool row and outer panel padding. Native Dynamic Type/layout verification remains necessary on a Mac.
+- Quarter turns still clear `cropRect`. Flips retain their orientation-aware callbacks. Reset Rotate preserves `cropRect`. The crop frame, canvas, gestures, rendering callbacks, other panels and video behavior were not changed.
+
+The user supplied a replacement preview photo. It is embedded only in the local, ignored `design/mockups/yumiro-rotate-local.html` and in this chat's local preview; do not add the photo or its embedded bytes to Git or publish them. Future previews should reuse that local image instead of the astronaut. The original public-image proposal remains available in the prior chat history. The supplied photo is not an app asset or an editor default.
+
+References: [Apple Photos](https://mobbin.com/screens/3a719f66-2139-427b-99c5-2ebc19fc044c), [Instagram](https://mobbin.com/screens/720bfb83-b9d4-4577-a1b9-814ca1646d24), [GoPro Quik](https://mobbin.com/screens/c628e27c-ed54-440e-9e80-4a64333d73b8).
+
+Mockup QA covered default and adjusted light/dark appearances, quarter turns, flip orientation, signed ±15° endpoints, Reset availability, narrow reflow, a 184 px panel and 44 px reset target. These are browser mockup checks, not native runtime tests. Xcode and XCTest are unavailable on this Windows host.
+
 ## Retouch: preferred proposal, not implemented
 
 The user prefers **Compact rows**, then requested two spacing corrections. The latest revision has been shown but has not received explicit final acceptance. Do not implement or push Retouch UI merely because Compact rows is the carousel's selected preview.
@@ -164,7 +182,7 @@ Retouch behavior to preserve:
 
 ## Mockups and where to find them
 
-Portable copies are saved in `design/mockups/` in this branch. These are interactive HTML fragments for Codex's visualization surface, not standalone apps or native screenshots. They include sample NASA portrait imagery from an allowlisted CDN. Slider previews change controls/values, not the photo-processing pipeline.
+Portable copies are saved in `design/mockups/`. These are interactive HTML fragments for Codex's visualization surface, not standalone apps or native screenshots. Older committed proposals use public NASA portrait imagery. New previews with the user-supplied photo are local-only and ignored by Git. Slider previews change controls/values, not the photo-processing pipeline.
 
 | File in `design/mockups/` | Direction to inspect | Status |
 |---|---|---|
@@ -175,6 +193,7 @@ Portable copies are saved in `design/mockups/` in this branch. These are interac
 | `yumiro-smooth-panel-options.html` | Quiet row | Approved; default/adjusted/processing, light/dark; Soft card is unselected |
 | `yumiro-retouch-panel-options.html` | Compact rows | Latest preferred proposal and corrected spacing, not implemented; light/dark, adjusted/all-off/no-face |
 | `yumiro-crop-options.html` | Shape rail | Explicitly selected and implemented for photo Crop; Pinned modes is the unselected alternative |
+| `yumiro-rotate-local.html` | Action row | Selected and implemented; local-only preview contains the supplied photo and is intentionally ignored by Git |
 
 Absolute portable-copy directory on this PC:
 
