@@ -472,64 +472,48 @@ struct ContentView: View {
 
     // MARK: Tools
 
-    /// The tool bar along the bottom: one row that scrolls, each group named above its tools (fix the photo, then
-    /// beauty, then remove and replace). The ends fade while there's more to scroll to.
+    /// The tool bar along the bottom, grouped: fix the photo, then beauty, then remove and replace.
     private var toolBar: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: Space.m) {
+                HStack(spacing: 0) {
                     ForEach(Array(Tool.groups.enumerated()), id: \.offset) { i, group in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(Tool.groupTitles[i])
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(Color.toolMuted)
-                                .lineLimit(1).fixedSize()
-                                .padding(.leading, Space.s)
-                                .accessibilityAddTraits(.isHeader)
-                            HStack(spacing: Space.xs) {
-                                ForEach(group) { t in toolButton(t).id(t) }
-                            }
+                        if i > 0 {
+                            Divider().frame(height: 28).padding(.horizontal, 4)
                         }
+                        ForEach(group) { t in toolButton(t).id(t) }
                     }
                 }
-                .padding(.horizontal, Space.m)
-                .padding(.top, Space.s)
-                .padding(.bottom, Space.xs)
-                .animation(.easeOut(duration: 0.2), value: model.tool)
+                .padding(.horizontal, Space.s)
             }
-            .scrollEdgeFades()
             .onChange(of: model.tool) { _, t in withAnimation { proxy.scrollTo(t, anchor: .center) } }
             .onAppear { proxy.scrollTo(model.tool, anchor: .center) }
         }
-        .frame(height: 84)
+        .frame(height: 66)
         .sensoryFeedback(.selection, trigger: model.tool)
     }
 
-    /// A tool in the bar: the picked one sits on a tinted tile with its name in bold. A dot marks a tool that changed
-    /// the photo, the picked one included.
+    /// A tool in the bar: the picked one is in the accent colour; a dot marks a tool that changed the photo.
     private func toolButton(_ t: Tool) -> some View {
         let on = t == model.tool
         let changed = toolChanged(t)
         return Button {
             model.tool = t
         } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: 4) {
                 Image(systemName: t.icon)
                     .font(.title3)
                     .frame(height: 24)
-                    .foregroundStyle(on ? Color.accentColor : Color.toolMuted)
                     .overlay(alignment: .topTrailing) {
-                        if changed { ChangedDot(onTile: on).offset(x: 7, y: -5) }
+                        if changed && !on {
+                            Circle().fill(.secondary).frame(width: 6, height: 6).offset(x: 6, y: -2)
+                        }
                     }
-                Text(t.rawValue)
-                    .font(.caption2.weight(on ? .semibold : .regular))
-                    .foregroundStyle(on ? Color.primary : Color.toolMuted)
-                    .lineLimit(1).fixedSize()
+                Text(t.rawValue).font(.caption2).lineLimit(1).fixedSize()
             }
-            .padding(.horizontal, 6)
-            .frame(minWidth: 64, minHeight: 56)
-            .background { if on { ToolTile() } }
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .foregroundStyle(on ? Color.accentColor : Color.secondary)
+            .frame(minWidth: 66, minHeight: 66)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(t.rawValue + (changed ? ", changed" : ""))
@@ -848,8 +832,6 @@ struct ContentView: View {
 extension Tool {
     /// The tool bar's groups: fix and frame the photo, beauty, then remove and replace.
     static let groups: [[Tool]] = [[.enhance, .adjust], [.smooth, .retouch, .face, .reshape], [.heal, .blur]]
-    /// The groups' names above them in the tool bar, in the same order.
-    static let groupTitles = ["Fix", "Beauty", "Remove"]
 
     var icon: String {
         switch self {
