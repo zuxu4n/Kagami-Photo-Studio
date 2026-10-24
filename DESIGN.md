@@ -1,6 +1,6 @@
 # Yumiro design A handoff
 
-Updated 2026-10-24 (America/Toronto). This is the design A source of truth for approved colors, typography, spacing, component states, references, and implementation boundaries. The seven earlier approved UI changes were pushed through **5efeebaa03558c9687f4e263502bf784233a3bfa**, and Stacked rails navigation through **dd97cc7**. Eyes now uses the reviewed Wide slider with endpoint labels and reset spacing described below. Retouch remains a proposal. Read this document before continuing design A.
+Updated 2026-10-24 (America/Toronto). This is the design A source of truth for approved colors, typography, spacing, component states, references, and implementation boundaries. All nine approved UI changes are implemented and pushed through **709b132f5323b31108ee09eff7b896b88d342823**, including Stacked rails navigation and the Eyes Wide slider with endpoint words and corrected reset spacing. Retouch remains a proposal. Browser and source checks are recorded below; native build and device validation remain unfinished. Read this document before continuing design A.
 
 ## Worktree, branch, and authorization
 
@@ -21,7 +21,7 @@ The script fetches/pulls `ui-a` and installs a separate app named **Yumiro A**, 
 
 ## Implementation status
 
-All nine approved components below are implemented. This change adds the reviewed Eyes controls following the user's commit/push request. No Retouch redesign is implemented, and choosing an option in a mockup alone does not approve implementation.
+All nine approved components below are implemented and pushed. The latest UI commit is `709b132`; local `ui-a` and the local `origin/ui-a` tracking ref matched that commit before this documentation update. No Retouch redesign is implemented, and choosing an option in a mockup alone does not approve implementation. Every implemented component still needs native validation on the Mac/device.
 
 | Area | Approved direction | UI commit | Status |
 |---|---|---|---|
@@ -33,10 +33,10 @@ All nine approved components below are implemented. This change adds the reviewe
 | Photo Adjust → Rotate & Straighten | Action row | `c9b55d6` | Implemented and pushed |
 | Photo Adjust → Brightness, Contrast, Saturation, Warmth | Focused slider hybrid | `5efeeba` | Implemented and pushed |
 | Face → category and subcategory navigation | Stacked rails | `dd97cc7` | Implemented and pushed; native validation pending |
-| Face → Eyes controls | Wide slider with endpoint labels | This change | Implemented; native validation pending |
+| Face → Eyes controls | Wide slider with endpoint words and 4 pt reset-row gap | `709b132` | Implemented and pushed; native validation pending |
 | Retouch panel | Compact rows preferred | None | Mockup only; latest spacing revision awaits acceptance |
 
-The first four UI changes are in [ContentView.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/ContentView.swift). Crop, Rotate, and light/color styling are in [Adjustments.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/Adjustments.swift), with explicit photo-only opt-ins (`photoCropStyle`, `photoRotateStyle`, `photoColorStyle`) at the `AdjustPanel` call in `ContentView.swift`. The shared video panel keeps its original presentation. Smoothing and retouch rendering, per-face storage, canvas gestures, camera, video editor, and home screen were not changed. Retouch still uses the original three `sliderRow` calls in app code.
+The first four UI changes, Face navigation, and Eyes controls are in [ContentView.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/ContentView.swift). Crop, Rotate, and light/color styling are in [Adjustments.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/Adjustments.swift), with explicit photo-only opt-ins (`photoCropStyle`, `photoRotateStyle`, `photoColorStyle`) at the `AdjustPanel` call in `ContentView.swift`. The shared video panel keeps its original presentation. Effect rendering, per-face storage, canvas gestures, camera, video editor, and home screen were not changed. Retouch still uses the original three `sliderRow` calls in app code. This handoff update changes documentation only.
 
 ## Visual foundations
 
@@ -103,6 +103,9 @@ Existing `Space` constants: `xs = 4`, `s = 8`, `m = 12`, `l = 16`, `xl = 24`, `x
 - Adjust panels use 6 pt vertical gaps. Crop and Rotate retain their original subtool row; the light/color hybrid uses a 46 pt strip. Crop ratio tiles use 4 pt gaps; light/color numeric tiles use 2 pt gaps.
 - Light/color control budget: header 44 + gap 6 + slider/endpoints 58 + gap 6 + strip 46 = 160 pt, plus the existing 24 pt vertical padding = 184 pt. Endpoint labels occupy 14 pt below the slider. This is the intended default-size budget, not a native layout measurement.
 - Rotate and light/color Reset all targets are 64 × 44 pt, or 46 × 44 pt in their compact variant. Header item spacing is 8 pt; Rotate's transform-action spacing is 4 pt.
+- Face navigation: two 44 pt rows; each visible backing is 32 pt high with 14 pt corners, 12 pt horizontal label padding and 4 pt item gaps. Minimum category/option widths are 54/58 pt. Overflow fades are 16 pt wide and appear only at edges where content continues.
+- Eyes controls: a 44 pt slider/value/reset row, then a 4 pt gap before the minimum 28 pt endpoint/Reset all footer. Value badge is 44 × 32 pt with 10 pt corners; selected Reset is 44 × 44 pt with 14 pt corners. Footer reserves 104 pt for the badge/reset columns and two 8 pt gaps so endpoint words align with the slider.
+- Eyes-only panel padding is 8 pt top / 12 pt bottom, retaining 16 pt horizontal insets. Two 44 pt rails + 44 pt controls + 4 pt gap + 28 pt footer + 20 pt padding = the intended 184 pt minimum. Other Face categories retain 12 pt top/bottom. Native text or multi-face context may increase height.
 
 ### Selected, changed, and unavailable states
 
@@ -112,10 +115,16 @@ Existing `Space` constants: `xs = 4`, `s = 8`, `m = 12`, `l = 16`, `xl = 24`, `x
 | Changed tool | Existing 6 pt dots on the main rail and non-selected Crop/Rotate subtools; light/color tiles instead replace the icon with a signed number |
 | Neutral light/color setting | SF Symbol in the tile; active value badge shows 0 on a neutral surface; selected Reset is unavailable |
 | Edited light/color setting | Signed number occupies the same 44 × 24 pt icon slot; active badge is accented; selected Reset restores only this parameter and its icon |
+| Selected Face category / option | Soft 12% accent backing, accent text, selected semibold label and 14 × 2 pt underline, including at neutral |
+| Edited Face category / option | Separate 6 pt secondary dot, including when selected; original conditional insertion remains. No reserved dot slot or rail-stability change was approved |
+| Neutral / edited Eyes control | Unitless signed value badge; neutral styling at zero, accent styling when edited. Midpoint stem and left/right endpoint words communicate direction; no duplicate title or normal-state helper sentence |
+| Unavailable Eyes control | Retained value in tertiary styling; existing mesh/busy guards disable slider and selected Reset. Missing-mesh option navigation stays available; Size retains its fallback |
 | Unavailable action / busy panel | Native disabled controls and tertiary action foreground; ratio/numeric tiles use 45% opacity and retain current values and selection |
 | Pressed custom action / tile | 70% opacity where the approved button style supplies it |
 
 Reset availability follows existing model checks, not the rounded text: light/color uses `abs(value) > 0.001`; Rotate uses its existing geometry check; Crop uses its current ratio check. Reset all remains unavailable when all Adjust settings are off and continues to reset the entire Adjust model, including crop and rotation. Do not silently change these scopes as part of styling.
+
+Eyes preserves the original selected-Reset disabled check `abs(value) < 0.001` plus mesh/busy availability. Its edit indicator uses `abs(value) > 0.001`; keep the existing comparisons rather than deriving state from rounded text. Face Reset all retains its scope over all Face shape settings on the selected face, preserving that face's Retouch settings and other faces.
 
 ## Approved components and behavior
 
@@ -214,6 +223,19 @@ The user explicitly selected **Stacked rails** in a written message after review
 - The original slider/value/reset styling, effect ranges, bindings, selected-face storage, render callbacks, reset scopes, undo grouping, selection haptics, mesh availability and editor processing lock are unchanged. The shared `Chip` and `ValueSlider` implementations were not modified. Canvas, face guides, other tool panels, camera and video are unchanged.
 - VoiceOver receives the original label, selected trait, and an explicit “Edits applied” value when changed. Decorative dots/fades are hidden. Custom buttons use the approved 70% pressed opacity and 45% disabled opacity while retaining selection and edit indicators. Semantic colors support light/dark appearance, and the existing xLarge Dynamic Type cap remains.
 
+Preserved inventory (8 categories, 34 options):
+
+| Category | Options in existing order |
+|---|---|
+| Face | Size, Width, Smile, Position, Perspective, Smirk |
+| Head | Size, Width, Height |
+| Jaw | Jaw, Jawline, Chin, Size, Define, Length |
+| Nose | Size, Width, Narrow, Lift, Tip |
+| Eyes | Size, Width, Height, Tilt, Distance |
+| Lips | Size, Height, Width |
+| Eyebrows | Thick, Lift, Shape, Tilt, Raise |
+| Forehead | Height |
+
 Local private mockup: `design/mockups/yumiro-face-navigation-local.html` (ignored, contains the supplied photo). The inline preview is served from the chat-owned regular-file copy at `C:/Users/Jason/.codex/visualizations/2026/10/24/01a16cbd-75e4-7df3-aa0a-c421b001d992/yumiro-face-navigation-local.html`; use that path for this chat's visualization reference. Do not force-add either private preview. Full inventory and research are in `design/face-navigation-proposals.md`.
 
 Mobbin references: [WhatsApp](https://mobbin.com/screens/a6e343ee-c1a6-419b-a22c-f962884c951d) for the two-level hierarchy, [VSCO](https://mobbin.com/screens/8aa78b87-281b-4e81-bb2e-a1d9e1d931f9) for grouped adjustments, and [Azar](https://mobbin.com/screens/8f295b8c-0d6e-4715-879d-af53d7f8352d) for independent selection/edit indicators.
@@ -224,13 +246,23 @@ Validation: `git diff --check` passed. A source comparison confirmed changes are
 
 After reviewing the Eyes mockups and requesting reset spacing, restoring original dots, and replacing helper prose with endpoint words, the user requested commit/push. The reviewed Wide slider is implemented only for Face → Eyes in `ContentView.swift`. Labeled slider remains an unselected alternative.
 
-- All five options remain Size, Width, Height, Tilt, Distance with their existing bindings and continuous **−1...1** ranges, neutral **0**, and signed rounded **−100...+100** output. The existing `ValueSlider` is reused with only its duplicate inline value hidden. Its zero catch, zero haptic and drag callbacks are unchanged.
+- All five options remain Size, Width, Height, Tilt, Distance with their existing bindings and continuous **−1...1** ranges, neutral **0**, and signed rounded **−100...+100** unitless output. The existing `ValueSlider` is reused with only its duplicate inline value hidden. Its center catch (`abs(v) < 0.03`), zero haptic and drag callbacks are unchanged; no new stepping or quantization is added.
 - The approved category/option rails identify the current control, so the duplicate slider title is omitted. A semantic 44 x 32 pt value badge uses 10 pt corners, monospaced subheadline digits, neutral styling at zero and accent styling for an edit. Unavailable controls retain their signed value in tertiary styling.
 - Plain endpoint words align with the actual slider edges: Smaller/Larger, Shorter/Longer, Less open/More open, Down/Up, Closer/Farther. The separate meaning/neutral helper paragraph and minus/plus prefixes were removed. A non-interactive midpoint stem and the slider's accessibility hint identify zero as neutral.
 - Selected Reset reuses the approved 44 pt neutral icon-button styling. It returns only the selected parameter to zero through the original `sliderEditing(true/false)` undo boundary. Its original `abs(value) < 0.001` disabled threshold is preserved. Reset all still calls `resetFaceSliders()`, with its existing availability and scope over all Face shape settings for the selected face; Retouch and other faces retain their existing behavior.
 - The reset rows have a 4 pt gap. Only Eyes uses 8 pt top / 12 pt bottom padding; other panels/categories retain 12 pt vertical insets. The intended default-size budget is two 44 pt navigation rows + 44 pt controls + 4 pt gap + minimum 28 pt footer + 20 pt padding = 184 pt. Footer space for the 44 pt value, 44 pt reset and two 8 pt gaps keeps endpoint words aligned with the slider. The panel remains a minimum and may grow for native text sizing or multi-face context; no native height measurement has been performed.
 - Original navigation and dot behavior are unchanged, as requested. No fixed dot slots or rail-stability revision was applied to app code. The shared `Chip`, `ValueSlider`, other Face controls, rendering model, effect ranges, per-face storage, canvas, guides, gestures, camera and video are unchanged.
 - Width/Height/Tilt/Distance retain the existing mesh requirement; Size retains its Vision landmark fallback. There is no new blanket no-face lock. Existing unavailable/no-face captions remain, and the busy state shows concise processing guidance. Multi-face context (“Face N of M · tap another face to switch”) is retained below the endpoint words. The editor-wide processing lock remains intact.
+
+| Eyes option | Existing property | Left / negative direction | Right / positive direction |
+|---|---|---|---|
+| Size | `eyes` | Smaller | Larger |
+| Width | `eyeWidth` | Shorter | Longer |
+| Height | `eyeHeight` | Less open | More open |
+| Tilt | `eyeTilt` | Down | Up |
+| Distance | `eyeDistance` | Closer | Farther |
+
+Reviewed states: default (all zero, selection visible, selected Reset unavailable); adjusted (signed values and independent edit dots); missing mesh (retained values, the four mesh-dependent sliders/resets unavailable, Size fallback available); processing (navigation and controls unavailable, values retained). Each was shown in light and dark. The requested dot-layout change was reverted in the mockups and never applied to native navigation; the reset-spacing correction was retained.
 
 Validation: `git diff --check` passed. Source comparison confirmed that only the Eyes presentation branch, new Eyes presentation helpers and Eyes-specific top padding changed. The original controls for every other Face category and all navigation/dot code remain identical. The shared slider, adjustment/model files, undo boundaries, per-face storage, canvas/guide/gesture code and all feature mappings/ranges are unchanged. The final browser review covered endpoint alignment, reset spacing, signs, default/adjusted/unavailable states, light/dark and narrow widths. Those are browser results, not native screenshots. Xcode/build/XCTest are unavailable on this Windows host; the Mac must validate native layout, Dynamic Type, VoiceOver, mesh fallback, per-face switching and drag/reset undo/redo.
 
@@ -295,7 +327,14 @@ Current Crop, Rotate, and light/color conversation artifacts (outside Git):
 - [Light/color original comparison](C:/Users/Jason/.codex/visualizations/2026/10/24/01a16c81-7e78-7cc2-94fb-eb94cd773c4b/yumiro-adjust-colors.html).
 - [Approved Focused slider hybrid](C:/Users/Jason/.codex/visualizations/2026/10/24/01a16c81-7e78-7cc2-94fb-eb94cd773c4b/yumiro-focused-slider-hybrid.html).
 
-The current Rotate and light/color artifacts contain the private supplied photo. Their repo copies use the ignored `*-local.html` suffix. Never force-add these files. The original photo stays at `C:/Users/Jason/OneDrive/Pictures/Pfp/e9f7a063d2e8c7e60bf6781376e2c5f1.jpg`.
+Current Face and Eyes conversation artifacts (outside Git):
+
+- [Approved Stacked rails](C:/Users/Jason/.codex/visualizations/2026/10/24/01a16cbd-75e4-7df3-aa0a-c421b001d992/yumiro-face-navigation-local.html).
+- [Approved Eyes Wide slider, final endpoint words and reset spacing](C:/Users/Jason/.codex/visualizations/2026/10/24/01a16cbd-75e4-7df3-aa0a-c421b001d992/yumiro-eyes-controls-local.html).
+
+The inline Face preview initially failed with “Invalid visualization read request” when referenced directly from the worktree. It was repaired by copying the fragment into this chat-owned visualization directory as a regular file and referencing that copy. The current Face and Eyes copies were verified byte-identical to their worktree originals; use these copies for this chat's inline previews.
+
+Rotate, light/color, Face and Eyes local artifacts contain the private supplied photo. Their repo copies use the ignored `*-local.html` suffix. Never force-add these files. The original photo stays at `C:/Users/Jason/OneDrive/Pictures/Pfp/e9f7a063d2e8c7e60bf6781376e2c5f1.jpg`. These PC-local previews are not included in a Mac checkout; the committed implementation and proposal notes remain the portable handoff.
 
 No native app screenshots were provided or saved in this chat. Browser screenshots were inspected during preview QA but were not persisted as files. The mockups approximate UIKit colors/icons; native code is authoritative for the implementation.
 
@@ -357,6 +396,23 @@ Use the canonical links below. Expiring image-download URLs are intentionally no
 
 The icon-to-signed-number swap is the user's approved synthesis of the Focused slider and visible changed-value directions. The alternative Value tabs layout is not the implementation.
 
+### Face category and subcategory navigation
+
+- [WhatsApp avatar editor](https://mobbin.com/screens/a6e343ee-c1a6-419b-a22c-f962884c951d): visible two-level category/option hierarchy.
+- [VSCO tools](https://mobbin.com/screens/8aa78b87-281b-4e81-bb2e-a1d9e1d931f9): grouping many related adjustments without flattening the hierarchy.
+- [Azar beauty editor](https://mobbin.com/screens/8f295b8c-0d6e-4715-879d-af53d7f8352d): distinct selected-tool and edited-tool indicators.
+- [Halide Quick Edit](https://mobbin.com/screens/298d9809-7e34-4cb6-9c07-4a0fa712c8ba): compact mode row above horizontal choices.
+
+The approved synthesis is Stacked rails. Category picker remains a mockup alternative. Research and inventory notes: [face-navigation-proposals.md](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/face-navigation-proposals.md). The earlier Eyes deferral in those navigation-only notes is superseded by `709b132` and the Eyes section in this handoff.
+
+### Eyes precise adjustments
+
+- [VSCO](https://mobbin.com/screens/df9557ce-8461-4c68-a07f-823919f788ca): signed numeric strength close to its active slider.
+- [Halide Mark III](https://mobbin.com/screens/094dc15f-2903-401e-9984-d97633308ae4): signed value and a neutral reference on the scale; no ruler or histogram is being adopted.
+- [Shopee](https://mobbin.com/screens/e0a34c4b-29b8-4bdf-aced-9fb455d9aa09): separate tool selection, numeric strength and Reset.
+
+The approved synthesis is Wide slider with a midpoint stem, signed value badge and plain endpoint words. Labeled slider and the separate meaning/neutral helper block are not the implementation. Research and revision notes: [eyes-controls-proposals.md](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/eyes-controls-proposals.md).
+
 ### Retouch grouping
 
 - [Azar](https://mobbin.com/screens/8f295b8c-0d6e-4715-879d-af53d7f8352d): distinguish the selected adjustment from neighboring tools.
@@ -369,7 +425,7 @@ These references inform layout details; they do not authorize importing applicat
 
 Completed:
 
-- `git diff --check` and the staged whitespace check passed for the latest implementation. Local `ui-a` and `origin/ui-a` both resolve to `5efeebaa03558c9687f4e263502bf784233a3bfa`; the worktree was clean before this documentation update. Earlier UI pushes were also confirmed.
+- `git diff --check` and the staged whitespace check passed for the Face navigation (`dd97cc7`) and Eyes (`709b132`) implementations. Their pushes were confirmed. Local `ui-a` and the local `origin/ui-a` tracking ref both resolved to `709b132f5323b31108ee09eff7b896b88d342823`, and the worktree was clean before this documentation update.
 - Source-scope comparisons confirmed that each UI commit only changed its approved area. The Smooth check also confirmed `EditorModel.swift` was unchanged.
 - Native behavior was inspected in source: selection, undo/reset grouping, smoothing default, per-face values, busy/crop guards, gesture calculations, and fit reset. These were source checks, not runtime tests.
 - Mockup JavaScript passed syntax checks. Browser previews were visually inspected for light/dark, selected/unselected or enabled/disabled states, and the requested panel states.
@@ -378,7 +434,13 @@ Completed:
 - Rotate mockup checks covered default/adjusted light and dark, signed ±15° endpoints, flip orientation, Reset availability, narrow layout, 184 px panel sizing, and 44 px reset targets.
 - The light/color hybrid mockup showed all-neutral icons and mixed edited values in light/dark; resetting Brightness restored its icon while leaving Contrast's signed value visible. Selected highlight remained distinct from edit state. Disabled controls retained values. The comparison also covered narrow scrolling and −100/+100 endpoints.
 - The `5efeeba` source audit compared the adjustment model, original Crop/Rotate controls, shared `ValueSlider`, reset/undo callbacks, crop frame, `EditorModel.swift`, and `VideoEditView.swift` against its parent. They were unchanged. `ContentView.swift` changed only by enabling `photoColorStyle: true`; rendering callbacks, busy lock and canvas code were unchanged. The commit contains only `Adjustments.swift`, `ContentView.swift`, and this handoff.
-- All three private repo previews (Rotate, original light/color comparison, hybrid) were verified to embed the exact supplied JPEG bytes, remain ignored/untracked, and stay out of the implementation diff. No native app photo asset was added.
+- Face browser QA covered both proposed layouts, light/dark, all 8 categories and 34 options in order, selected-neutral/selected-edited states, shared Face/Head edit dots, remembered subcategory selection, horizontal overflow access, and navigation targets of at least 44 px. The panel/canvas remained 184/449 px in the 844 px phone shell; a 320 px viewport had no page overflow. No browser errors were reported.
+- The `dd97cc7` source audit confirmed that only the Face navigation/layout regions changed; original slider/Position controls, helper/reset callbacks, feature mappings, shared slider and model were preserved. Canvas, guides, gestures and other tools were unchanged.
+- Eyes browser QA covered both layouts and all five options, default/adjusted/missing-mesh/processing in light/dark, signed −100/+100 endpoints and the existing zero catch. Selected Reset returned only that value to zero while preserving peer edits. Missing-mesh Width retained −12 with its slider/reset unavailable; Size remained available. Processing retained values and disabled navigation and controls.
+- Final Eyes endpoint words align with the slider's left/right edges below the track; the separate meaning/neutral sentence is absent. The 4 px reset-row gap and 184/449 px panel/canvas were preserved in light/dark and at a 320 px viewport. All five endpoint pairs fit without overlap, with wrapping where needed. Original dot visibility/layout was restored. No browser warnings/errors were reported. Rail stability from the discarded dot-slot trial is not an approved or implemented result.
+- The `709b132` source audit confirmed that only the Eyes presentation branch/helpers and Eyes-only top padding changed. Every other Face control and all navigation/dot code remained identical. `Adjustments.swift`, `EditorModel.swift`, `Theme.swift`, and `VideoEditView.swift` were unchanged; ranges, mesh guards, bindings, per-face storage, render/undo/reset callbacks and canvas code were preserved.
+- All five private repo previews (Rotate, original light/color comparison, hybrid, Face navigation, Eyes) remain ignored/untracked and outside the implementation commits. Earlier photo-byte checks confirmed the supplied JPEG in the Rotate/light/color previews; Face and Eyes reuse that same local image. No native app photo asset was added. Face/Eyes inline regular-file copies match their worktree mockups byte-for-byte.
+- This documentation-only update passed `git diff --check`; all 23 linked local files exist. No native screenshots are recorded; the linked HTML files are approved mockups or explicitly marked alternatives. No new app runtime tests were run for this documentation change.
 - Crop's JavaScript syntax/source checks passed, but its initial browser visual-QA attempt could not reach the local renderer. Do not count later successful Rotate/light/color QA or preview selections as completed Crop visual/runtime validation.
 
 Still unfinished:
@@ -390,5 +452,7 @@ Still unfinished:
 5. Verify Crop on iOS: all ten ratios, Original/Free, selected states, Reset availability, Cancel restoring an existing frame, Done returning to the previous tool, undo grouping, processing locks, light/dark, and Dynamic Type. Confirm the frame and pinch/pan behavior are unchanged.
 6. Verify Rotate on iOS: left/right quarter turns, orientation-aware flips, ±15° straighten, zero catch and haptics, geometry-only Reset, global Reset all, undo/redo, busy lock, narrow reflow, and selected flip states in light/dark.
 7. Verify all four light/color tools on iOS: default icons, icon-to-number replacement, signed display, selected-neutral versus edited-peer states, Reset restoring the icon and preserving peers, Reset all scope, unchanged range/neutral/zero snapping, per-drag undo/redo, disabled availability, scroll-to-selection, VoiceOver values, and light/dark at narrow widths and xLarge Dynamic Type.
-8. Complete native contrast/material legibility checks and save actual device screenshots if requested. No native build, XCTest result, native screenshot, or device layout measurement is available in this handoff.
-9. Keep home, camera, video editor, face/other tool panels, effects, and image geometry outside unsolicited redesign work. Continue one explicitly requested photo-editor area at a time. Unselected layouts (Grouped shelf, Labeled chips, Action cluster, Labeled controls, Soft card, Pinned modes, Split controls, Value tabs, and Retouch Adjustment tabs) remain alternatives, not implementation tasks.
+8. Verify Face navigation on iOS: all 8 categories/34 options, selected-neutral and selected-edited states, shared Face/Head dots, remembered subcategories, scrolling to offscreen selections, actual-overflow fades, busy lock, VoiceOver selected/edit announcements, per-face switching, Position, and unchanged slider/reset/undo behavior. Include narrow widths, light/dark and Dynamic Type through xLarge.
+9. Verify Eyes on iOS: all five signed ranges, neutral midpoint/zero catch, endpoint alignment/wrapping, 4 pt reset-row spacing, narrow phones and multi-face footer sizing, mesh-dependent availability and Size fallback, no-face/busy captions, retained unavailable values, per-face persistence, selected Reset versus all-Face Reset all scope, drag/reset undo/redo, haptics, VoiceOver and both appearances. No native height or canvas-size claim is established by browser measurements.
+10. Complete native contrast/material legibility checks and save actual device screenshots if requested. No native build, XCTest result, native screenshot, or device layout measurement is available in this handoff.
+11. Keep home, camera, video editor, other tool panels, effects, and image geometry outside unsolicited redesign work. Other Face categories use the approved navigation but retain their existing adjustment controls. Continue one explicitly requested photo-editor area at a time. Unselected layouts (Grouped shelf, Labeled chips, Action cluster, Labeled controls, Soft card, Pinned modes, Split controls, Value tabs, Face Category picker, Eyes Labeled slider, and Retouch Adjustment tabs) remain alternatives, not implementation tasks. The reverted dot-slot revision and removed Eyes helper prose are not pending implementation work.
