@@ -60,3 +60,5 @@ xcodebuild -project PhotoStudio.xcodeproj -scheme PhotoStudio -configuration Rel
 The shared scheme runs Release with the debugger off: so it runs at full speed on the phone. Metal kernels are compiled on the device at first use (`ShaderSource.swift`), so Xcode's optional Metal Toolchain isn't needed.
 
 See [TESTING.md](TESTING.md) for regression tests and device checks.
+
+To try two designs side by side, `tools/install_variant.sh a` builds the branch `ui-a` and installs it as its own app, "Yumiro A" (and `b` makes "Yumiro B"), so the variants don't replace each other on the phone.
