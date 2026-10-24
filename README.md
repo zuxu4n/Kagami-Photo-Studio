@@ -2,13 +2,29 @@
 
 A free, open-source, on-device photo editor for iPhone. Everything runs on the phone: there is no network code at all.
 
-Prototype v0.1 (one screen):
-- **Enhance ×4**: Real-ESRGAN general-x4v3 (Core ML, 512 px tiles, Neural Engine + GPU). The input long side is capped at 1024 px, so output is up to 4096 px.
+Prototype v0.1. The home screen opens a photo (straight into a tool, if one is picked), the camera or a video. Needs iOS 18.
+
+### Photo editor
+
+Eight tools in three groups: fix and frame (Enhance, Adjust), beauty (Smooth, Retouch, Face, Warp), remove and replace (Heal, Background). Every change can be undone and redone, pinch and two-finger drag zoom and move the photo, hold the Compare button to see the original, and Save adds a full-size copy to Photos (add-only permission).
+
+- **Enhance**: Real-ESRGAN general-x4v3 (Core ML, 512 px tiles, shared between a Neural Engine copy and a GPU copy). The result is never smaller than the photo and is enlarged up to 4× while it stays within 12.6 MP (4× for a typical selfie, 1× for a 12 MP photo); a photo that needs more than 20 tiles runs on a half-size copy. On faces only the model's small changes are kept (noise cleaning and fine sharpening), so it never redraws them. A Strength slider fades between the photo and the enhanced one, and Enhance can be turned off again (spots healed since are healed again on the photo as it was).
+- **Adjust**: crop (Free or a fixed shape, with a frame to drag and resize), turn, flip both ways, straighten, brightness, contrast, saturation and warmth (Core Image).
 - **Smooth**: edge-preserving skin smoothing (Metal), limited to a face-skin mask built from Apple Vision landmarks, so eyes, brows, lips and moles stay sharp.
+- **Retouch**: whiten teeth, brighten eyes and even skin tone, per face (colour only; Metal).
+- **Face**: over 30 sliders in eight areas (face, head, jaw, nose, eyes, lips, eyebrows, forehead), each face with its own values, plus Position, an oval dragged around the head to turn it. Jawline and eye size use Apple Vision's 76 landmarks; the rest use MediaPipe Face Mesh V2's 478 landmarks (Vision finds each face, then the mesh runs on an upright 256 px crop of it, twice, as MediaPipe's tracking does). All are local Metal warps.
+- **Warp**: drag on a face to push it by hand, with a brush size and strength; the pushes stay under the Face sliders.
 - **Heal**: Spot: tap a spot to remove it (LaMa big-lama at 512 px, CPU + GPU; the Neural Engine compile takes minutes for this model). People: tap a person to outline them (Apple's on-device person instance cutout, split between faces when Vision joins people who touch), tap again to remove. Brush and Erase paint the selection; Add shadow adds the dark area joined to its lower half. Removal works on a crop around each area with LaMa's 1024 function (about a third of full size for a standing person on a 12 MP photo, instead of a sixth), then the fill's finest detail is replaced by patches of the surrounding background's own grain (`ObjectRemoval.swift`).
-- **Face**: slim face, bigger eyes and slim nose from Apple Vision's 76 landmarks; jaw, chin, lips, smile and forehead from MediaPipe Face Mesh V2's 478 landmarks (Vision finds each face, then the mesh runs on an upright 256 px crop of it, twice, as MediaPipe's tracking does). All are local Metal warps.
-- Hold to compare; save to Photos (add-only permission).
-- Each tool's time is shown on screen and appended to `Documents/timings.json` in the app container.
+- **Background**: blur what's behind the people like a lens (Metal, with the background filled in behind them so their colours don't glow), or remove it: see-through (saved as PNG), white or black. Brush and Erase fix the people's outline by hand.
+
+### Camera and video
+
+- **Camera**: films with Smooth, Retouch and the face shape drawn live on every frame (faces tracked from frame to frame, the same Metal kernels as the editor), front or back camera, with sound. Hold the picture to compare.
+- **Video**: the same look on a video from Photos, plus Adjust (crop, turn, light and colour). Saves a new HEVC copy with its sound to Photos.
+
+### Timings
+
+Each tool's time and memory use is appended to `Documents/timings.json` in the app container, and the camera's frame rate to `Documents/camera_timings.json` (the last 5,000 entries of each), for collection over USB. Test builds launched with the argument `EnhanceBench` or `RemoveBench` time Enhance or removal on the phone (see `EnhanceBench.swift` and `EditorModel+Remove.swift`).
 
 ## Clean room
 

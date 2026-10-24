@@ -1009,6 +1009,8 @@ final class EditorModel: ObservableObject {
     // MARK: Timings (also written to Documents/timings.json for collection over USB)
 
     private static let logQueue = DispatchQueue(label: "timings-log", qos: .utility)  // one file writer at a time
+    /// The log keeps only the newest entries, so it can't grow without end over months of use.
+    nonisolated static let maxLogEntries = 5000
 
     /// Logs a timing with this app's memory: mem_mb now, peak_mb during the tool, avail_mb left before iOS would
     /// close the app, and the working photo's size.
@@ -1027,6 +1029,7 @@ final class EditorModel: ObservableObject {
             let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("timings.json")
             var all = (try? JSONSerialization.jsonObject(with: Data(contentsOf: url))) as? [[String: Any]] ?? []
             all.append(entry)
+            if all.count > EditorModel.maxLogEntries { all.removeFirst(all.count - EditorModel.maxLogEntries) }  // the file is rewritten on every entry
             if let d = try? JSONSerialization.data(withJSONObject: all, options: [.prettyPrinted]) { try? d.write(to: url) }
         }
     }

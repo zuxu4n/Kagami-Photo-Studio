@@ -293,6 +293,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("camera_timings.json")
             var all = (try? JSONSerialization.jsonObject(with: Data(contentsOf: url))) as? [[String: Any]] ?? []
             all.append(entry)
+            if all.count > EditorModel.maxLogEntries { all.removeFirst(all.count - EditorModel.maxLogEntries) }
             if let d = try? JSONSerialization.data(withJSONObject: all, options: [.prettyPrinted]) { try? d.write(to: url) }
         }
     }

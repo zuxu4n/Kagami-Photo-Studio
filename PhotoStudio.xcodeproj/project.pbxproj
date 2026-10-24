@@ -278,7 +278,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Yumiro;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Yumiro uses the camera to film with your face settings. Nothing leaves your phone.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Yumiro records sound with your videos. Nothing leaves your phone.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Yumiro saves your edited photo to your library. Nothing leaves your phone.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Yumiro saves your edited photos and videos to your library. Nothing leaves your phone.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -310,7 +310,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Yumiro;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Yumiro uses the camera to film with your face settings. Nothing leaves your phone.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Yumiro records sound with your videos. Nothing leaves your phone.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Yumiro saves your edited photo to your library. Nothing leaves your phone.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Yumiro saves your edited photos and videos to your library. Nothing leaves your phone.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
