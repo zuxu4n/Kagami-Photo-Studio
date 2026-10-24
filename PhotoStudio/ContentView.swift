@@ -117,7 +117,8 @@ struct ContentView: View {
             canvas
             toolPanel
                 .padding(.horizontal, Space.l)
-                .padding(.vertical, Space.m)
+                .padding(.top, model.tool == .face && area == .eyes ? Space.s : Space.m)
+                .padding(.bottom, Space.m)
                 .frame(maxWidth: .infinity, minHeight: 184, alignment: .center)
             Divider()
             toolBar
@@ -726,31 +727,35 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     areaTabs
                     subtabChips
-                    Group {
-                        if feature == .position {
-                            HStack {
-                                Text("Drag the oval around the head").font(.subheadline)
-                                Spacer()
-                                ResetButton(label: "Reset Position") { model.resetPosition() }
-                                    .disabled(!model.positionMoved || model.busy != nil)
+                    if area == .eyes, let f = feature {
+                        eyesControls(f)
+                    } else {
+                        Group {
+                            if feature == .position {
+                                HStack {
+                                    Text("Drag the oval around the head").font(.subheadline)
+                                    Spacer()
+                                    ResetButton(label: "Reset Position") { model.resetPosition() }
+                                        .disabled(!model.positionMoved || model.busy != nil)
+                                }
+                                .frame(height: 44)
+                                .disabled(!model.selectedHasMesh)
+                            } else if let f = feature {
+                                sliderRow(f.title, value: Binding(get: { model[keyPath: f.value] }, set: { model[keyPath: f.value] = $0 }),
+                                          range: f.range)
+                                    .disabled(f.needsMesh && !model.selectedHasMesh)
+                            } else {
+                                Color.clear.frame(height: 44)
                             }
-                            .frame(height: 44)
-                            .disabled(!model.selectedHasMesh)
-                        } else if let f = feature {
-                            sliderRow(f.title, value: Binding(get: { model[keyPath: f.value] }, set: { model[keyPath: f.value] = $0 }),
-                                      range: f.range)
-                                .disabled(f.needsMesh && !model.selectedHasMesh)
-                        } else {
-                            Color.clear.frame(height: 44)
                         }
+                        .frame(height: 44)
+                        HStack(alignment: .firstTextBaseline) {
+                            HintText(faceCaption)
+                            PanelTextButton(title: "Reset all") { model.resetFaceSliders() }
+                                .disabled(!model.faceSlidersMoved || model.busy != nil)
+                        }
+                        .frame(minHeight: 28)
                     }
-                    .frame(height: 44)
-                    HStack(alignment: .firstTextBaseline) {
-                        HintText(faceCaption)
-                        PanelTextButton(title: "Reset all") { model.resetFaceSliders() }
-                            .disabled(!model.faceSlidersMoved || model.busy != nil)
-                    }
-                    .frame(minHeight: 28)
                 }
             case .adjust:
                 AdjustPanel(adjust: $model.adjust, tool: $model.adjustTool, editing: { e in
@@ -943,6 +948,99 @@ struct ContentView: View {
                 .frame(width: Space.l)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
+        }
+    }
+
+    /// Eyes reuse the focused slider styling; the selected rail option supplies the visible label.
+    private func eyesControls(_ f: FaceFeature) -> some View {
+        let value = model[keyPath: f.value]
+        let edited = abs(value) > 0.001
+        let unavailable = model.busy != nil || (f.needsMesh && !model.selectedHasMesh)
+        let directions = eyesDirections(f)
+        let binding = Binding(get: { model[keyPath: f.value] }, set: { model[keyPath: f.value] = $0 })
+        let accessoryWidth: CGFloat = 44 + 44 + 2 * Space.s
+
+        return VStack(alignment: .leading, spacing: Space.xs) {
+            HStack(spacing: Space.s) {
+                ValueSlider(value: binding, range: f.range, reset: 0, editing: { editing in
+                    sliding = editing
+                    model.sliderEditing(editing)
+                }, showsValue: false)
+                .overlay(alignment: .bottom) {
+                    Capsule().fill(unavailable ? Color(.tertiaryLabel) : Color.secondary)
+                        .frame(width: 1.5, height: 9).padding(.bottom, 1)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                }
+                .disabled(unavailable)
+                .accessibilityLabel("Eyes, \(f.title)")
+                .accessibilityValue(ValueSlider.label(value) + (edited ? "" : ", neutral"))
+                .accessibilityHint("Negative: \(directions.negative). Zero is neutral. Positive: \(directions.positive).")
+
+                Text(ValueSlider.label(value))
+                    .font(.subheadline.weight(.medium).monospacedDigit())
+                    .foregroundStyle(unavailable ? Color(.tertiaryLabel) : edited ? Color.accentColor : Color.secondary)
+                    .frame(width: 44, height: 32)
+                    .background {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(edited && !unavailable ? Color.accentColor.opacity(0.12) : Color(.secondarySystemBackground))
+                    }
+                    .accessibilityHidden(true)
+
+                Button {
+                    model.sliderEditing(true)
+                    model[keyPath: f.value] = 0
+                    model.sliderEditing(false)
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                }
+                .buttonStyle(PhotoEditorTopBarButtonStyle())
+                .disabled(abs(value) < 0.001 || unavailable)
+                .accessibilityLabel("Reset \(f.title)")
+                .accessibilityHint("Returns only this adjustment to zero")
+            }
+            .frame(height: 44)
+
+            HStack(alignment: .top, spacing: 0) {
+                Group {
+                    if model.busy != nil {
+                        HintText("Available when processing finishes")
+                    } else if unavailable || model.faceCount == 0 {
+                        HintText(faceCaption)
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack(alignment: .top, spacing: Space.xs) {
+                                Text(directions.negative)
+                                Spacer(minLength: Space.xs)
+                                Text(directions.positive).multilineTextAlignment(.trailing)
+                            }
+                            .font(.footnote).foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                            if model.faceCount > 1 {
+                                Text("Face \((model.selectedFace ?? 0) + 1) of \(model.faceCount) · tap another face to switch")
+                                    .font(.caption2).foregroundStyle(.secondary)
+                                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                PanelTextButton(title: "Reset all") { model.resetFaceSliders() }
+                    .disabled(!model.faceSlidersMoved || model.busy != nil)
+                    .frame(width: accessoryWidth, alignment: .trailing)
+            }
+            .frame(minHeight: 28)
+        }
+    }
+
+    private func eyesDirections(_ f: FaceFeature) -> (negative: String, positive: String) {
+        switch f {
+        case .eyes: return ("Smaller", "Larger")
+        case .eyeWidth: return ("Shorter", "Longer")
+        case .eyeHeight: return ("Less open", "More open")
+        case .eyeTilt: return ("Down", "Up")
+        case .eyeDistance: return ("Closer", "Farther")
+        default: return ("", "")
         }
     }
 

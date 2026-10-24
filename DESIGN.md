@@ -1,6 +1,6 @@
 # Yumiro design A handoff
 
-Updated 2026-10-24 (America/Toronto). This is the design A source of truth for approved colors, typography, spacing, component states, references, and implementation boundaries. The seven earlier approved UI changes were pushed through **5efeebaa03558c9687f4e263502bf784233a3bfa**. Face category navigation now uses the approved Stacked rails direction described below. Retouch remains a proposal. Read this document before continuing design A.
+Updated 2026-10-24 (America/Toronto). This is the design A source of truth for approved colors, typography, spacing, component states, references, and implementation boundaries. The seven earlier approved UI changes were pushed through **5efeebaa03558c9687f4e263502bf784233a3bfa**, and Stacked rails navigation through **dd97cc7**. Eyes now uses the reviewed Wide slider with endpoint labels and reset spacing described below. Retouch remains a proposal. Read this document before continuing design A.
 
 ## Worktree, branch, and authorization
 
@@ -21,7 +21,7 @@ The script fetches/pulls `ui-a` and installs a separate app named **Yumiro A**, 
 
 ## Implementation status
 
-All eight approved components below are implemented. The seven earlier UI changes were pushed through **5efeeba**; this change adds Face category navigation. No Retouch redesign is implemented, and choosing an option in a mockup alone does not approve implementation.
+All nine approved components below are implemented. This change adds the reviewed Eyes controls following the user's commit/push request. No Retouch redesign is implemented, and choosing an option in a mockup alone does not approve implementation.
 
 | Area | Approved direction | UI commit | Status |
 |---|---|---|---|
@@ -32,7 +32,8 @@ All eight approved components below are implemented. The seven earlier UI change
 | Photo Adjust → Crop controls | Shape rail | `48ff495` | Implemented and pushed |
 | Photo Adjust → Rotate & Straighten | Action row | `c9b55d6` | Implemented and pushed |
 | Photo Adjust → Brightness, Contrast, Saturation, Warmth | Focused slider hybrid | `5efeeba` | Implemented and pushed |
-| Face → category and subcategory navigation | Stacked rails | This change | Implemented; native validation pending |
+| Face → category and subcategory navigation | Stacked rails | `dd97cc7` | Implemented and pushed; native validation pending |
+| Face → Eyes controls | Wide slider with endpoint labels | This change | Implemented; native validation pending |
 | Retouch panel | Compact rows preferred | None | Mockup only; latest spacing revision awaits acceptance |
 
 The first four UI changes are in [ContentView.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/ContentView.swift). Crop, Rotate, and light/color styling are in [Adjustments.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/Adjustments.swift), with explicit photo-only opt-ins (`photoCropStyle`, `photoRotateStyle`, `photoColorStyle`) at the `AdjustPanel` call in `ContentView.swift`. The shared video panel keeps its original presentation. Smoothing and retouch rendering, per-face storage, canvas gestures, camera, video editor, and home screen were not changed. Retouch still uses the original three `sliderRow` calls in app code.
@@ -82,6 +83,7 @@ Use the system font and SF Symbols in the app. Browser mockups use system-font f
 | Light/color neutral tile icons / captions | System 20 pt / `.caption2` (about 11 pt), regular; selected caption semibold |
 | Light/color slider endpoint labels | `.caption2.monospacedDigit()` (about 11 pt), secondary |
 | Face category / subcategory labels | `.subheadline` (about 15 pt) / `.footnote` (about 13 pt); selected semibold |
+| Eyes value / endpoint words / multi-face context | `.subheadline.weight(.medium).monospacedDigit()` / `.footnote` / `.caption2` |
 
 The photo editor already caps Dynamic Type at `.xLarge`; that limit was preserved. Default browser text sizes do not establish native Dynamic Type behavior. Retouch's compact mockup labels/value badges are 13 px; check native legibility before treating that as final SwiftUI typography.
 
@@ -202,7 +204,7 @@ Mockup QA covered all-neutral icons, mixed signed values, selection independent 
 
 ## Face navigation: approved Stacked rails
 
-The user explicitly selected **Stacked rails** in a written message after reviewing both editor-context mockups. Category picker remains an unselected alternative. Only category/subcategory navigation and its Face-specific layout grouping changed in `ContentView.swift`; Eyes adjustment controls have not been redesigned.
+The user explicitly selected **Stacked rails** in a written message after reviewing both editor-context mockups. Category picker remains an unselected alternative. The `dd97cc7` implementation changed only category/subcategory navigation and its Face-specific layout grouping in `ContentView.swift`. The subsequent Eyes control implementation is described separately below.
 
 - Two horizontal rails retain all eight categories and all 34 options in their original order. Each category still remembers its selected subcategory. Both rails reveal their selected item on appearance; categories center on selection, and subcategories center on selection or when their category is reopened.
 - Categories use system subheadline and subcategories use footnote, regular or selected semibold. Each button has at least a 54 pt category / 58 pt subcategory width and a 44 pt target. Its visible backing is 32 pt high with 14 pt continuous corners; item spacing is 4 pt and horizontal label padding is 12 pt.
@@ -217,6 +219,22 @@ Local private mockup: `design/mockups/yumiro-face-navigation-local.html` (ignore
 Mobbin references: [WhatsApp](https://mobbin.com/screens/a6e343ee-c1a6-419b-a22c-f962884c951d) for the two-level hierarchy, [VSCO](https://mobbin.com/screens/8aa78b87-281b-4e81-bb2e-a1d9e1d931f9) for grouped adjustments, and [Azar](https://mobbin.com/screens/8f295b8c-0d6e-4715-879d-af53d7f8352d) for independent selection/edit indicators.
 
 Validation: `git diff --check` passed. A source comparison confirmed changes are confined to the Face layout/navigation regions, with the original slider/Position controls, helper/reset behavior, Face inventory and feature mappings preserved. Everything outside those regions in `ContentView.swift`, including canvas/gestures/guides, is unchanged. No native build or XCTest run is possible on this Windows host. On the Mac, verify both appearances, narrow widths, Dynamic Type through xLarge, VoiceOver, selecting offscreen items, reopening each category's remembered option, selected-neutral/selected-edited states, shared Face/Head dots, per-face switching, busy lock, Position and unchanged slider undo/reset behavior.
+
+## Eyes controls: approved Wide slider
+
+After reviewing the Eyes mockups and requesting reset spacing, restoring original dots, and replacing helper prose with endpoint words, the user requested commit/push. The reviewed Wide slider is implemented only for Face → Eyes in `ContentView.swift`. Labeled slider remains an unselected alternative.
+
+- All five options remain Size, Width, Height, Tilt, Distance with their existing bindings and continuous **−1...1** ranges, neutral **0**, and signed rounded **−100...+100** output. The existing `ValueSlider` is reused with only its duplicate inline value hidden. Its zero catch, zero haptic and drag callbacks are unchanged.
+- The approved category/option rails identify the current control, so the duplicate slider title is omitted. A semantic 44 x 32 pt value badge uses 10 pt corners, monospaced subheadline digits, neutral styling at zero and accent styling for an edit. Unavailable controls retain their signed value in tertiary styling.
+- Plain endpoint words align with the actual slider edges: Smaller/Larger, Shorter/Longer, Less open/More open, Down/Up, Closer/Farther. The separate meaning/neutral helper paragraph and minus/plus prefixes were removed. A non-interactive midpoint stem and the slider's accessibility hint identify zero as neutral.
+- Selected Reset reuses the approved 44 pt neutral icon-button styling. It returns only the selected parameter to zero through the original `sliderEditing(true/false)` undo boundary. Its original `abs(value) < 0.001` disabled threshold is preserved. Reset all still calls `resetFaceSliders()`, with its existing availability and scope over all Face shape settings for the selected face; Retouch and other faces retain their existing behavior.
+- The reset rows have a 4 pt gap. Only Eyes uses 8 pt top / 12 pt bottom padding; other panels/categories retain 12 pt vertical insets. The intended default-size budget is two 44 pt navigation rows + 44 pt controls + 4 pt gap + minimum 28 pt footer + 20 pt padding = 184 pt. Footer space for the 44 pt value, 44 pt reset and two 8 pt gaps keeps endpoint words aligned with the slider. The panel remains a minimum and may grow for native text sizing or multi-face context; no native height measurement has been performed.
+- Original navigation and dot behavior are unchanged, as requested. No fixed dot slots or rail-stability revision was applied to app code. The shared `Chip`, `ValueSlider`, other Face controls, rendering model, effect ranges, per-face storage, canvas, guides, gestures, camera and video are unchanged.
+- Width/Height/Tilt/Distance retain the existing mesh requirement; Size retains its Vision landmark fallback. There is no new blanket no-face lock. Existing unavailable/no-face captions remain, and the busy state shows concise processing guidance. Multi-face context (“Face N of M · tap another face to switch”) is retained below the endpoint words. The editor-wide processing lock remains intact.
+
+Validation: `git diff --check` passed. Source comparison confirmed that only the Eyes presentation branch, new Eyes presentation helpers and Eyes-specific top padding changed. The original controls for every other Face category and all navigation/dot code remain identical. The shared slider, adjustment/model files, undo boundaries, per-face storage, canvas/guide/gesture code and all feature mappings/ranges are unchanged. The final browser review covered endpoint alignment, reset spacing, signs, default/adjusted/unavailable states, light/dark and narrow widths. Those are browser results, not native screenshots. Xcode/build/XCTest are unavailable on this Windows host; the Mac must validate native layout, Dynamic Type, VoiceOver, mesh fallback, per-face switching and drag/reset undo/redo.
+
+Private preview: `design/mockups/yumiro-eyes-controls-local.html` (ignored, contains the supplied photo). The inline regular-file copy is at `C:/Users/Jason/.codex/visualizations/2026/10/24/01a16cbd-75e4-7df3-aa0a-c421b001d992/yumiro-eyes-controls-local.html`. Do not force-add either preview. Research, inventory and review notes are in `design/eyes-controls-proposals.md`.
 
 ## Retouch: preferred proposal, not implemented
 
@@ -260,6 +278,7 @@ Portable copies are saved in `design/mockups/`. These are interactive HTML fragm
 | [yumiro-adjust-colors-local.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-adjust-colors-local.html) | Focused slider / Value tabs | Earlier comparison; local-only and ignored because it contains the supplied photo |
 | [yumiro-focused-slider-hybrid-local.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-focused-slider-hybrid-local.html) | Focused slider with changed values | Approved and implemented; local-only and ignored because it contains the supplied photo |
 | [yumiro-face-navigation-local.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-face-navigation-local.html) | Stacked rails / Category picker | Stacked rails explicitly selected and implemented; local-only and ignored because it contains the supplied photo |
+| [yumiro-eyes-controls-local.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-eyes-controls-local.html) | Wide slider / Labeled slider | Reviewed Wide slider implemented with endpoint words and 4 pt reset gap; original dots retained; private and ignored |
 
 Absolute portable-copy directory on this PC:
 
