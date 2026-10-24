@@ -122,6 +122,8 @@ struct ContentView: View {
             Divider()
             toolBar
         }
+        .disabled(model.busy != nil)
+        .allowsHitTesting(model.busy == nil)
         .dynamicTypeSize(...DynamicTypeSize.xLarge)   // the tool panel is dense; past this it would push the photo away
         .sensoryFeedback(.success, trigger: model.info) { _, new in new == "Saved to Photos" }
         .confirmationDialog("Close this photo?", isPresented: $confirmClose, titleVisibility: .visible) {

@@ -476,14 +476,15 @@ final class EditorModel: ObservableObject {
         history.clear()
         canUndo = false
         canRedo = false
-        toolShown(tool)
         edited = false
+        toolShown(tool)
         record("Open + face landmarks", ms, peakMB: meter.stop(), extra: ["decode_ms": decodeMs])
     }
 
     /// Closes the photo (back to the home screen) and lets go of its pixels. Opening the next photo sets the rest.
     func close() {
         guard busy == nil else { return }
+        workingVersion &+= 1   // cutout and matte-fix tasks for the closed photo must discard their results
         working = nil
         preview = nil
         display = nil
@@ -493,6 +494,20 @@ final class EditorModel: ObservableObject {
         enhanceBase = nil
         personMatte = nil
         blurOverlay = nil
+        smoothed = nil
+        blurred = nil
+        warped = nil
+        people = nil
+        faces = []
+        shapes = []
+        selectedFace = nil
+        faceCount = 0
+        healsSinceEnhance = []
+        sliderStart = nil
+        strengthDrag = nil
+        reshape = nil
+        blurStroke = nil
+        blurEdits = .none
         clearSelection()
         history.clear()
         canUndo = false
@@ -512,7 +527,10 @@ final class EditorModel: ObservableObject {
         updateBlurOverlay()
         guard t == .smooth, !smoothOpened, hasImage else { return }
         smoothOpened = true
-        if smooth < 0.001 { smooth = smoothStart; edited = true }
+        if smooth < 0.001 {
+            pushUndo(undoStep(.unchanged))
+            smooth = smoothStart
+        }
     }
 
     // MARK: Enhance (Real-ESRGAN from the photo's own pixels, faces kept as they are; destructive)
@@ -520,6 +538,7 @@ final class EditorModel: ObservableObject {
     /// Enhance is a switch. The first tap enhances the photo; the next tap puts back the photo as it was before Enhance,
     /// with any spots healed since then healed again on it. So Enhance never runs on its own result.
     func runEnhance() async {
+        guard busy == nil else { return }
         if enhanceOn {
             await enhanceOff()
             return
@@ -651,7 +670,7 @@ final class EditorModel: ObservableObject {
 
     /// `point` is in preview pixel coordinates.
     func heal(at point: CGPoint) async {
-        guard var img = working, let prev = preview else { return }
+        guard busy == nil, var img = working, let prev = preview else { return }
         busy = "Healing…"
         defer { busy = nil }
         let center = CGPoint(x: point.x / CGFloat(prev.width), y: point.y / CGFloat(prev.height))
@@ -924,7 +943,7 @@ final class EditorModel: ObservableObject {
     // MARK: Save
 
     func save() async {
-        guard let img = working else { return }
+        guard busy == nil, let img = working else { return }
         busy = "Saving…"
         defer { busy = nil }
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)

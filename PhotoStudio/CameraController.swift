@@ -23,6 +23,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     private let audioOut = AVCaptureAudioDataOutput()
     private var videoInput: AVCaptureDeviceInput?
     private var configured = false
+    private var wantsSession = false   // accessed only on sessionQueue, including while permission prompts are open
     private lazy var renderer = LiveRenderer()
     private let tracker = LiveFaceTracker()
 
@@ -56,6 +57,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     // MARK: Session
 
     func start() {
+        sessionQueue.async { self.wantsSession = true }
         Task {
             let video = await AVCaptureDevice.requestAccess(for: .video)
             guard video else {
@@ -64,6 +66,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             }
             let audio = await AVCaptureDevice.requestAccess(for: .audio)
             sessionQueue.async { [self] in
+                guard wantsSession else { return }
                 if !configured { configure(audio: audio) }
                 if !session.isRunning { session.startRunning() }
             }
@@ -71,8 +74,11 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     }
 
     func stop() {
-        if recording { stopRecording() }
-        sessionQueue.async { [self] in if session.isRunning { session.stopRunning() } }
+        stopRecording()   // also stops a startRecording request that hasn't published `recording` yet
+        sessionQueue.async { [self] in
+            wantsSession = false
+            if session.isRunning { session.stopRunning() }
+        }
     }
 
     func switchCamera() {
@@ -224,13 +230,19 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             writer = nil; videoIn = nil; audioIn = nil; adaptor = nil; sessionStart = nil
             lock.unlock()
             DispatchQueue.main.async { self.recording = false }
-            guard started else { wr.cancelWriting(); return }
+            guard started else {
+                wr.cancelWriting()
+                try? FileManager.default.removeItem(at: wr.outputURL)
+                return
+            }
             wr.finishWriting {
                 guard wr.status == .completed else {
+                    try? FileManager.default.removeItem(at: wr.outputURL)
                     DispatchQueue.main.async { self.message = "The video couldn't be saved (\(wr.error?.localizedDescription ?? "unknown error"))." }
                     return
                 }
                 CameraController.saveToPhotos(wr.outputURL) { error in
+                    try? FileManager.default.removeItem(at: wr.outputURL)   // Photos moves it on success
                     DispatchQueue.main.async { self.message = error ?? "Saved to Photos" }
                 }
             }

@@ -49,7 +49,7 @@ extension EditorModel {
 
     /// People mode: a tap on the selection removes it; a tap on a person adds them to it.
     func peopleTap(at point: CGPoint) async {
-        guard let prev = preview else { return }
+        guard busy == nil, let prev = preview else { return }
         let w = prev.width, h = prev.height
         let i = min(h - 1, max(0, Int(point.y))) * w + min(w - 1, max(0, Int(point.x)))
         if hasSelection, selection.count == w * h, selection[i] > 127 {
@@ -121,7 +121,7 @@ extension EditorModel {
 
     /// Adds the shadow (or a dark reflection) joined to the selection.
     func addShadow() async {
-        guard hasSelection, let prev = preview else { return }
+        guard busy == nil, hasSelection, let prev = preview else { return }
         busy = "Finding the shadow…"
         defer { busy = nil }
         let sel = selection, known = people?.masks ?? []
@@ -140,7 +140,7 @@ extension EditorModel {
 
     /// Removes the selected area from the full-size photo (one undo step).
     func removeSelection() async {
-        guard hasSelection, var img = working, let prev = preview else { return }
+        guard busy == nil, hasSelection, var img = working, let prev = preview else { return }
         busy = "Removing…"
         defer { busy = nil }
         let sel = selection, pw = prev.width, ph = prev.height

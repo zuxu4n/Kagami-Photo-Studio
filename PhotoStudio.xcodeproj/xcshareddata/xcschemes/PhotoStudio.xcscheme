@@ -28,6 +28,15 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
+         <TestableReference skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "5A1C00000000000000000032"
+               BuildableName = "PhotoStudioTests.xctest"
+               BlueprintName = "PhotoStudioTests"
+               ReferencedContainer = "container:PhotoStudio.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <!-- Run uses Release and no debugger, so on-device runs are full speed. -->

@@ -116,7 +116,7 @@ struct AboutView: View {
                     Text("Yumiro has no servers and no network code. Photos and videos are only read when you pick them, and saved copies go straight to Photos.")
                 }
                 Section("Open source") {
-                    Link("Source code on GitHub", destination: URL(string: "https://github.com/zuxu4n/Kagami-Photo-Studio")!)
+                    Link("Source code on GitHub", destination: URL(string: "https://github.com/zuxu4n/Yumiro")!)
                 }
                 Section("Built with open models") {
                     LabeledContent("Real-ESRGAN", value: "Enhance · BSD-3-Clause")

@@ -32,6 +32,7 @@ struct VideoEditView: View {
     @State private var asset: AVURLAsset?
     @State private var player = AVPlayer()
     @State private var composition: AVVideoComposition?
+    @State private var compositionTask: Task<Void, Never>?
     @State private var playing = false
     @State private var saving: Double?     // export progress, 0...1
     @State private var message: String?
@@ -48,6 +49,7 @@ struct VideoEditView: View {
                 .overlay(alignment: .bottomLeading) { playButton.padding(Space.m) }
             controls
         }
+        .disabled(saving != nil)
         .overlay {
             if let saving {
                 ZStack {
@@ -80,6 +82,7 @@ struct VideoEditView: View {
         .sensoryFeedback(.success, trigger: message) { _, new in new == "Saved to Photos" }
         .task { await load() }
         .onDisappear {
+            compositionTask?.cancel()
             player.pause()
             if let loop { NotificationCenter.default.removeObserver(loop) }
             try? FileManager.default.removeItem(at: movie.url)   // our own temporary copy
@@ -87,10 +90,11 @@ struct VideoEditView: View {
         .onChange(of: look) { _, new in box.look = new; refresh() }
         .onChange(of: adjust) { old, new in
             box.adjust = new
-            if old.outputSize(for: CGSize(width: 1000, height: 1600)) == new.outputSize(for: CGSize(width: 1000, height: 1600)) {
-                refresh()
+            if old.crop != new.crop || old.cropRect?.size != new.cropRect?.size || old.turns % 2 != new.turns % 2 {
+                compositionTask?.cancel()
+                compositionTask = Task { await recompose() }   // the newest picture size wins
             } else {
-                Task { await recompose() }   // a new crop or turn changes the picture's size
+                refresh()
             }
         }
     }
@@ -138,9 +142,10 @@ struct VideoEditView: View {
         let asset = AVURLAsset(url: movie.url)
         self.asset = asset
         guard let c = try? await VideoLook.composition(for: asset, box: box) else {
-            message = "This video can't be opened."
+            if !Task.isCancelled { message = "This video can't be opened." }
             return
         }
+        guard !Task.isCancelled else { return }
         let item = AVPlayerItem(asset: asset)
         item.videoComposition = c
         composition = c
@@ -156,6 +161,7 @@ struct VideoEditView: View {
     /// A new composition for a new picture size, swapped into the player where it is.
     private func recompose() async {
         guard let asset, let c = try? await VideoLook.composition(for: asset, box: box) else { return }
+        guard !Task.isCancelled else { return }
         composition = c
         player.currentItem?.videoComposition = c
         refresh()
@@ -173,19 +179,31 @@ struct VideoEditView: View {
     }
 
     private func save() async {
-        guard let composition else { return }
+        guard saving == nil, composition != nil else { return }
         player.pause(); playing = false
         saving = 0
         defer { saving = nil }
+        // Export owns a snapshot: comparison gestures and later preview frames must not change the saved movie.
+        let exportBox = LookBox(look: look, adjust: adjust)
+        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        guard status == .authorized || status == .limited else {
+            message = "Yumiro can't add to Photos. You can allow it in Settings › Yumiro."; return
+        }
         let asset = AVURLAsset(url: movie.url)
+        guard let composition = try? await VideoLook.composition(for: asset, box: exportBox) else {
+            message = "This video can't be saved."; return
+        }
         guard let export = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHEVCHighestQuality) else {
             message = "This video can't be saved."; return
         }
         export.videoComposition = composition
         let out = FileManager.default.temporaryDirectory.appendingPathComponent("Yumiro-\(UUID().uuidString).mov")
+        defer { try? FileManager.default.removeItem(at: out) }   // Photos moves it on success; failures must release it too
         let progress = Task {
             for await state in export.states(updateInterval: 0.2) {
-                if case .exporting(let p) = state { await MainActor.run { saving = p.fractionCompleted } }
+                if case .exporting(let p) = state {
+                    await MainActor.run { if !Task.isCancelled { saving = p.fractionCompleted } }
+                }
             }
         }
         do {
@@ -196,10 +214,6 @@ struct VideoEditView: View {
             return
         }
         progress.cancel()
-        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-        guard status == .authorized || status == .limited else {
-            message = "Yumiro can't add to Photos. You can allow it in Settings › Yumiro."; return
-        }
         do {
             try await PHPhotoLibrary.shared().performChanges {
                 let options = PHAssetResourceCreationOptions()

@@ -2,12 +2,17 @@ import AVFoundation
 import CoreImage
 import ImageIO
 
-/// The look for a video, shared by the preview player and the export, and changed from the sliders while it plays.
+/// Thread-safe settings for a video composition. The preview follows the sliders; an export owns a frozen copy.
 final class LookBox: @unchecked Sendable {
     private let lock = NSLock()
     private var _look = LiveLook()
     private var _comparing = false
     private var _adjust = Adjustments()
+    init(look: LiveLook = LiveLook(), adjust: Adjustments = Adjustments()) {
+        _look = look
+        _adjust = adjust
+    }
+
     var adjust: Adjustments {
         get { lock.lock(); defer { lock.unlock() }; return _adjust }
         set { lock.lock(); _adjust = newValue; lock.unlock() }

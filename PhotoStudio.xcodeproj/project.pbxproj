@@ -6,12 +6,28 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		5A1C00000000000000000036 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5A1C0000000000000000000A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5A1C00000000000000000006;
+			remoteInfo = PhotoStudio;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		5A1C00000000000000000031 /* PhotoStudioTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PhotoStudioTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A1C00000000000000000001 /* PhotoStudio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PhotoStudio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A1C00000000000000000020 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		5A1C00000000000000000030 /* PhotoStudioTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PhotoStudioTests;
+			sourceTree = "<group>";
+		};
 		5A1C00000000000000000002 /* PhotoStudio */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = PhotoStudio;
@@ -20,6 +36,12 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		5A1C00000000000000000034 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5A1C00000000000000000003 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -34,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				5A1C00000000000000000002 /* PhotoStudio */,
+				5A1C00000000000000000030 /* PhotoStudioTests */,
 				5A1C00000000000000000020 /* Signing.xcconfig */,
 				5A1C00000000000000000005 /* Products */,
 			);
@@ -43,6 +66,7 @@
 			isa = PBXGroup;
 			children = (
 				5A1C00000000000000000001 /* PhotoStudio.app */,
+				5A1C00000000000000000031 /* PhotoStudioTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -50,6 +74,25 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		5A1C00000000000000000032 /* PhotoStudioTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5A1C00000000000000000038 /* Build configuration list for PhotoStudioTests */;
+			buildPhases = (
+				5A1C00000000000000000033 /* Sources */,
+				5A1C00000000000000000034 /* Frameworks */,
+			);
+			buildRules = ();
+			dependencies = (
+				5A1C00000000000000000035 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				5A1C00000000000000000030 /* PhotoStudioTests */,
+			);
+			name = PhotoStudioTests;
+			productName = PhotoStudioTests;
+			productReference = 5A1C00000000000000000031 /* PhotoStudioTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		5A1C00000000000000000006 /* PhotoStudio */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 5A1C00000000000000000007 /* Build configuration list for PBXNativeTarget "PhotoStudio" */;
@@ -102,6 +145,7 @@
 			projectRoot = "";
 			targets = (
 				5A1C00000000000000000006 /* PhotoStudio */,
+				5A1C00000000000000000032 /* PhotoStudioTests */,
 			);
 		};
 /* End PBXProject section */
@@ -117,6 +161,12 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		5A1C00000000000000000033 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5A1C00000000000000000008 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -126,7 +176,47 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		5A1C00000000000000000035 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5A1C00000000000000000006 /* PhotoStudio */;
+			targetProxy = 5A1C00000000000000000036 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		5A1C00000000000000000039 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5A1C00000000000000000020 /* Signing.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks");
+				PRODUCT_BUNDLE_IDENTIFIER = com.zuxu4n.photostudio.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PhotoStudio.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PhotoStudio";
+			};
+			name = Debug;
+		};
+		5A1C0000000000000000003A /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5A1C00000000000000000020 /* Signing.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks");
+				PRODUCT_BUNDLE_IDENTIFIER = com.zuxu4n.photostudio.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PhotoStudio.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PhotoStudio";
+			};
+			name = Release;
+		};
 		5A1C0000000000000000000C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -241,6 +331,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		5A1C00000000000000000038 /* Build configuration list for PhotoStudioTests */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5A1C00000000000000000039 /* Debug */,
+				5A1C0000000000000000003A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		5A1C00000000000000000007 /* Build configuration list for PBXNativeTarget "PhotoStudio" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
