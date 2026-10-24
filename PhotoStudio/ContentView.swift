@@ -750,7 +750,7 @@ struct ContentView: View {
                 AdjustPanel(adjust: $model.adjust, tool: $model.adjustTool, editing: { e in
                     sliding = e
                     model.sliderEditing(e)
-                })
+                }, photoCropStyle: true)
                 .disabled(model.busy != nil)
                 .onChange(of: model.adjust) { old, new in
                     // Moving the crop frame in Crop changes only the frame on top; the picture under it stays.

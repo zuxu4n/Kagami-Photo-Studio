@@ -236,6 +236,7 @@ struct AdjustPanel<Accessory: View>: View {
     @Binding var tool: AdjustTool
     var editing: (Bool) -> Void = { _ in }
     var freeCrop = true   // whether Free is offered (it needs the frame's handles, which only the photo editor has)
+    var photoCropStyle = false   // approved Shape rail, local to the photo editor
     @ViewBuilder var accessory: () -> Accessory
     @State private var cropEntry: (crop: CropRatio, rect: CGRect?)?   // the crop when Crop was opened, for Cancel
     @State private var lastTool: AdjustTool = .brightness              // where Done and Cancel go back to
@@ -243,10 +244,11 @@ struct AdjustPanel<Accessory: View>: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            header
+            if photoCropStyle && tool == .crop { photoCropHeader } else { header }
             Group {
                 switch tool {
-                case .crop: cropControls
+                case .crop:
+                    if photoCropStyle { photoCropControls } else { cropControls }
                 case .rotate: rotateControls
                 default:
                     ValueSlider(value: valueBinding(tool.value!), editing: editing)
@@ -289,6 +291,50 @@ struct AdjustPanel<Accessory: View>: View {
             }
         }
         .frame(height: 36)
+    }
+
+    /// Photo-editor-only Crop actions. Reset availability and all action callbacks stay the same.
+    private var photoCropHeader: some View {
+        HStack(spacing: 8) {
+            Text("Crop").font(.body.weight(.medium))
+            Button {
+                change { $0 = tool.reset($0) }
+            } label: {
+                Image(systemName: "arrow.counterclockwise")
+            }
+            .buttonStyle(PhotoCropActionStyle(icon: true))
+            .disabled(!tool.isChanged(adjust))
+            .accessibilityLabel("Reset Crop")
+            .accessibilityHint("Returns crop to Original")
+            Spacer(minLength: 0)
+            Button("Cancel") { cancelCrop() }
+                .buttonStyle(PhotoCropActionStyle())
+                .accessibilityLabel("Cancel crop")
+            Button("Done") { confirmCrop() }
+                .buttonStyle(PhotoCropActionStyle(primary: true))
+                .accessibilityLabel("Done cropping")
+        }
+        .frame(height: 44)
+    }
+
+    private struct PhotoCropActionStyle: ButtonStyle {
+        @Environment(\.isEnabled) private var isEnabled
+        var primary = false
+        var icon = false
+
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .font(icon ? .system(size: 20) : .subheadline.weight(primary ? .semibold : .regular))
+                .foregroundStyle(!isEnabled ? Color(.tertiaryLabel) : primary ? Color.white : Color.accentColor)
+                .padding(.horizontal, icon ? 0 : 10)
+                .frame(minWidth: icon ? 44 : 60, minHeight: 44)
+                .background {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(primary ? Color.accentColor.opacity(isEnabled ? 1 : 0.35) : Color(.secondarySystemBackground))
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .opacity(configuration.isPressed ? 0.7 : 1)
+        }
     }
 
     private func confirmCrop() {
@@ -362,6 +408,60 @@ struct AdjustPanel<Accessory: View>: View {
         .sensoryFeedback(.selection, trigger: adjust.crop)
     }
 
+    /// The approved Shape rail keeps the original order, ratios, and one-step crop changes.
+    private var photoCropControls: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(CropRatio.allCases.filter { freeCrop || $0 != .free }) { r in
+                        let on = adjust.crop == r
+                        Button {
+                            change { $0.crop = r; $0.cropRect = nil }
+                        } label: {
+                            VStack(spacing: 5) {
+                                Group {
+                                    if r == .free { Image(systemName: "crop") } else { RatioIcon(ratio: r.value) }
+                                }
+                                .frame(width: 26, height: 26)
+                                Text(r.rawValue)
+                                    .font(.caption2.weight(on ? .semibold : .regular))
+                                    .lineLimit(1).fixedSize()
+                            }
+                            .foregroundStyle(on ? Color.accentColor : Color.secondary)
+                            .frame(minWidth: 58)
+                            .frame(height: 58)
+                            .background {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color.accentColor.opacity(on ? 0.12 : 0))
+                            }
+                            .overlay(alignment: .bottom) {
+                                if on {
+                                    Capsule().fill(Color.accentColor)
+                                        .frame(width: 14, height: 2).padding(.bottom, 3)
+                                }
+                            }
+                            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .buttonStyle(PhotoCropRatioStyle())
+                        .id(r)
+                        .accessibilityLabel(r == .original ? "Original, no crop" : r == .free ? "Free, unrestricted crop" : "\(r.rawValue) aspect ratio")
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                    }
+                }
+            }
+            .onAppear { proxy.scrollTo(adjust.crop, anchor: .center) }
+        }
+        .sensoryFeedback(.selection, trigger: adjust.crop)
+    }
+
+    private struct PhotoCropRatioStyle: ButtonStyle {
+        @Environment(\.isEnabled) private var isEnabled
+
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label.opacity(!isEnabled ? 0.45 : configuration.isPressed ? 0.7 : 1)
+        }
+    }
+
     private var rotateControls: some View {
         HStack(spacing: 12) {
             HStack(spacing: 6) {
@@ -411,8 +511,8 @@ struct AdjustPanel<Accessory: View>: View {
 }
 
 extension AdjustPanel where Accessory == EmptyView {
-    init(adjust: Binding<Adjustments>, tool: Binding<AdjustTool>, editing: @escaping (Bool) -> Void = { _ in }, freeCrop: Bool = true) {
-        self.init(adjust: adjust, tool: tool, editing: editing, freeCrop: freeCrop, accessory: { EmptyView() })
+    init(adjust: Binding<Adjustments>, tool: Binding<AdjustTool>, editing: @escaping (Bool) -> Void = { _ in }, freeCrop: Bool = true, photoCropStyle: Bool = false) {
+        self.init(adjust: adjust, tool: tool, editing: editing, freeCrop: freeCrop, photoCropStyle: photoCropStyle, accessory: { EmptyView() })
     }
 }
 

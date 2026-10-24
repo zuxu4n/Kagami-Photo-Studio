@@ -1,0 +1,176 @@
+<div id="yumiro-crop-review" data-appearance="light">
+  <div class="viz-controls" aria-label="Crop preview settings">
+    <div class="viz-row" role="group" aria-label="Appearance">
+      <button class="btn cursor-interaction" type="button" data-theme="light" aria-pressed="true">Light</button>
+      <button class="btn cursor-interaction" type="button" data-theme="dark" aria-pressed="false">Dark</button>
+    </div>
+    <label class="form-label">Crop state
+      <select class="form-select" data-state aria-label="Crop preview state">
+        <option value="changed">Crop changed · Reset available</option>
+        <option value="original">Original · Reset unavailable</option>
+        <option value="existing">Existing crop · Cancel restores it</option>
+        <option value="busy">Processing · Controls unavailable</option>
+      </select>
+    </label>
+  </div>
+  <div class="viz-carousel viz-dotted-background" aria-label="Yumiro Crop layout options">
+    <section data-variant="Shape rail" aria-label="Shape rail Crop layout">
+      <div class="yc-stage"><div class="yc-phone" data-layout="shapes"></div></div>
+    </section>
+    <section data-variant="Pinned modes" aria-label="Pinned modes Crop layout" hidden>
+      <div class="yc-stage"><div class="yc-phone" data-layout="pinned"></div></div>
+    </section>
+  </div>
+  <div class="text-small" data-feedback aria-live="polite">4:5 selected · Reset available.</div>
+</div>
+<style>
+#yumiro-crop-review .yc-stage{display:flex;justify-content:center;min-height:880px;padding:20px 0 16px;box-sizing:border-box}
+#yumiro-crop-review .yc-phone{--yc-bg:light-dark(#fff,#000);--yc-canvas:light-dark(#f2f2f7,#1c1c1e);--yc-text:light-dark(#171719,#f5f5f7);--yc-muted:light-dark(#696971,#a1a1aa);--yc-disabled:light-dark(#b6b6be,#55555d);--yc-line:light-dark(#d9d9de,#38383a);--yc-accent:light-dark(#007aff,#0a84ff);--yc-soft:light-dark(#e9f3ff,#092b4c);--yc-ink:light-dark(#0064cc,#6bb5ff);width:390px;max-width:100%;height:844px;background:var(--yc-bg);color:var(--yc-text);border:1px solid var(--yc-line);border-radius:38px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;flex-direction:column;box-shadow:0 10px 36px #00000014;box-sizing:border-box}
+#yumiro-crop-review[data-appearance="light"] .yc-phone{color-scheme:light}
+#yumiro-crop-review[data-appearance="dark"] .yc-phone{color-scheme:dark}
+#yumiro-crop-review .yc-phone *{box-sizing:border-box}
+#yumiro-crop-review .yc-phone button{font:inherit;border:0;margin:0;padding:0;background:transparent;color:inherit;flex-shrink:0}
+#yumiro-crop-review .yc-status{height:59px;flex-shrink:0;display:flex;justify-content:space-between;padding:15px 26px 0;position:relative;font-size:14px;font-weight:500}
+#yumiro-crop-review .yc-island{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:116px;height:31px;background:#000;border-radius:24px}
+#yumiro-crop-review .yc-status-icons{display:flex;gap:5px;align-items:flex-start}
+#yumiro-crop-review .yc-status-icons svg{width:15px;height:15px}
+#yumiro-crop-review .yc-top{height:52px;flex-shrink:0;display:flex;align-items:center;position:relative;padding:4px 12px}
+#yumiro-crop-review .yc-top-control{width:44px;height:44px;display:grid;place-items:center;border-radius:14px;background:var(--yc-canvas);color:var(--yc-accent)}
+#yumiro-crop-review .yc-top-control svg{width:20px;height:20px;stroke-width:1.8}
+#yumiro-crop-review .yc-close{color:var(--yc-muted)}
+#yumiro-crop-review .yc-disabled{color:var(--yc-disabled)}
+#yumiro-crop-review .yc-history{display:flex;gap:4px;position:absolute;left:50%;transform:translateX(-50%)}
+#yumiro-crop-review .yc-save{margin-left:auto;min-width:76px;background:var(--yc-accent);color:#fff;font-size:17px;font-weight:600}
+#yumiro-crop-review .yc-canvas{height:449px;flex-shrink:0;position:relative;background:var(--yc-canvas);display:flex;align-items:center;justify-content:center;overflow:hidden}
+#yumiro-crop-review .yc-image-box{position:relative;width:100%;aspect-ratio:1;flex-shrink:0;overflow:hidden}
+#yumiro-crop-review .yc-photo{display:block;width:100%;height:100%;object-fit:cover;user-select:none}
+#yumiro-crop-review .yc-crop-frame{position:absolute;left:var(--frame-x,10%);top:var(--frame-y,0%);width:var(--frame-w,80%);height:var(--frame-h,100%);border:1.25px solid white;box-shadow:0 0 0 500px #0000008c;pointer-events:none}
+#yumiro-crop-review .yc-crop-frame[hidden]{display:none}
+#yumiro-crop-review .yc-grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr)}
+#yumiro-crop-review .yc-grid span{border-right:.75px solid #ffffff4d;border-bottom:.75px solid #ffffff4d}
+#yumiro-crop-review .yc-grid span:nth-child(3n){border-right:0}
+#yumiro-crop-review .yc-grid span:nth-last-child(-n+3){border-bottom:0}
+#yumiro-crop-review .yc-corner{position:absolute;width:18px;height:18px;border:solid white}
+#yumiro-crop-review .yc-corner:nth-child(2){left:0;top:0;border-width:3.5px 0 0 3.5px}
+#yumiro-crop-review .yc-corner:nth-child(3){right:0;top:0;border-width:3.5px 3.5px 0 0}
+#yumiro-crop-review .yc-corner:nth-child(4){right:0;bottom:0;border-width:0 3.5px 3.5px 0}
+#yumiro-crop-review .yc-corner:nth-child(5){left:0;bottom:0;border-width:0 0 3.5px 3.5px}
+#yumiro-crop-review .yc-edge{display:none;position:absolute;background:white;border-radius:2px}
+#yumiro-crop-review .yc-crop-frame[data-free="true"] .yc-edge{display:block}
+#yumiro-crop-review .yc-edge:nth-last-child(1){top:50%;left:0;width:3.5px;height:22px;transform:translateY(-50%)}
+#yumiro-crop-review .yc-edge:nth-last-child(2){top:50%;right:0;width:3.5px;height:22px;transform:translateY(-50%)}
+#yumiro-crop-review .yc-edge:nth-last-child(3){left:50%;top:0;width:22px;height:3.5px;transform:translateX(-50%)}
+#yumiro-crop-review .yc-edge:nth-last-child(4){left:50%;bottom:0;width:22px;height:3.5px;transform:translateX(-50%)}
+#yumiro-crop-review .yc-compare{position:absolute;bottom:12px;left:12px;width:44px;height:44px;display:grid;place-items:center;border:1px solid light-dark(#00000016,#ffffff24);border-radius:14px;background:light-dark(#f8f8faef,#242426ef);color:var(--yc-text);backdrop-filter:blur(14px)}
+#yumiro-crop-review .yc-compare[hidden]{display:none}
+#yumiro-crop-review .yc-compare svg{width:20px;height:20px}
+#yumiro-crop-review .yc-panel{height:184px;flex-shrink:0;padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+#yumiro-crop-review .yc-heading{height:44px;flex-shrink:0;display:flex;align-items:center;gap:8px}
+#yumiro-crop-review .yc-title{font-size:17px;font-weight:500}
+#yumiro-crop-review .yc-heading .yc-reset{width:44px;height:44px;background:var(--yc-canvas);color:var(--yc-ink);border-radius:14px;display:grid;place-items:center}
+#yumiro-crop-review .yc-reset svg{width:20px;height:20px}
+#yumiro-crop-review .yc-heading .yc-cancel{height:44px;min-width:60px;padding:0 10px;margin-left:auto;background:var(--yc-canvas);color:var(--yc-ink);border-radius:14px;font-size:15px}
+#yumiro-crop-review .yc-heading .yc-done{height:44px;min-width:60px;padding:0 12px;background:var(--yc-accent);color:#fff;border-radius:14px;font-size:15px;font-weight:500}
+#yumiro-crop-review .yc-heading button:disabled{color:var(--yc-disabled)}
+#yumiro-crop-review .yc-heading .yc-done:disabled{background:color-mix(in srgb,var(--yc-accent) 35%,var(--yc-bg))}
+#yumiro-crop-review .yc-ratios{height:58px;flex-shrink:0;display:flex;align-items:center;gap:8px;min-width:0}
+#yumiro-crop-review .yc-scroll{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;min-width:0;width:100%;height:58px;align-items:center;scroll-padding:8px}
+#yumiro-crop-review .yc-scroll::-webkit-scrollbar{display:none}
+#yumiro-crop-review .yc-ratio{position:relative;min-width:58px;height:58px;border-radius:14px!important;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:5px;color:var(--yc-muted)!important}
+#yumiro-crop-review .yc-ratio-label{font-size:11px;font-weight:400;white-space:nowrap}
+#yumiro-crop-review .yc-shape-area{height:26px;width:26px;display:grid;place-items:center}
+#yumiro-crop-review .yc-shape-area svg{width:24px;height:24px;stroke-width:1.6}
+#yumiro-crop-review .yc-ratio-shape{width:var(--shape-w);height:var(--shape-h);border:1.6px solid currentColor;border-radius:2.5px}
+#yumiro-crop-review .yc-ratio[data-ratio="Original"] .yc-ratio-shape{border-style:dashed}
+#yumiro-crop-review .yc-ratio[aria-pressed="true"]{background:var(--yc-soft);color:var(--yc-ink)!important}
+#yumiro-crop-review .yc-ratio[aria-pressed="true"] .yc-ratio-label{font-weight:500}
+#yumiro-crop-review .yc-ratio[aria-pressed="true"]::after{content:"";position:absolute;bottom:3px;left:calc(50% - 7px);height:2px;width:14px;background:var(--yc-accent);border-radius:2px}
+#yumiro-crop-review .yc-ratio:disabled{opacity:.45}
+#yumiro-crop-review .yc-pinned{display:flex;align-items:center;gap:4px;padding-right:8px;border-right:1px solid var(--yc-line);height:44px;flex-shrink:0}
+#yumiro-crop-review .yc-phone[data-layout="pinned"] .yc-ratio{height:44px;min-width:52px;padding:0 10px;font-size:13px;background:var(--yc-canvas)}
+#yumiro-crop-review .yc-phone[data-layout="pinned"] .yc-ratio[aria-pressed="true"]{background:var(--yc-soft)}
+#yumiro-crop-review .yc-phone[data-layout="pinned"] .yc-ratio-label{font-size:13px}
+#yumiro-crop-review .yc-phone[data-layout="pinned"] .yc-pinned .yc-ratio{min-width:44px;padding:0 8px}
+#yumiro-crop-review .yc-phone[data-layout="pinned"] .yc-ratio[aria-pressed="true"]::after{bottom:5px}
+#yumiro-crop-review .yc-tools{height:46px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:0}
+#yumiro-crop-review .yc-adjust-tool{position:relative;flex:1;min-width:0;height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--yc-muted)!important}
+#yumiro-crop-review .yc-adjust-tool svg{height:24px;width:22px;stroke-width:1.7}
+#yumiro-crop-review .yc-adjust-tool span{font-size:11px;white-space:nowrap}
+#yumiro-crop-review .yc-adjust-tool[data-selected="true"]{color:var(--yc-accent)!important}
+#yumiro-crop-review .yc-adjust-tool[data-changed="true"]::before{content:"";position:absolute;top:0;left:calc(50% + 12px);width:6px;height:6px;border-radius:50%;background:var(--yc-muted)}
+#yumiro-crop-review .yc-brightness{height:58px;display:flex;align-items:center;gap:12px}
+#yumiro-crop-review .yc-brightness input{width:100%;accent-color:var(--yc-accent)}
+#yumiro-crop-review .yc-brightness output{font-size:13px;color:var(--yc-muted)}
+#yumiro-crop-review .yc-panel [hidden]{display:none!important}
+#yumiro-crop-review .yc-bottom{height:66px;flex-shrink:0;border-top:1px solid var(--yc-line)}
+#yumiro-crop-review .yc-rail{height:65px;display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;padding:3px 8px}
+#yumiro-crop-review .yc-rail::-webkit-scrollbar{display:none}
+#yumiro-crop-review .yc-tool{position:relative;min-width:66px;height:58px;padding:5px 6px 4px;border-radius:14px;flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;color:var(--yc-muted)}
+#yumiro-crop-review .yc-tool svg{width:22px;height:22px;stroke-width:1.7}
+#yumiro-crop-review .yc-tool-label{font-size:11px;line-height:14px;white-space:nowrap}
+#yumiro-crop-review .yc-tool[data-selected]{background:var(--yc-soft);color:var(--yc-accent)}
+#yumiro-crop-review .yc-tool[data-selected] .yc-tool-label{font-weight:600}
+#yumiro-crop-review .yc-tool[data-selected]::after{content:"";position:absolute;bottom:3px;width:14px;height:2px;border-radius:3px;background:var(--yc-accent)}
+#yumiro-crop-review .yc-divider{height:24px;width:1px;background:var(--yc-line);flex-shrink:0;margin:0 5px}
+#yumiro-crop-review .yc-home{height:34px;flex-shrink:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px}
+#yumiro-crop-review .yc-home::before{content:"";height:5px;width:134px;border-radius:3px;background:var(--yc-text)}
+@media(max-width:350px){#yumiro-crop-review .yc-panel{padding-left:12px;padding-right:12px}#yumiro-crop-review .yc-heading{gap:6px}}
+</style>
+<script>
+(()=>{
+ const root=document.getElementById('yumiro-crop-review');
+ const ratios=['Original','Free','1:1','4:5','3:4','2:3','9:16','4:3','3:2','16:9'];
+ const values=[null,null,1,4/5,3/4,2/3,9/16,4/3,3/2,16/9];
+ const icon=name=>`<i data-lucide="${name}" aria-hidden="true"></i>`;
+ const saved=globalThis.openai?.widgetState?.privateContent||{};
+ const state={theme:saved.theme==='dark'?'dark':'light',mode:'changed',ratio:'4:5',entry:'Original',inCrop:true,busy:false};
+ const phones=[...root.querySelectorAll('.yc-phone')];
+ const adjustNames=['Crop','Rotate','Brightness','Contrast','Saturation','Warmth'];
+ const adjustIcons=['crop','rotate-ccw','sun','circle','droplet','thermometer'];
+ const names=['Enhance','Adjust','Smooth','Retouch','Face','Warp','Heal','Background'];
+ const icons=['sparkles','sliders-horizontal','droplet','wand-sparkles','smile','hand','bandage','scan-line'];
+ function ratioButton(name,shapes){const v=values[ratios.indexOf(name)]||1;return `<button type="button" class="yc-ratio cursor-interaction" data-ratio="${name}" aria-pressed="${state.ratio===name}" aria-label="${name==='Original'?'Original, no crop':name==='Free'?'Free, unrestricted crop':name+' aspect ratio'}">${shapes?`<span class="yc-shape-area">${name==='Free'?icon('crop'):`<span class="yc-ratio-shape" style="--shape-w:${v>=1?23:23*v}px;--shape-h:${v>=1?23/v:23}px"></span>`}</span>`:''}<span class="yc-ratio-label">${name}</span></button>`;}
+ phones.forEach(phone=>{
+  const shapes=phone.dataset.layout==='shapes';
+  const ratioMarkup=shapes?`<div class="yc-scroll" aria-label="All crop aspect ratios">${ratios.map(r=>ratioButton(r,true)).join('')}</div>`:`<div class="yc-pinned" aria-label="Original and Free">${ratios.slice(0,2).map(r=>ratioButton(r,false)).join('')}</div><div class="yc-scroll" aria-label="Fixed crop aspect ratios">${ratios.slice(2).map(r=>ratioButton(r,false)).join('')}</div>`;
+  phone.innerHTML=`<div class="yc-status" aria-hidden="true"><span>9:41</span><span class="yc-island"></span><span class="yc-status-icons">${icon('signal')}${icon('wifi')}${icon('battery-full')}</span></div>
+  <div class="yc-top" aria-label="Approved Balanced top bar, unchanged"><span class="yc-top-control yc-close">${icon('x')}</span><div class="yc-history"><span class="yc-top-control">${icon('undo-2')}</span><span class="yc-top-control yc-disabled">${icon('redo-2')}</span></div><span class="yc-top-control yc-save">Save</span></div>
+  <div class="yc-canvas" aria-label="Existing crop frame, static preview; canvas gestures unchanged"><div class="yc-image-box"><img class="yc-photo" draggable="false" src="https://cdn.jsdelivr.net/gh/scikit-image/scikit-image@v0.19.3/skimage/data/astronaut.png" alt="Sample NASA astronaut portrait"><div class="yc-crop-frame" aria-hidden="true"><div class="yc-grid">${'<span></span>'.repeat(9)}</div>${'<span class="yc-corner"></span>'.repeat(4)}${'<span class="yc-edge"></span>'.repeat(4)}</div></div><span class="yc-compare" aria-label="Approved Compare control">${icon('columns-2')}</span></div>
+  <section class="yc-panel" aria-label="${shapes?'Shape rail':'Pinned modes'} Crop controls"><div class="yc-heading"><span class="yc-title">Crop</span><button class="yc-reset cursor-interaction" type="button" data-reset aria-label="Reset Crop to Original" data-tooltip="Reset Crop to Original">${icon('rotate-ccw')}</button><button class="yc-cancel cursor-interaction" data-cancel type="button">Cancel</button><button class="yc-done cursor-interaction" data-done type="button">Done</button></div><div class="yc-ratios" role="group" aria-label="Crop aspect ratio">${ratioMarkup}</div><div class="yc-brightness" hidden><input type="range" min="-100" max="100" value="0" aria-label="Existing Brightness slider" disabled><output>0</output></div><div class="yc-tools" aria-label="Existing Adjust tools">${adjustNames.map((n,i)=>`<button class="yc-adjust-tool ${i===0?'cursor-interaction':''}" type="button" data-adjust="${n}" aria-label="${n}" ${i===0?'':'disabled'}>${icon(adjustIcons[i])}<span>${n}</span></button>`).join('')}</div></section>
+  <div class="yc-bottom" aria-label="Approved Focus rail, unchanged"><div class="yc-rail">${[[0,1],[2,3,4,5],[6,7]].map(g=>g.map(i=>`<span class="yc-tool" ${i===1?'data-selected':''}>${icon(icons[i])}<span class="yc-tool-label">${names[i]}</span></span>`).join('')).join('<span class="yc-divider" aria-hidden="true"></span>')}</div></div><div class="yc-home" aria-hidden="true"></div>`;
+  phone.querySelectorAll('[data-ratio]').forEach(button=>button.addEventListener('click',()=>{state.ratio=button.dataset.ratio;render();persist();}));
+  phone.querySelector('[data-reset]').addEventListener('click',()=>{state.ratio='Original';render();persist();});
+  phone.querySelector('[data-cancel]').addEventListener('click',()=>{state.ratio=state.entry;state.inCrop=false;render();persist();});
+  phone.querySelector('[data-done]').addEventListener('click',()=>{state.inCrop=false;render();persist();});
+  phone.querySelector('[data-adjust="Crop"]').addEventListener('click',()=>{if(!state.inCrop){state.entry=state.ratio;state.inCrop=true;render();persist();}});
+ });
+ function persist(){globalThis.openai?.setWidgetState?.({modelContent:{cropRatio:state.ratio,cropOpen:state.inCrop},privateContent:{theme:state.theme}})?.catch(()=>{});}
+ function render(){
+  root.dataset.appearance=state.theme;
+  root.querySelectorAll('[data-theme]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.theme===state.theme)));
+  phones.forEach(phone=>{
+   phone.querySelector('.yc-title').textContent=state.inCrop?'Crop':'Brightness';
+   const reset=phone.querySelector('[data-reset]');reset.disabled=state.busy||!state.inCrop||state.ratio==='Original';
+   reset.setAttribute('aria-label',state.inCrop?'Reset Crop to Original':'Reset Brightness');
+   phone.querySelector('[data-cancel]').hidden=!state.inCrop;
+   phone.querySelector('[data-done]').hidden=!state.inCrop;
+   phone.querySelectorAll('[data-cancel],[data-done]').forEach(b=>b.disabled=state.busy);
+   phone.querySelector('.yc-ratios').hidden=!state.inCrop;phone.querySelector('.yc-brightness').hidden=state.inCrop;
+   phone.querySelectorAll('[data-ratio]').forEach(b=>{b.setAttribute('aria-pressed',String(b.dataset.ratio===state.ratio));b.disabled=state.busy;});
+   phone.querySelectorAll('[data-adjust]').forEach(b=>{b.dataset.selected=String(b.dataset.adjust===(state.inCrop?'Crop':'Brightness'));b.dataset.changed=String(b.dataset.adjust==='Crop'&&!state.inCrop&&state.ratio!=='Original');if(b.dataset.adjust==='Crop')b.disabled=state.busy;});
+   const frame=phone.querySelector('.yc-crop-frame');const r=values[ratios.indexOf(state.ratio)]||1;const w=r>=1?1:r,h=r>=1?1/r:1;
+   frame.hidden=state.ratio==='Original'||!state.inCrop;frame.dataset.free=String(state.ratio==='Free');
+   frame.style.setProperty('--frame-x',(1-w)*50+'%');frame.style.setProperty('--frame-y',(1-h)*50+'%');frame.style.setProperty('--frame-w',w*100+'%');frame.style.setProperty('--frame-h',h*100+'%');
+   phone.querySelector('.yc-compare').hidden=state.busy||(state.inCrop&&state.ratio!=='Original');
+   const box=phone.querySelector('.yc-image-box');
+   if(!state.inCrop&&state.ratio!=='Original'){const pw=phone.clientWidth;box.style.width=Math.min(pw,449*r)+'px';box.style.aspectRatio=String(r);}else{box.style.width='100%';box.style.aspectRatio='1';}
+  });
+  root.querySelector('[data-feedback]').textContent=state.busy?'Processing · Current crop retained; all Crop controls unavailable.':state.inCrop?state.ratio+' selected · '+(state.ratio==='Original'?'Reset unavailable.':'Reset available.'):'Crop closed · '+state.ratio+' retained. Tap Crop to reopen.';
+ }
+ root.querySelectorAll('[data-theme]').forEach(b=>b.addEventListener('click',()=>{state.theme=b.dataset.theme;render();persist();}));
+ const modeControl=root.querySelector('[data-state]');
+ modeControl.addEventListener('change',()=>{state.mode=modeControl.value;state.ratio=state.mode==='original'?'Original':'4:5';state.entry=state.mode==='existing'?'4:5':'Original';state.busy=state.mode==='busy';state.inCrop=true;render();persist();});
+ render();if(globalThis.lucide)lucide.createIcons({attrs:{width:20,height:20}});
+ if(globalThis.Tweak){const appearance={appearance:state.theme};const tweak=new Tweak({container:root,onChange:()=>{state.theme=appearance.appearance;render();}});tweak.addSelect(appearance,'appearance',{label:'Appearance',options:['light','dark']});}
+})();
+</script>

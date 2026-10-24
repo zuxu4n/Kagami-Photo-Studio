@@ -21,7 +21,7 @@ The script fetches/pulls `ui-a` and installs a separate app named **Yumiro A**, 
 
 ## Implementation status
 
-All four UI changes below are committed and pushed. Latest UI implementation commit: **e8d5a3d**. A later handoff/documentation commit may be HEAD without changing that UI baseline.
+The first four UI changes below are committed and pushed through **e8d5a3d**. Adjust → Crop’s Shape rail was explicitly selected on 2026-10-24 and is now implemented; see the new section below. Retouch remains a proposal.
 
 | Area | Approved direction | UI commit | Status |
 |---|---|---|---|
@@ -29,9 +29,10 @@ All four UI changes below are committed and pushed. Latest UI implementation com
 | Photo-editor top bar | Balanced bar | `93155a5` | Implemented and pushed |
 | Canvas Compare, Original badge, fit-to-screen | Soft controls | `63b357c` | Implemented and pushed |
 | Smooth panel | Quiet row | `e8d5a3d` | Implemented and pushed |
+| Photo Adjust → Crop controls | Shape rail | See branch history | Implemented after explicit selection |
 | Retouch panel | Compact rows preferred | None | Mockup only; latest spacing revision awaits acceptance |
 
-All UI implementation edits are in [ContentView.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/ContentView.swift). Shared smoothing, retouch rendering, per-face storage, gestures, camera, video editor, and home screen were not changed. Retouch still uses the original three `sliderRow` calls in app code.
+The first four UI changes are in [ContentView.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/ContentView.swift). Crop styling is in `Adjustments.swift`, with an explicit photo-editor opt-in at the `AdjustPanel` call in `ContentView.swift`; the shared video panel keeps its original presentation. Shared smoothing, retouch rendering, per-face storage, gestures, camera, video editor, and home screen were not changed. Retouch still uses the original three `sliderRow` calls in app code.
 
 ## Visual foundations
 
@@ -123,6 +124,19 @@ Behavior that must remain intact:
 - Native slider availability follows the existing busy lock. No new no-face restriction was added.
 - Helper: “Edges, eyes and lips stay sharp”; no-face: “No face found in this photo”; busy: “Available when processing finishes”.
 
+## Adjust → Crop: approved Shape rail
+
+The user explicitly selected **Shape rail** after reviewing two editor-context proposals, Shape rail and Pinned modes, on 2026-10-24. Only the photo editor opts into the new styling (`photoCropStyle: true`); video retains its original panel.
+
+- All ten options stay in their existing order: Original, Free, 1:1, 4:5, 3:4, 2:3, 9:16, 4:3, 3:2, 16:9.
+- Each ratio has its existing 26 pt outline/icon above an 11 pt system caption, in a minimum 58 × 58 pt tile with a 14 pt continuous radius. Selection adds a 12% accent fill, accent foreground, semibold caption, and a 14 × 2 pt underline 3 pt above the bottom. Tiles have 4 pt spacing and retain horizontal scrolling and initial centering on the current ratio.
+- Crop, Reset, Cancel, and Done share a 44 pt header. Reset is a neutral 44 × 44 pt icon control. Cancel and Done have at least 60 × 44 pt targets; Done uses the solid accent treatment. All colors are semantic for light/dark appearance, and controls respect the existing busy lock.
+- The existing 58 pt ratio area, 6 pt panel gaps, Adjust subtool row, and outer panel padding remain. The default-size content fits the existing 184 pt minimum panel budget; native sizing at larger Dynamic Type still requires device verification.
+- Selecting a ratio still clears `cropRect` through the existing `change` callback and remains one undo step. Original means no crop; Free remains unrestricted. Reset still restores Original and clears `cropRect`, and is unavailable when the crop is Original. Cancel restores the ratio and frame captured on entry; Done retains the crop. Both exit to the previous Adjust subtool and retain existing haptics.
+- The crop frame, masks, handles, geometry, rendering callbacks, canvas gestures, and video controls were not changed.
+
+The approved review includes light/dark, Original/reset unavailable, changed/reset available, existing crop/Cancel restore, and busy states. The browser mockup is illustrative; no native screenshot, Xcode build, or iOS runtime verification has been completed on this Windows host. JavaScript syntax validation passed; the browser could not reach the local preview server for visual QA in this chat.
+
 ## Retouch: preferred proposal, not implemented
 
 The user prefers **Compact rows**, then requested two spacing corrections. The latest revision has been shown but has not received explicit final acceptance. Do not implement or push Retouch UI merely because Compact rows is the carousel's selected preview.
@@ -160,6 +174,7 @@ Portable copies are saved in `design/mockups/` in this branch. These are interac
 | `yumiro-canvas-controls.html` | Soft controls | Approved; normal/comparing/zoomed, light/dark; Labeled controls is unselected |
 | `yumiro-smooth-panel-options.html` | Quiet row | Approved; default/adjusted/processing, light/dark; Soft card is unselected |
 | `yumiro-retouch-panel-options.html` | Compact rows | Latest preferred proposal and corrected spacing, not implemented; light/dark, adjusted/all-off/no-face |
+| `yumiro-crop-options.html` | Shape rail | Explicitly selected and implemented for photo Crop; Pinned modes is the unselected alternative |
 
 Absolute portable-copy directory on this PC:
 
@@ -209,6 +224,12 @@ Use the canonical links below. Expiring image-download URLs are intentionally no
 - [Shopee](https://mobbin.com/screens/e0a34c4b-29b8-4bdf-aced-9fb455d9aa09): Smooth strength with a separate Reset action.
 - [(Not Boring) Camera](https://mobbin.com/screens/4a350c13-9234-42a0-97ea-acef9019fb76): title, value, helper, and slider grouped in a compact panel.
 
+### Crop aspect-ratio selection
+
+- [Unfold](https://mobbin.com/screens/e65a8df7-97f0-4b12-b429-955b64c919ee): outlined ratio shapes with labels in a horizontal strip.
+- [Apple Photos](https://mobbin.com/screens/5bcf365a-c53b-471d-95e5-08dc4d9fa79d): compact aspect labels with a selected backing.
+- [Google Maps](https://mobbin.com/screens/4aaecdc2-8367-4027-8a2c-a76390f4e527): explicit checkmarked aspect selection in its iOS crop picker.
+
 ### Retouch grouping
 
 - [Azar](https://mobbin.com/screens/8f295b8c-0d6e-4715-879d-af53d7f8352d): distinguish the selected adjustment from neighboring tools.
@@ -234,4 +255,5 @@ Still unfinished:
 2. Build/install the pushed design A on the user's Mac with `tools/install_variant.sh a`. No Xcode build, XCTest, or phone install has been run in this chat. No compiler-success claim is justified.
 3. Run the relevant existing regression tests on a Mac; see [TESTING.md](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/TESTING.md). Smooth's automatic default/undo/redo tests are especially relevant. Do not add tests that only mirror cosmetic view code.
 4. Inspect native light/dark appearance, smaller supported phone widths, Dynamic Type through the existing xLarge cap, VoiceOver order/announcements, and real material legibility. Check Compare hold/release, pinch/pan, zoomed fit reset, Save, Undo/Redo, Smooth reset, and per-face Retouch persistence.
-5. Keep home, camera, video editor, face/crop/other tool panels, effects, and image geometry outside unsolicited redesign work. Continue one explicitly requested photo-editor area at a time.
+5. Verify Crop on iOS: all ten ratios, Original/Free, selected states, Reset availability, Cancel restoring an existing frame, Done returning to the previous tool, undo grouping, processing locks, light/dark, and Dynamic Type. Confirm the frame and pinch/pan behavior are unchanged.
+6. Keep home, camera, video editor, face/other tool panels, effects, and image geometry outside unsolicited redesign work. Continue one explicitly requested photo-editor area at a time.
