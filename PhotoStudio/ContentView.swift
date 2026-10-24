@@ -134,26 +134,88 @@ struct ContentView: View {
         }
     }
 
+    /// The Balanced bar keeps history centred and Save as the primary action.
     private var topBar: some View {
-        HStack(spacing: 4) {
-            StudioIconButton(icon: "xmark", label: "Close photo") {
-                if model.edited { confirmClose = true } else { closePhoto() }
-            }
-            .disabled(model.busy != nil)
-            Spacer()
-            StudioIconButton(icon: "arrow.uturn.backward", label: "Undo") { Task { await model.undo() } }
-                .disabled(!model.canUndo || model.busy != nil)
-            StudioIconButton(icon: "arrow.uturn.forward", label: "Redo") { Task { await model.redo() } }
-                .disabled(!model.canRedo || model.busy != nil)
-            Spacer()
-            Button("Save") { Task { await model.save() } }
-                .buttonStyle(.borderedProminent)
+        ZStack {
+            HStack {
+                Button {
+                    if model.edited { confirmClose = true } else { closePhoto() }
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(PhotoEditorTopBarButtonStyle(neutral: true))
+                .disabled(model.busy != nil)
+                .accessibilityLabel("Close photo")
+                .accessibilitySortPriority(3)
+
+                Spacer(minLength: 0)
+
+                Button {
+                    Task { await model.save() }
+                } label: {
+                    Text("Save").padding(.horizontal, 17)
+                }
+                .buttonStyle(PhotoEditorTopBarButtonStyle(primary: true))
                 .disabled(model.busy != nil)
                 .accessibilityHint("Saves a copy to Photos")
+            }
+
+            HStack(spacing: 4) {
+                Button {
+                    Task { await model.undo() }
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                }
+                .buttonStyle(PhotoEditorTopBarButtonStyle())
+                .disabled(!model.canUndo || model.busy != nil)
+                .accessibilityLabel("Undo")
+                .accessibilitySortPriority(2)
+
+                Button {
+                    Task { await model.redo() }
+                } label: {
+                    Image(systemName: "arrow.uturn.forward")
+                }
+                .buttonStyle(PhotoEditorTopBarButtonStyle())
+                .disabled(!model.canRedo || model.busy != nil)
+                .accessibilityLabel("Redo")
+                .accessibilitySortPriority(1)
+            }
         }
-        .padding(.horizontal, Space.s)
-        .padding(.trailing, Space.s)
+        .padding(.horizontal, Space.m)
         .frame(height: 52)
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Local to the photo editor: 44-point targets with system light and dark colours.
+    private struct PhotoEditorTopBarButtonStyle: ButtonStyle {
+        @Environment(\.isEnabled) private var isEnabled
+        var primary = false
+        var neutral = false
+
+        init(primary: Bool = false, neutral: Bool = false) {
+            self.primary = primary
+            self.neutral = neutral
+        }
+
+        private var foreground: Color {
+            if !isEnabled { return Color(.tertiaryLabel) }
+            if primary { return .white }
+            return neutral ? .secondary : .accentColor
+        }
+
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .font(primary ? .body.weight(.semibold) : .system(size: 20))
+                .foregroundStyle(foreground)
+                .frame(minWidth: primary ? 76 : 44, minHeight: 44)
+                .background {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(primary ? Color.accentColor.opacity(isEnabled ? 1 : 0.35) : Color(.secondarySystemBackground))
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .opacity(configuration.isPressed ? 0.7 : 1)
+        }
     }
 
     private func closePhoto() {
@@ -472,14 +534,14 @@ struct ContentView: View {
 
     // MARK: Tools
 
-    /// The tool bar along the bottom, grouped: fix the photo, then beauty, then remove and replace.
+    /// The Focus rail: a continuous strip, grouped into fix and frame, beauty, then remove and replace.
     private var toolBar: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
+                HStack(spacing: 2) {
                     ForEach(Array(Tool.groups.enumerated()), id: \.offset) { i, group in
                         if i > 0 {
-                            Divider().frame(height: 28).padding(.horizontal, 4)
+                            Divider().frame(height: 24).padding(.horizontal, 5)
                         }
                         ForEach(group) { t in toolButton(t).id(t) }
                     }
@@ -493,7 +555,7 @@ struct ContentView: View {
         .sensoryFeedback(.selection, trigger: model.tool)
     }
 
-    /// A tool in the bar: the picked one is in the accent colour; a dot marks a tool that changed the photo.
+    /// The selected tool has a soft accent backing and underline; a dot marks other tools with edits.
     private func toolButton(_ t: Tool) -> some View {
         let on = t == model.tool
         let changed = toolChanged(t)
@@ -509,10 +571,28 @@ struct ContentView: View {
                             Circle().fill(.secondary).frame(width: 6, height: 6).offset(x: 6, y: -2)
                         }
                     }
-                Text(t.rawValue).font(.caption2).lineLimit(1).fixedSize()
+                Text(t.rawValue)
+                    .font(.caption2.weight(on ? .semibold : .regular))
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .foregroundStyle(on ? Color.accentColor : Color.secondary)
-            .frame(minWidth: 66, minHeight: 66)
+            .padding(.horizontal, 6)
+            .frame(minWidth: 66)
+            .frame(height: 58)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.accentColor.opacity(on ? 0.12 : 0))
+            }
+            .overlay(alignment: .bottom) {
+                if on {
+                    Capsule()
+                        .fill(Color.accentColor)
+                        .frame(width: 14, height: 2)
+                        .padding(.bottom, 3)
+                }
+            }
+            .frame(height: 66)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
