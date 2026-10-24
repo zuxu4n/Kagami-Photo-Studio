@@ -1,6 +1,6 @@
 # Yumiro B: design handoff
 
-This is the design record for **Yumiro B**, the `ui-b` branch. It lists what the user approved, what's built, what was only proposed, and what's left. Last updated 2026-10-24; the code it describes is `ui-b` at `f52f7c1`.
+This is the design record for **Yumiro B**, the `ui-b` branch. It lists what the user approved, what's built, what was only proposed, and what's left. Last updated 2026-10-24; the code it describes is `ui-b` at `20d73b0`.
 
 The code is the source of truth for exact values. This file says why each value is what it is, and where it lives.
 
@@ -11,12 +11,13 @@ The code is the source of truth for exact values. This file says why each value 
   - the labelled-strip tool bar;
   - fill-field slider rows;
   - Track mode tabs and chips, in every use, including the camera and the video editor;
-  - the Tool cards home screen.
+  - the Tool cards home screen;
+  - the Docked panel camera, with the fill field in the camera's and the video editor's look controls.
 
   None of it has been compiled or tried on the phone yet. See [Approved decisions](#approved-decisions) and [Components](#components).
 - **Only proposed:** the options the user didn't pick for each part, under [Proposed but not picked](#proposed-but-not-picked). Don't build them unless the user picks one.
-- **Not started:** the camera and video editor screens.
-- **Old-style leftovers:** the Adjust panel, the look sliders, the panel buttons, and the three sizes of changed dot. See [Not built yet](#not-built-yet).
+- **Not started:** the video editor screen.
+- **Old-style leftovers:** the Adjust panel, the panel buttons, and the three sizes of changed dot. See [Not built yet](#not-built-yet).
 - **Validation so far:** reading each diff, contrast worked out from the colour values, and layout arithmetic. There are no builds, test runs or device screenshots. What to check on the phone is under [Validation](#validation).
 
 ## How to work on ui-b
@@ -43,6 +44,7 @@ These rules come from the user. A fresh session doesn't get the previous session
 | Slider row | Option 3, "Fill field" | `b3f53c5` | [Yumiro Slider Row](https://claude.ai/artifact/HhNV7Z7EAWJt8dTne6YnuR) |
 | Mode tabs and chips | Option 1, "Track", in every use | `6da010a` and `33ded13` | [Yumiro Tabs and Chips](https://claude.ai/artifact/R5cCo1VDvFfZjpcSPMzX3U) |
 | Home screen | Option 1, "Tool cards" | `0c2c9bc` and `f52f7c1` | [Yumiro Home Screen](https://claude.ai/artifact/FBTjR8Swy3BWNDJ6ytUXqF) |
+| Camera | Option 2, "Docked panel" | `20d73b0` | [Yumiro Camera](https://claude.ai/artifact/4wwPUhSG5hjzkGrtHSwNSi) |
 
 ui-b's tool bar is **not** design A's "Focus rail" from main. The user asked for the labelled strip in ui-b on purpose.
 
@@ -54,6 +56,7 @@ The canvases are private claude.ai Artifacts owned by the user. Open them with t
 - **Slider row:** `Option3.dc.html` and `Option3Dark.dc.html` on the Options page, and `Panels3.dc.html` on the Panels page. That canvas draws design A's Focus rail tool bar. ui-b has the labelled strip instead.
 - **Tabs and chips:** `Editor1.dc.html` on the "Face in the editor" page, and `Uses1.dc.html` on the "Every use" page (Heal, both Background modes, the disabled Refine switch, the camera, the video editor). This canvas already shows ui-b's top bar, tool bar and slider fields.
 - **Home screen:** `Home1.dc.html` on the "Home screen" page, and the first phone of `Busy.dc.html` on the "While a photo opens" page. Both draw the shared `Main.dc.html` with `look="cards"`.
+- **Camera:** `Option2.dc.html` on the "Camera screen" page: live, recording, and camera access off, each in light and dark. All draw the shared `Main.dc.html` with `look="docked"`. The first version of the camera-off screen was black in light mode too; the user caught it, and the approved version has a grey area that follows light and dark.
 
 Local copies of the canvas sources are in earlier sessions' scratchpads. They are temporary and may be deleted:
 
@@ -61,6 +64,7 @@ Local copies of the canvas sources are in earlier sessions' scratchpads. They ar
 - `C:\Users\Jason\AppData\Local\Temp\claude\C--Users-Jason-OneDrive-Desktop-Code-js-photoStudioClaude\d9da43b8-b25d-4a98-a1fd-c3e284618932\scratchpad\slider\project\`
 - `C:\Users\Jason\AppData\Local\Temp\claude\C--Users-Jason-OneDrive-Desktop-Code-js-photoStudioClaude\d9da43b8-b25d-4a98-a1fd-c3e284618932\scratchpad\tabs\project\`
 - `C:\Users\Jason\AppData\Local\Temp\claude\C--Users-Jason-OneDrive-Desktop-Code-js-photoStudioClaude\ef35a15a-37f1-436c-8e6f-1376f317c51e\scratchpad\home\project\`
+- `C:\Users\Jason\AppData\Local\Temp\claude\C--Users-Jason-OneDrive-Desktop-Code-js-photoStudioClaude\19a8e3b9-4843-4688-b1e8-6853d77fbb72\scratchpad\camera\project\`
 
 Reusable mockup parts for the next canvas:
 
@@ -71,6 +75,10 @@ Reusable mockup parts for the next canvas:
 - **The `home` folder:**
   - `Main.dc.html`: the home screen, with a `look` prop (`current`, `cards`, `tiles`, `canvas`) and a `busy` prop;
   - `Icon.dc.html`: the tool glyphs plus photo, camera, video, info, lock, chevron and a photo stack.
+- **The `camera` folder:**
+  - `Main.dc.html`: the camera screen, with a `look` prop (`current`, `glass`, `docked`, `strip`) and a `state` prop (`live`, `recording`, `denied`). Holding the picture or the Compare tile compares, and Record starts a pretend timer;
+  - `Look.dc.html`: `LookControls`, with a `layout` prop (`system`, `fill`, `strip`) and a `surface` prop (`plain`, `material`);
+  - `Icon.dc.html`: close, switch camera, compare, reset, camera, and a line glyph for each of the 13 looks.
 
 **There are no device screenshots.** Nothing has been captured from a phone or simulator.
 
@@ -80,16 +88,18 @@ The app uses system colours, so light mode, dark mode and Increase Contrast come
 
 | Role | Value | Used by |
 |---|---|---|
-| Accent | `Color.accentColor` | Save fill, Undo/Redo icons, picked tool icon, reset arrow, slider fill and handle, changed dots; on the home screen, the "Edit a photo" fill and the Camera, Video and tool icons |
-| Control grey | `Color(.secondarySystemBackground)`: #F2F2F7 light, #1C1C1E dark | top bar buttons, slider fields, reset tiles, mode tracks, chips, Face area track; the home screen's About, Camera and Video tiles and tool cards |
-| Grey on a material | `Color(.secondarySystemFill)`, via `Color.trackFill(material)` | chips and tracks on `.regularMaterial` (the camera's look panel) |
-| Picked tint | `Color.toolTile(scheme)`: accent at 0.14 light, 0.24 dark | picked tool tile, picked mode tile, picked chip, picked Face area |
+| Accent | `Color.accentColor` | Save fill, Undo/Redo icons, picked tool icon, reset arrow, slider fill and handle, changed dots; on the home screen, the "Edit a photo" fill and the Camera, Video and tool icons; on the camera, the Compare and Switch icons and the Open Settings fill |
+| Control grey | `Color(.secondarySystemBackground)`: #F2F2F7 light, #1C1C1E dark | top bar buttons, slider fields, reset tiles, mode tracks, chips, Face area track; the home screen's About, Camera and Video tiles and tool cards; the camera's Compare and Switch tiles, and the area behind the camera-off message |
+| Grey on a material | `Color(.secondarySystemFill)`, via `Color.trackFill(material)` | chips and tracks on a material. Nothing uses it now that the camera's panel is solid; the code path stays in `trackFill` |
+| Picked tint | `Color.toolTile(scheme)`: accent at 0.14 light, 0.24 dark | picked tool tile, picked mode tile, picked chip, picked Face area; the camera's Compare tile while it's held |
+| Recording time | #D70015 (`Color.recordingTime`, private to `CameraView.swift`) | the camera's status pill while recording, with the time in white. System red (#FF3B30) gives white text only 3.6:1 |
+| Record ring | white in dark mode, `Color(.systemGray3)` (#C7C7CC) in light (`Color.recordRing`) | the 4 pt ring around the record button, which sits on the panel; a white ring would vanish on the light panel |
 | Slider fill | accent at 0.14 light, 0.28 dark | slider field fill (`SliderField.marks`) |
-| Muted text | `Color.toolMuted`: rgb(0.42, 0.42, 0.44) light, (0.60, 0.60, 0.62) dark; Increase Contrast (0.33, 0.33, 0.35) and (0.72, 0.72, 0.75) | unpicked tool names, icons and group titles; unpicked mode names on a track; the home screen's group titles, tool card lines and privacy line |
+| Muted text | `Color.toolMuted`: rgb(0.42, 0.42, 0.44) light, (0.60, 0.60, 0.62) dark; Increase Contrast (0.33, 0.33, 0.35) and (0.72, 0.72, 0.75) | unpicked tool names, icons and group titles; unpicked mode names on a track; the home screen's group titles, tool card lines and privacy line; the camera-off screen's icon and line |
 | Muted value | `Color.sliderMuted`: white 0.42 light, 0.60 dark; Increase Contrast 0.30 and 0.75 | a slider's value while it's at its default |
 | Slider marks | `Color(.systemGray2)` | a two-way slider's middle line; the default mark |
 | Disabled | text `Color(.tertiaryLabel)`; picked tile `Color(.systemGray5)`; slider tint `Color(.systemGray3)`; Save fill at 0.35 opacity | every control with `.disabled`; the whole home screen while a photo opens ("Edit a photo" fill at 0.35, like Save) |
-| Close icon | `.secondary` | the top bar's neutral button; the home screen's About |
+| Close icon | `.secondary` | the top bar's neutral button; the home screen's About; the camera's Close (on a material over the picture, and on the background colour when the camera is off) |
 
 `toolMuted` and `sliderMuted` exist because `.secondary` (#8A8A8E) is only about 3.4:1 on white, below the 4.5:1 needed for small text. The contrast results are under [Validation](#validation).
 
@@ -121,8 +131,12 @@ The font is the system font (SF Pro), always set with Dynamic Type text styles. 
 | Home: group titles | as the tool bar's: `.caption2.weight(.semibold)`, `toolMuted`, headers |
 | Home: tool cards | name `.subheadline.weight(.semibold)`, `.primary`; line `.footnote`, `toolMuted`; icon `.title3`, accent, in a 28 pt wide frame |
 | Home: privacy line | `.footnote`, `toolMuted`, after a `lock` |
+| Camera: status pill | `.footnote`, `.primary` on `.regularMaterial`; while recording the time is `.monospacedDigit()`, semibold and white on `recordingTime` |
+| Camera: tile icons (Close, Compare, Switch) | `.system(size: 20)`, as the editor's top bar |
+| Camera off: icon, title, line | `camera` at `.system(size: 40)` in `toolMuted`; "Allow the camera" `.title3.weight(.semibold)`, a header; the line `.subheadline`, `toolMuted`, centred |
+| Camera off: Open Settings | `.body.weight(.semibold)`, white on the accent, like Save |
 
-The home screen isn't capped: it scrolls, so it follows Dynamic Type all the way.
+The home screen isn't capped: it scrolls, so it follows Dynamic Type all the way. The camera stays capped at `.xLarge`, as before.
 
 Slider values show two-way ranges as −100 to +100 with a sign, using a real minus sign (−). One-way ranges show 0 to 100.
 
@@ -130,12 +144,12 @@ Slider values show two-way ranges as −100 to +100 with a sign, using a real mi
 
 - **Spacing scale** (`Space` in `Theme.swift`): xs 4, s 8, m 12, l 16, xl 24, xxl 32.
 - **Touch targets:** every control is at least 44 pt. Rows of controls are 44 pt tall. Chips are 36 pt, and a tile inside a track is 36 pt (44 minus 4 pt of padding on each side).
-- **Corner radii** (`style: .continuous` on every redesigned control; the toast and the camera's panel use plain corners):
+- **Corner radii** (`style: .continuous` on every redesigned control; the toast and the busy badge use plain corners):
 
   | Radius | Used for |
   |---|---|
-  | 14 | 44 pt controls: top bar buttons, slider fields, reset tiles, mode tracks, the Face area track; every home screen tile and card |
-  | 12 | tool bar tiles, chips, the camera's material panel |
+  | 14 | 44 pt controls: top bar buttons, slider fields, reset tiles, mode tracks, the Face area track; every home screen tile and card; the camera's Close, Compare and Switch tiles and Open Settings |
+  | 12 | tool bar tiles, chips |
   | 10 | the tile inside a track; toasts |
 
 - **Editor layout, top to bottom:**
@@ -152,6 +166,12 @@ Slider values show two-way ranges as −100 to +100 with a sign, using a real mi
   - "Start with a tool", 20 pt further down;
   - each group 4 pt further down: its title, 4 pt, then cards two to a row, 8 pt apart both ways, at least 60 pt tall;
   - the privacy line, 12 pt further down.
+- **Camera layout, top to bottom:**
+  - the picture: from the top of the screen (under the status bar's area) down to the panel;
+  - over it, the top bar: 52 pt tall, 12 pt side padding, inside the safe area;
+  - the panel, on `systemBackground` down through the home indicator: 12 pt on top, the chips (36 pt), 10 pt, the slider row (44 pt), 12 pt, the record row (76 pt), 8 pt below. That's 198 pt plus the home indicator;
+  - the record row has 16 pt side padding: Compare on the left, Record in the middle, Switch camera on the right.
+- **Camera-off layout:** a `secondarySystemBackground` area from the top of the screen down to the button, with Close at the top left (12 pt in, centred in 52 pt) and the message centred with 40 pt side padding; then Open Settings, 52 pt tall, full width with 16 pt all round.
 - **Press and motion:**
   - every custom button fades to 0.7 opacity while pressed;
   - a track's tile slides with `.snappy(duration: 0.25)`;
@@ -196,7 +216,7 @@ Slider values show two-way ranges as −100 to +100 with a sign, using a real mi
 - **Undo, ring and Strength:** one undo step per drag and per reset. Non-undoable brush sliders show the brush ring on the photo while dragging. Enhance's Strength uses its own `onEditing` and `onReset` steps.
 - **VoiceOver:** reads and adjusts the field as the system `Slider`, through `accessibilityRepresentation`. The reset tile reads "Reset <name>".
 - **Reset tile:** an accent arrow on a grey 44 pt tile (radius 14). It turns `tertiaryLabel` when the slider is at its default or the app is busy.
-- **Scope:** only through `sliderRow`, which covers the photo editor's tool panels. With no `title`, `ValueSlider` still draws the system slider, which the Adjust panel (photo and video editors) and the camera use.
+- **Scope:** `sliderRow`, which covers the photo editor's tool panels, and `LookControls`, which covers the camera and the video editor's Face panel (`20d73b0`). With no `title`, `ValueSlider` still draws the system slider, which only the Adjust panel (photo and video editors) uses now.
 
 ### Mode tabs: "Track" (`ModeTabs`, `TrackItemStyle` with `.none` backing, in `Theme.swift`)
 
@@ -221,7 +241,7 @@ Slider values show two-way ranges as −100 to +100 with a sign, using a real mi
 - **Rows:**
   - **Face subtabs:** a scrolling row, 6 pt apart.
   - **Background fills (Off, Clear, White, Black):** 8 pt apart in a 44 pt row, disabled while the app is busy.
-  - **Camera looks (`LookControls`, also in the video editor's Face panel):** a scrolling row, 6 pt apart, with 16 pt side padding. In the camera it sits on `.regularMaterial`, so the grey becomes the see-through `secondarySystemFill`.
+  - **Camera looks (`LookControls`, also in the video editor's Face panel):** a scrolling row, 6 pt apart, with 16 pt side padding. Since `20d73b0` the camera's panel is solid, so the chips use the plain grey there too.
 - **Behaviour:** every row plays the selection haptic.
 
 ### Face areas (`ContentView.areaTabs`, `TrackItemStyle` with `.tile` backing)
@@ -245,6 +265,24 @@ Slider values show two-way ranges as −100 to +100 with a sign, using a real mi
 - **Press:** every tile fades to 0.7 while pressed.
 - **VoiceOver order:** Yumiro (a header), About, Edit a photo, Camera, Edit a video, Start with a tool (a header), then each group title (a header) and its tools, then the privacy line. Icons inside the cards are hidden, so a card reads as its name and line.
 - **Not a `NavigationStack` any more:** the header is drawn by the view, so the title doesn't shrink as the page scrolls. The Welcome and About sheets keep their own navigation bars.
+
+### Camera: "Docked panel" (`CameraView`, `LookControls`, `CameraAccessView` and the private `CameraButtonStyle` in `CameraView.swift`)
+
+- **Picture:** the live camera fills the screen from the top down to the panel, under the status bar's area (`ignoresSafeArea(edges: .top)`). It still fills its frame (`resizeAspectFill`), so the panel crops the picture rather than shrinking it. Recording is unaffected.
+- **Hold to compare:** holding anywhere on the picture shows it without the look, as before.
+- **Top bar, over the picture:**
+  - **Close** on the left: a 44 pt tile (radius 14) on `.regularMaterial` with a `.secondary` `xmark`. It's disabled while recording, and the icon then turns `tertiaryLabel`.
+  - **Status pill** in the middle: 32 pt tall, a capsule on `.regularMaterial`, reading "Looking for a face" or "Hold the picture to compare". While recording it turns `recordingTime` red with a white dot and the time in white semibold.
+- **Panel:** solid `systemBackground`, so it's white in light mode and black in dark, like the photo editor's tool panel. It holds `LookControls` (the chips, then the slider field and reset tile), then the record row.
+- **Record row:**
+  - **Compare** on the left: the photo editor's compare glyph (`square.split.2x1`), accent, on a grey 44 pt tile. Holding it does the same as holding the picture, and the tile takes the picked tint while either is held. It reads "Hold to compare with the original", as in the editor, with the button trait.
+  - **Record** in the middle: 76 pt, a red dot in a 4 pt `recordRing` that becomes a 30 pt square while recording. Medium impact haptic on start and stop, as before.
+  - **Switch camera** on the right: an accent `arrow.triangle.2.circlepath` on a grey 44 pt tile, disabled while recording.
+- **Toast:** "Saved to Photos" and other messages still show 64 pt below the top of the safe area, over the picture.
+- **Camera off (`CameraAccessView`):** the same shape as the live screen. A `secondarySystemBackground` area where the picture would be holds the message (camera icon, "Allow the camera", the line), with Close on a `systemBackground` tile at the top left. Below it, where the panel would be, is a full-width 52 pt "Open Settings" in white on the accent. It follows light and dark mode; the first mockup had it black in light mode, which the user caught. The copy is unchanged.
+- **VoiceOver order:** Close, the status, the chips, the slider field, its reset, Compare, Record, Switch camera. The labels are unchanged: "Close camera", "Switch camera", "Record" and "Stop recording", "Reset <look>".
+- **Unchanged:** the look itself, the camera controller, the 13 looks, the record haptic, the timer, `.statusBarHidden()`, and the `.xLarge` Dynamic Type cap.
+- **Shared with the video editor:** `LookControls` changed from the system slider and plain reset arrow to the fill field and reset tile, so the video editor's Face panel shows them too. Its chips and layout are otherwise the same.
 
 ### Unchanged parts (not redesigned yet)
 
@@ -302,6 +340,15 @@ All references are iOS screens and patterns only.
 - [Tinder](https://mobbin.com/screens/becb7eec-eeb1-4c0f-b919-693966caadfc) and [Any Distance](https://mobbin.com/screens/889d3bc2-59f3-46c0-b955-9737cbadb2b7): "everything stays on your device" said where photos are picked, or a privacy promise in settings. No home screen found leads with privacy.
 - [Mammoth](https://mobbin.com/screens/67aadc4a-6db0-4eae-8d11-4e288bb46069): the system photo picker's own "Private Access to Photos" card, which Yumiro's picker shows too.
 
+**Camera**
+
+- [Azar](https://mobbin.com/screens/8f295b8c-0d6e-4715-879d-af53d7f8352d) and [Shopee](https://mobbin.com/screens/328ab298-7eb2-4525-b60e-27fb311d3a30): a solid panel docked under the picture, holding icon-over-name tiles with dots on the changed ones; the slider sits just above the panel. This informed Option 2, which was picked, and Option 3.
+- [Azar](https://mobbin.com/screens/8f295b8c-0d6e-4715-879d-af53d7f8352d) and [Snapchat](https://mobbin.com/screens/e3488f3d-632c-46cc-b84f-867d3a9de1e8): a compare button you can see, at the end of the slider row. [Ulta](https://mobbin.com/screens/9c30ff40-ccc1-4834-a6cc-85c50df0c19d) puts "Before & After" in a menu.
+- [WhatsApp](https://mobbin.com/screens/9072cfbe-c1b2-4915-9d90-9a2badd12f72), [Messages](https://mobbin.com/screens/870439ce-b80c-4e24-80a0-9f34a588e51e) and [Edits](https://mobbin.com/screens/0158dcd6-1cdc-4261-8d30-d6e136f3076a): the recording time as a red pill at the top centre; WhatsApp and Edits put Switch camera beside the record button.
+- [CapCut](https://mobbin.com/screens/6bfe7a64-4cfc-4654-ba90-01141600ee7c): the time just above the record button. [Snapchat](https://mobbin.com/screens/ca8f9728-a151-41d6-8b67-70fc8bbc46d1): a progress ring around it.
+- [WhatsApp](https://mobbin.com/screens/7a8660b8-5db6-4c68-ad9f-8c325f86b177) and [Instagram](https://mobbin.com/screens/0c243e80-dd7c-4dc7-91fa-922dfe9b9d1c): "Find a face" as a small pill under the top bar, or as text in the middle.
+- [Klarna](https://mobbin.com/screens/e79dc9e0-830c-460d-bd79-1e1fc419ab4c), [PlayStation](https://mobbin.com/screens/b27fac9f-381a-46f3-b761-47922ba43290) and [Meetup](https://mobbin.com/screens/a98bbd1f-2f2e-4d74-a207-77c78a8caaf7): camera access off as an icon, one line on why, and one filled button; Klarna pins it full width at the bottom, and Meetup keeps the message where the camera would be.
+
 ## Proposed but not picked
 
 These are on the canvases, but they're not approved. Don't build them unless the user picks one.
@@ -313,10 +360,12 @@ These are on the canvases, but they're not approved. Don't build them unless the
 - **Tabs, Option 3 "Tool tiles":** icon-over-name mode tiles like the tool bar; swatches on the Background fills.
 - **Home, Option 2 "Tiles and rows":** Photo (accent fill), Camera and Video as three equal 92 pt tiles; the tools as grouped 48 pt rows with the line on the right and a chevron.
 - **Home, Option 3 "Editor start":** the editor with no photo yet. A grey area holds "Edit a photo", Camera, Video and the privacy line, and the labelled-strip tool bar sits along the bottom. The tools' lines aren't shown.
+- **Camera, Option 1 "Glass card":** today's layout over a full-screen picture, with Close and Switch as 44 pt material tiles, the look card at radius 14 with the fill field, and a centred camera-off screen with a 52 pt Open Settings.
+- **Camera, Option 3 "Look strip":** the 13 looks as a labelled strip like the tool bar (Skin, Head, Features, Retouch) under the fill field on a solid panel, with the record button and a Compare tile over the picture, and Open Settings pinned to the bottom of a plain camera-off screen.
 
 ## Not built yet
 
-**Remaining parts, in the user's planned order:** camera → video editor. Neither has been researched or mocked up.
+**Remaining part:** the video editor. It hasn't been researched or mocked up. Its Face panel already has the new look controls through `LookControls`.
 
 **Leftovers in the old style, to settle when their part comes up:**
 
@@ -326,7 +375,6 @@ These are on the canvases, but they're not approved. Don't build them unless the
   - its own tool row: accent icon over a `.caption2` name, a 6 pt `.secondary` changed dot, and no tile.
 
   It doesn't match the labelled strip, the fill field or the chips.
-- **Camera and video look sliders** (`LookControls`): the chips are new, but the slider below them is still the system slider with a plain reset arrow.
 - **Panel buttons:** `PanelTextButton` (Reset all, Clear, Add shadow, Remove, Turn off) is still the system bordered style, which no new part uses.
 - **Changed dots:** there are three sizes. The tool bar uses 8 pt with a ring, chips and tracks use 6 pt accent, and the Adjust row uses a 6 pt grey dot.
 
@@ -336,10 +384,11 @@ These are on the canvases, but they're not approved. Don't build them unless the
 
 **Builds and tests:**
 
-- **Nothing in ui-b has been compiled.** This PC can't build, and the user hasn't reported a build result for `62567b2`, `b3f53c5`, `575d86a`, `6da010a`, `33ded13`, `0c2c9bc` or `f52f7c1` yet.
+- **Nothing in ui-b has been compiled.** This PC can't build, and the user hasn't reported a build result for `62567b2`, `b3f53c5`, `575d86a`, `6da010a`, `33ded13`, `0c2c9bc`, `f52f7c1` or `20d73b0` yet.
 - **Each change was reviewed by reading the diff** for Swift and SwiftUI correctness. Every API used is available on iOS 18, the deployment target.
 - **The tests in `PhotoStudioTests`** (`EditorRegressionTests`, `VideoLookTests`) cover editing, undo and video looks, not these views. `TESTING.md` explains how to run them on a Mac.
 - **Mockups:** the home canvas was published without a render check by the session that made it. The user has looked at it and picked from it. The home screen in ui-b follows `Home1.dc.html` value for value, apart from one fix: the card rows were 4 pt apart in the first build and are 8 pt now (`f52f7c1`).
+- **Camera mockups:** published without a render check (the canvas needs a claude.ai sign-in the session's browser didn't have). The user looked at it, picked Option 2, and caught that its camera-off screen was black in light mode; that was fixed on the canvas before the build. The camera in ui-b follows `Option2.dc.html`. The one difference: the Compare tile reads "Hold to compare with the original", the photo editor's label, rather than the mockup's "Compare with the original".
 
 **Contrast**, calculated with the WCAG formula from the colour values above. The `toolMuted` and `sliderMuted` rows are text and need 4.5:1. The picked tool's accent icon is a graphic and needs 3:1.
 
@@ -359,8 +408,12 @@ These are on the canvases, but they're not approved. Don't build them unless the
 | Accent icon on #1C1C1E (home tiles and cards, dark) | 4.67 |
 | White text on the accent (Save, "Edit a photo"), light | 4.02 |
 | White text on the accent (Save, "Edit a photo"), dark | 3.65 |
+| White text on `recordingTime` #D70015 (the camera's recording time) | 5.38 |
+| White text on system red #FF3B30 (not used: why the time has its own red) | 3.55 |
+| Red record dot #FF3B30 on the white panel | 3.55 |
+| `recordRing` #C7C7CC on the white panel | 1.68 |
 
-The tool cards' lines use `toolMuted` on the grey, so they get the track rows' 4.74 and 6.00. White on the accent is below 4.5:1 for 17 pt text. Save already had that, and it's how the system's own filled buttons look, so it's recorded here rather than changed.
+The tool cards' lines use `toolMuted` on the grey, so they get the track rows' 4.74 and 6.00, and so does the camera-off line. The record ring is faint on the light panel, but the red dot inside it clears the 3:1 a graphic needs, so the button still reads. White on the accent is below 4.5:1 for 17 pt text. Save already had that, and it's how the system's own filled buttons look, so it's recorded here rather than changed.
 
 **Layout arithmetic** (from the code, not measured on a device):
 
@@ -369,14 +422,22 @@ The tool cards' lines use `toolMuted` on the grey, so they get the track rows' 4
 - **Background fills:** the four fills fit across a 375 pt phone (343 pt inside the panel).
 - **Home screen:** the header and content are about 630 pt tall at the default text size. That fits a 390 × 844 phone with room to spare. On a 375 × 667 phone it's about the height of the screen, so it may scroll a little, and larger text scrolls.
 - **Tool card text:** on a 390 pt phone the name and line get about 113 pt across, and about 105 pt on a 375 pt phone. So "Reshape features" and "Teeth, eyes, tone" may wrap to two lines on the smaller phone or with larger text.
+- **Camera panel:** 198 pt plus the home indicator. On a 390 × 844 phone the picture shows about 612 pt of height above it; on a 375 × 667 phone, about 469 pt. The panel only grows with Dynamic Type up to the `.xLarge` cap.
+- **Video editor Face panel:** the look controls are 90 pt tall (36 pt chips, 10 pt, 44 pt field), as the system slider row was, so the Face panel needs about 166 of its 236 pt.
 
 **Still to check on the phone:**
 
 - **Tool bar:** where the dot sits on each icon; the edge fades as you scroll; the tile in dark mode.
 - **Slider fields:** how a drag feels (it's a custom control); the click at zero on Face's two-way sliders; Enhance's Strength applying when you lift your finger.
 - **Tracks:** the tile slide; the Face area track scrolling under its corners; the Refine track while disabled.
-- **Camera chips:** the see-through grey on the material panel.
-- **Video editor:** the Adjust panel's fit.
+- **Camera:**
+  - how much of the picture shows above the panel, and that the face still sits well in it;
+  - holding the picture and holding the Compare tile, and the tile's tint while either is held;
+  - the record ring in light mode, and the red time pill while recording;
+  - Close and Switch greyed out while recording;
+  - the "Saved to Photos" toast clearing the top bar;
+  - the camera-off screen in light and dark mode (turn off camera access in Settings to see it).
+- **Video editor:** the Adjust panel's fit; the fill field and reset tile in the Face panel.
 - **Home screen:**
   - both cards in a row staying the same height when a line wraps;
   - the greyed-out look while a photo opens;
@@ -390,7 +451,7 @@ The tool cards' lines use `toolMuted` on the grey, so they get the track rows' 4
 | Colours, spacing, buttons, mode tabs, chips, tool bar parts | `PhotoStudio/Theme.swift`: `Space`, `Color.sliderMuted`, `Color.trackFill`, `ModeTabs`, `Chip`, `TrackItemStyle`, `ResetButton`, `Color.toolMuted`, `Color.toolTile`, `ToolTile`, `ChangedDot`, `scrollEdgeFades` |
 | Editor layout, top bar, tool bar, panels, slider row, Face areas | `PhotoStudio/ContentView.swift`: `editor`, `topBar`, `PhotoEditorTopBarButtonStyle`, `toolBar`, `toolButton`, `toolPanel`, `areaTabs`, `subtabChips`, `sliderRow`, `Tool.groups`, `Tool.groupTitles` |
 | Slider field, Adjust panel | `PhotoStudio/Adjustments.swift`: `ValueSlider`, `SliderField`, `AdjustPanel` |
-| Camera look chips (shared with video) | `PhotoStudio/CameraView.swift`: `LookControls` |
+| Camera screen, camera-off screen, look controls (shared with video) | `PhotoStudio/CameraView.swift`: `CameraView`, `CameraAccessView`, `LookControls`, `CameraButtonStyle`, `Color.recordingTime`, `Color.recordRing` |
 | Video editor controls | `PhotoStudio/VideoEditView.swift`: `controls` |
 | Home screen (the Welcome and About sheets are in the same file, unchanged) | `PhotoStudio/HomeView.swift`: `HomeView`, `HomeTileStyle` |
 | Install a branch on the phone | `tools/install_variant.sh b` (run on the Mac) |
