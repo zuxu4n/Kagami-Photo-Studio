@@ -19,6 +19,7 @@ The code is the source of truth for exact values. This file says why each value 
 - **Not started:** the video editor screen.
 - **Old-style leftovers:** the Adjust panel, the panel buttons, and the three sizes of changed dot. See [Not built yet](#not-built-yet).
 - **Validation so far:** reading each diff, contrast worked out from the colour values, and layout arithmetic. There are no builds, test runs or device screenshots. What to check on the phone is under [Validation](#validation).
+- **Open question:** the camera's looks tile icon may fall below the 3:1 a graphic needs over some pictures: in light mode over dark ones, in dark mode over bright ones, and over mid-tone ones too while it's tinted (estimated, see [Validation](#validation)). Nothing has been changed for it yet.
 
 ## How to work on ui-b
 
@@ -45,7 +46,7 @@ These rules come from the user. A fresh session doesn't get the previous session
 | Mode tabs and chips | Option 1, "Track", in every use | `6da010a` and `33ded13` | [Yumiro Tabs and Chips](https://claude.ai/artifact/R5cCo1VDvFfZjpcSPMzX3U) |
 | Home screen | Option 1, "Tool cards" | `0c2c9bc` and `f52f7c1` | [Yumiro Home Screen](https://claude.ai/artifact/FBTjR8Swy3BWNDJ6ytUXqF) |
 | Camera | Option 2, "Docked panel" | `20d73b0` | [Yumiro Camera](https://claude.ai/artifact/4wwPUhSG5hjzkGrtHSwNSi) |
-| Camera: hiding the looks | Option 2, "Looks tile" | `27ca408` | the same canvas, "Hide the looks" page |
+| Camera: hiding the looks | Option 2, "Looks tile" | `27ca408` | [Yumiro Camera](https://claude.ai/artifact/4wwPUhSG5hjzkGrtHSwNSi), "Hide the looks" page |
 
 ui-b's tool bar is **not** design A's "Focus rail" from main. The user asked for the labelled strip in ui-b on purpose.
 
@@ -59,6 +60,8 @@ The canvases are private claude.ai Artifacts owned by the user. Open them with t
 - **Home screen:** `Home1.dc.html` on the "Home screen" page, and the first phone of `Busy.dc.html` on the "While a photo opens" page. Both draw the shared `Main.dc.html` with `look="cards"`.
 - **Camera:** `Option2.dc.html` on the "Camera screen" page: live, recording, and camera access off, each in light and dark. All draw the shared `Main.dc.html` with `look="docked"`. The first version of the camera-off screen was black in light mode too; the user caught it, and the approved version has a grey area that follows light and dark.
 - **Camera, hiding the looks:** `Hide2.dc.html` on the "Hide the looks" page: live with the looks showing, and recording with them hidden by the tile, in light and dark. It draws `Main.dc.html` with `look="docked"` and `hide="tile"`. `HideNow.dc.html` on the same page is the camera as it was before.
+
+The camera canvas has three pages. It opens on "Hide the looks" (`HideNow`, `Hide1`, `Hide2`, `Hide3`); "Camera screen" has `Current`, `Option1`, `Option2` and `Option3`; "Parts" has the shared `Main`, `Look` and `Icon`. Every phone on it can be tried: hold the picture, tap Record, and tap the looks tile or handle.
 
 Local copies of the canvas sources are in earlier sessions' scratchpads. They are temporary and may be deleted:
 
@@ -109,6 +112,12 @@ Hex values used in the mockups:
 
 - **Light:** background #FFFFFF, grey #F2F2F7, secondary #8A8A8E, muted #6C6C70, accent #007AFF, track #E5E5EA, tick #AEAEB2, tint #D9EBFF (#DBEBFF in some of the tabs canvas's parts; the home canvas has no picked tint), disabled #C4C4C6, separator #C6C6C8.
 - **Dark:** background #000000, grey #1C1C1E, secondary #8D8D93, muted #98989F, accent #0A84FF, track #39393D, tick #636366, tint #02203D, disabled #4F4F54, separator #38383A.
+- **Camera canvas** (`CM_LIGHT` and `CM_DARK` in its `Main.dc.html`):
+  - material rgba(246,246,248,0.84) light, rgba(30,30,32,0.80) dark, for `.regularMaterial` over the picture;
+  - recording pill #D70015 with white text; record dot #FF3B30; record ring #C7C7CC light, #FFFFFF dark;
+  - Compare tile while held: rgba(0,122,255,0.14) light, rgba(10,132,255,0.24) dark, on the panel;
+  - looks tile while the looks show: rgba(210,228,250,0.92) light, rgba(10,132,255,0.40) dark, over the picture. The code uses `.regularMaterial` with `toolTile` on top instead;
+  - disabled icons #C4C4C6 light, #4F4F54 dark on the panel; rgba(60,60,67,0.3) light, rgba(235,235,245,0.3) dark on a material.
 
 ## Typography
 
@@ -178,7 +187,8 @@ Slider values show two-way ranges as −100 to +100 with a sign, using a real mi
   - every custom button fades to 0.7 opacity while pressed;
   - a track's tile slides with `.snappy(duration: 0.25)`;
   - picked-state changes use `.easeOut(duration: 0.2)`;
-  - scroll edge fades use `.easeInOut(duration: 0.2)`.
+  - scroll edge fades use `.easeInOut(duration: 0.2)`;
+  - the camera's looks tile uses the default animation: the look controls fade, and the panel shrinks or grows.
 
 ## Components
 
@@ -275,7 +285,7 @@ Slider values show two-way ranges as −100 to +100 with a sign, using a real mi
 - **Top bar, over the picture:**
   - **Close** on the left: a 44 pt tile (radius 14) on `.regularMaterial` with a `.secondary` `xmark`. It's disabled while recording, and the icon then turns `tertiaryLabel`.
   - **Status pill** in the middle: 32 pt tall, a capsule on `.regularMaterial`, reading "Looking for a face" or "Hold the picture to compare". While recording it turns `recordingTime` red with a white dot and the time in white semibold.
-  - **Looks tile** on the right (`27ca408`): an accent `slider.horizontal.3` on a 44 pt tile. It shows and hides the look controls at any time, including while recording. It has the picked tint over `.regularMaterial` while the looks show, and plain `.regularMaterial` while they're hidden. It reads "Hide looks" or "Show looks". The choice is kept in `UserDefaults` (`@AppStorage("cameraLooksHidden")`), so the camera opens the way it was left. The change uses the default animation: the looks fade, and the picture grows into the space.
+  - **Looks tile** on the right (`27ca408`): an accent `slider.horizontal.3` on a 44 pt tile. It shows and hides the look controls at any time, including while recording. It has the picked tint over `.regularMaterial` while the looks show, and plain `.regularMaterial` while they're hidden. It reads "Hide looks" or "Show looks". The choice is kept in `UserDefaults` (`@AppStorage("cameraLooksHidden")`), so the camera opens the way it was left. The change uses the default animation: the looks fade, and the picture grows into the space. It's in the top bar because that corner was empty once Switch camera moved to the record row, and a tile there mirrors Close. Unlike the options not picked, the camera never hides or shows the looks on its own.
 - **Panel:** solid `systemBackground`, so it's white in light mode and black in dark, like the photo editor's tool panel. It holds `LookControls` (the chips, then the slider field and reset tile), then the record row. With the looks hidden, only the record row is left.
 - **Record row:**
   - **Compare** on the left: the photo editor's compare glyph (`square.split.2x1`), accent, on a grey 44 pt tile. Holding it does the same as holding the picture, and the tile takes the picked tint while either is held. It reads "Hold to compare with the original", as in the editor, with the button trait.
@@ -370,10 +380,10 @@ These are on the canvases, but they're not approved. Don't build them unless the
 - **Tabs, Option 3 "Tool tiles":** icon-over-name mode tiles like the tool bar; swatches on the Background fills.
 - **Home, Option 2 "Tiles and rows":** Photo (accent fill), Camera and Video as three equal 92 pt tiles; the tools as grouped 48 pt rows with the line on the right and a chevron.
 - **Home, Option 3 "Editor start":** the editor with no photo yet. A grey area holds "Edit a photo", Camera, Video and the privacy line, and the labelled-strip tool bar sits along the bottom. The tools' lines aren't shown.
-- **Camera, Option 1 "Glass card":** today's layout over a full-screen picture, with Close and Switch as 44 pt material tiles, the look card at radius 14 with the fill field, and a centred camera-off screen with a 52 pt Open Settings.
-- **Hiding the looks, Option 1 "Fold while recording":** no new control; the looks fold away when recording starts and come back when it stops.
-- **Hiding the looks, Option 3 "Handle":** a grab handle at the top of the panel folds the looks (tap or swipe down), and they also fold by themselves while recording unless they were already folded. The handle takes about 14 pt from the picture.
-- **Camera, Option 3 "Look strip":** the 13 looks as a labelled strip like the tool bar (Skin, Head, Features, Retouch) under the fill field on a solid panel, with the record button and a Compare tile over the picture, and Open Settings pinned to the bottom of a plain camera-off screen.
+- **Camera, Option 1 "Glass card"** (`Option1.dc.html`): the old layout over a full-screen picture, with Close and Switch as 44 pt material tiles, the look card at radius 14 with the fill field, and a centred camera-off screen with a 52 pt Open Settings.
+- **Camera, Option 3 "Look strip"** (`Option3.dc.html`): the 13 looks as a labelled strip like the tool bar (Skin, Head, Features, Retouch) under the fill field on a solid panel, with the record button and a Compare tile over the picture, and Open Settings pinned to the bottom of a plain camera-off screen.
+- **Hiding the looks, Option 1 "Fold while recording"** (`Hide1.dc.html`): no new control; the looks fold away when recording starts and come back when it stops.
+- **Hiding the looks, Option 3 "Handle"** (`Hide3.dc.html`): a grab handle at the top of the panel folds the looks (tap or swipe down), and they also fold by themselves while recording unless they were already folded. The handle takes about 14 pt from the picture.
 
 ## Not built yet
 
@@ -390,6 +400,8 @@ These are on the canvases, but they're not approved. Don't build them unless the
 - **Panel buttons:** `PanelTextButton` (Reset all, Clear, Add shadow, Remove, Turn off) is still the system bordered style, which no new part uses.
 - **Changed dots:** there are three sizes. The tool bar uses 8 pt with a ring, chips and tracks use 6 pt accent, and the Adjust row uses a 6 pt grey dot.
 
+**No photo button on the camera.** It only records video. The user asked to hide the settings "when recording/taking picture"; the looks tile covers recording. Taking photos from the camera would be a part of its own, and nothing has been designed for it.
+
 **Known flaw:** commit `62567b2`'s message has no blank line after its subject, so `git log --oneline` shows it as one long line. Fixing it needs a force-push, so leave it.
 
 ## Validation
@@ -401,7 +413,7 @@ These are on the canvases, but they're not approved. Don't build them unless the
 - **The tests in `PhotoStudioTests`** (`EditorRegressionTests`, `VideoLookTests`) cover editing, undo and video looks, not these views. `TESTING.md` explains how to run them on a Mac.
 - **Mockups:** the home canvas was published without a render check by the session that made it. The user has looked at it and picked from it. The home screen in ui-b follows `Home1.dc.html` value for value, apart from one fix: the card rows were 4 pt apart in the first build and are 8 pt now (`f52f7c1`).
 - **Camera mockups:** published without a render check (the canvas needs a claude.ai sign-in the session's browser didn't have). The user looked at it, picked Option 2, and caught that its camera-off screen was black in light mode; that was fixed on the canvas before the build. The camera in ui-b follows `Option2.dc.html`. The one difference: the Compare tile reads "Hold to compare with the original", the photo editor's label, rather than the mockup's "Compare with the original".
-- **Hiding the looks:** the "Hide the looks" page was also published without a render check. The user picked Option 2. ui-b follows `Hide2.dc.html`, apart from the panel's heights: the mockup's panel is 230 pt with the looks and 130 pt without, and the code's is 198 and 96 pt plus the home indicator, as before.
+- **Hiding the looks:** the "Hide the looks" page was also published without a render check. The user picked Option 2. ui-b follows `Hide2.dc.html`, apart from the panel's heights: the mockup's panel is 230 pt with the looks and 130 pt without, and the code's is 198 and 96 pt plus the home indicator, as before. The tile's tint is also drawn differently (see the camera canvas's hex values above).
 
 **Contrast**, calculated with the WCAG formula from the colour values above. The `toolMuted` and `sliderMuted` rows are text and need 4.5:1. The picked tool's accent icon is a graphic and needs 3:1.
 
@@ -425,8 +437,17 @@ These are on the canvases, but they're not approved. Don't build them unless the
 | White text on system red #FF3B30 (not used: why the time has its own red) | 3.55 |
 | Red record dot #FF3B30 on the white panel | 3.55 |
 | `recordRing` #C7C7CC on the white panel | 1.68 |
+| Accent icon on the held Compare tile | the picked tile's 3.35 light, 4.52 dark |
+| Accent looks icon on the tinted material, light: over white, a mid-tone picture, black | about 3.2, 2.8, 2.2 |
+| Accent looks icon on the tinted material, dark: over white, a mid-tone picture, black | about 2.0, 2.6, 3.6 |
+| Accent looks icon on the plain material (looks hidden), light: over white, a mid-tone picture, black | about 3.8, 3.2, 2.6 |
+| Accent looks icon on the plain material (looks hidden), dark: over white, a mid-tone picture, black | about 2.4, 3.3, 4.9 |
+| `.secondary` Close icon on the material, light: over white, a mid-tone picture, black | about 3.4, 3.2, 2.9 |
+| `.secondary` Close icon on the material, dark: over white, a mid-tone picture, black | about 3.8, 4.8, 6.1 |
 
 The tool cards' lines use `toolMuted` on the grey, so they get the track rows' 4.74 and 6.00, and so does the camera-off line. The record ring is faint on the light panel, but the red dot inside it clears the 3:1 a graphic needs, so the button still reads. White on the accent is below 4.5:1 for 17 pt text. Save already had that, and it's how the system's own filled buttons look, so it's recorded here rather than changed.
+
+The camera's material rows are estimates. They treat `.regularMaterial` as the canvas's flat colour (light rgba(246,246,248,0.84), dark rgba(30,30,32,0.80)) over plain white, the canvas's mid-tone picture (#8E9A8B) or black. The real material blurs and adds vibrancy, so the phone will differ. They suggest the looks tile's accent icon can fall below 3:1: in light mode over dark pictures, in dark mode over bright ones, and over mid-tone ones too while it's tinted. Close's `.secondary` icon dips just under 3:1 only in light mode over a dark picture. That is to check on the phone before deciding anything. If it's hard to see, ways to fix it: a `.primary` icon while the tile is tinted, or `.thickMaterial`. Nothing has been changed for it.
 
 **Layout arithmetic** (from the code, not measured on a device):
 
@@ -452,7 +473,8 @@ The tool cards' lines use `toolMuted` on the grey, so they get the track rows' 4
   - the "Saved to Photos" toast clearing the top bar;
   - the camera-off screen in light and dark mode (turn off camera access in Settings to see it);
   - the looks tile: the looks fading in and out, the picture growing without a jump (the camera layer resizes on its own), the tint over the picture, hiding while recording, and the camera opening hidden after it was closed hidden;
-  - the status pill between Close and the looks tile at the largest text size.
+  - the status pill between Close and the looks tile at the largest text size;
+  - the looks tile's icon and Close's icon against a bright background and a dark one, in light and dark mode.
 - **Video editor:** the Adjust panel's fit; the fill field and reset tile in the Face panel.
 - **Home screen:**
   - both cards in a row staying the same height when a line wraps;
