@@ -102,12 +102,14 @@ struct HomeView: View {
                 .foregroundStyle(live ? Color.toolMuted : Color(.tertiaryLabel))
                 .padding(.leading, Space.s)
                 .accessibilityAddTraits(.isHeader)
-            ForEach(Array(stride(from: 0, to: tools.count, by: 2)), id: \.self) { j in
-                HStack(spacing: Space.s) {
-                    ForEach(tools[j..<min(j + 2, tools.count)]) { t in toolCard(t) }
-                    if j + 1 == tools.count { Color.clear.frame(maxWidth: .infinity) }
+            VStack(spacing: Space.s) {
+                ForEach(Array(stride(from: 0, to: tools.count, by: 2)), id: \.self) { j in
+                    HStack(spacing: Space.s) {
+                        ForEach(tools[j..<min(j + 2, tools.count)]) { t in toolCard(t) }
+                        if j + 1 == tools.count { Color.clear.frame(maxWidth: .infinity) }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)   // both cards in a row as tall as the taller one
                 }
-                .fixedSize(horizontal: false, vertical: true)   // both cards in a row as tall as the taller one
             }
         }
         .padding(.top, Space.xs)
