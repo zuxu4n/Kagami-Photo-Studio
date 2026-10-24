@@ -1,6 +1,6 @@
 # Yumiro design A handoff
 
-Updated 2026-10-24 (America/Toronto). This document records approved photo-editor styling, the pushed branch state, and the Retouch proposal still under review. Read it before continuing design A.
+Updated 2026-10-24 (America/Toronto). This is the design A source of truth for approved colors, typography, spacing, component states, references, and implementation boundaries. Application status was checked against local `ui-a` and `origin/ui-a` at **5efeebaa03558c9687f4e263502bf784233a3bfa**. Retouch remains a proposal. Read this document before continuing design A.
 
 ## Worktree, branch, and authorization
 
@@ -21,7 +21,7 @@ The script fetches/pulls `ui-a` and installs a separate app named **Yumiro A**, 
 
 ## Implementation status
 
-The Focus rail, Balanced bar, Soft controls, Smooth Quiet row, Crop Shape rail, and Rotate Action row are committed and pushed through **c9b55d6**. The user approved the Focused slider hybrid for Brightness, Contrast, Saturation, and Warmth and explicitly requested its commit and push on 2026-10-24. Retouch remains a proposal.
+All seven approved components below are implemented and pushed through **5efeeba**. The latest commit implements the Focused slider hybrid for Brightness, Contrast, Saturation, and Warmth. No Retouch redesign is implemented, and choosing an option in a mockup alone does not approve implementation.
 
 | Area | Approved direction | UI commit | Status |
 |---|---|---|---|
@@ -31,10 +31,10 @@ The Focus rail, Balanced bar, Soft controls, Smooth Quiet row, Crop Shape rail, 
 | Smooth panel | Quiet row | `e8d5a3d` | Implemented and pushed |
 | Photo Adjust → Crop controls | Shape rail | `48ff495` | Implemented and pushed |
 | Photo Adjust → Rotate & Straighten | Action row | `c9b55d6` | Implemented and pushed |
-| Photo Adjust → Brightness, Contrast, Saturation, Warmth | Focused slider hybrid | See branch history | Implemented after explicit approval to commit and push |
+| Photo Adjust → Brightness, Contrast, Saturation, Warmth | Focused slider hybrid | `5efeeba` | Implemented and pushed |
 | Retouch panel | Compact rows preferred | None | Mockup only; latest spacing revision awaits acceptance |
 
-The first four UI changes are in [ContentView.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/ContentView.swift). Crop styling is in `Adjustments.swift`, with an explicit photo-editor opt-in at the `AdjustPanel` call in `ContentView.swift`; the shared video panel keeps its original presentation. Shared smoothing, retouch rendering, per-face storage, gestures, camera, video editor, and home screen were not changed. Retouch still uses the original three `sliderRow` calls in app code.
+The first four UI changes are in [ContentView.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/ContentView.swift). Crop, Rotate, and light/color styling are in [Adjustments.swift](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/PhotoStudio/Adjustments.swift), with explicit photo-only opt-ins (`photoCropStyle`, `photoRotateStyle`, `photoColorStyle`) at the `AdjustPanel` call in `ContentView.swift`. The shared video panel keeps its original presentation. Smoothing and retouch rendering, per-face storage, canvas gestures, camera, video editor, and home screen were not changed. Retouch still uses the original three `sliderRow` calls in app code.
 
 ## Visual foundations
 
@@ -71,6 +71,15 @@ Use the system font and SF Symbols in the app. Browser mockups use system-font f
 | Helper text | `.footnote` (about 13 pt), secondary foreground |
 | Original badge | `.caption.weight(.semibold)` (about 12 pt) |
 | Fit zoom value | `.footnote.weight(.medium)`, monospaced digits |
+| Crop header | `.body.weight(.medium)` (about 17 pt) |
+| Crop Cancel / Done | `.subheadline` (about 15 pt), regular / semibold |
+| Crop ratios | `.caption2` (about 11 pt), regular; selected semibold |
+| Rotate action icons / short captions | System 20 pt / `.caption2` (about 11 pt) |
+| Straighten label / angle | `.subheadline.weight(.medium)` (about 15 pt); angle uses monospaced digits |
+| Compact Straighten label / angle; Reset all | `.footnote` (about 13 pt); compact angle uses monospaced digits |
+| Light/color header / active value / edited tile number | `.subheadline.weight(.medium)` (about 15 pt); numbers use monospaced digits |
+| Light/color neutral tile icons / captions | System 20 pt / `.caption2` (about 11 pt), regular; selected caption semibold |
+| Light/color slider endpoint labels | `.caption2.monospacedDigit()` (about 11 pt), secondary |
 
 The photo editor already caps Dynamic Type at `.xLarge`; that limit was preserved. Default browser text sizes do not establish native Dynamic Type behavior. Retouch's compact mockup labels/value badges are 13 px; check native legibility before treating that as final SwiftUI typography.
 
@@ -87,6 +96,22 @@ Existing `Space` constants: `xs = 4`, `s = 8`, `m = 12`, `l = 16`, `xl = 24`, `x
 - Canvas controls: bottom-left/bottom-right, 12 pt inset. Original stays top-center with a 10 pt top inset.
 - Tool panel: existing minimum 184 pt area, generally 16 pt horizontal and 12 pt vertical padding. Preserve canvas proportions when changing a panel.
 - Native sliders keep system track/thumb rendering and a 44 pt interaction frame. The mockup's 4 px track and 26 px thumb are illustrative.
+- Adjust panels use 6 pt vertical gaps. Crop and Rotate retain their original subtool row; the light/color hybrid uses a 46 pt strip. Crop ratio tiles use 4 pt gaps; light/color numeric tiles use 2 pt gaps.
+- Light/color control budget: header 44 + gap 6 + slider/endpoints 58 + gap 6 + strip 46 = 160 pt, plus the existing 24 pt vertical padding = 184 pt. Endpoint labels occupy 14 pt below the slider. This is the intended default-size budget, not a native layout measurement.
+- Rotate and light/color Reset all targets are 64 × 44 pt, or 46 × 44 pt in their compact variant. Header item spacing is 8 pt; Rotate's transform-action spacing is 4 pt.
+
+### Selected, changed, and unavailable states
+
+| State | Approved treatment |
+|---|---|
+| Selected main-rail tool, Crop ratio, or light/color tile | Soft 12% accent backing, accent foreground, semibold caption, short underline; selection remains visible at neutral. The original Crop/Rotate subtool row retains its existing accent-only selection |
+| Changed tool | Existing 6 pt dots on the main rail and non-selected Crop/Rotate subtools; light/color tiles instead replace the icon with a signed number |
+| Neutral light/color setting | SF Symbol in the tile; active value badge shows 0 on a neutral surface; selected Reset is unavailable |
+| Edited light/color setting | Signed number occupies the same 44 × 24 pt icon slot; active badge is accented; selected Reset restores only this parameter and its icon |
+| Unavailable action / busy panel | Native disabled controls and tertiary action foreground; ratio/numeric tiles use 45% opacity and retain current values and selection |
+| Pressed custom action / tile | 70% opacity where the approved button style supplies it |
+
+Reset availability follows existing model checks, not the rounded text: light/color uses `abs(value) > 0.001`; Rotate uses its existing geometry check; Crop uses its current ratio check. Reset all remains unavailable when all Adjust settings are off and continues to reset the entire Adjust model, including crop and rotation. Do not silently change these scopes as part of styling.
 
 ## Approved components and behavior
 
@@ -150,7 +175,7 @@ The user explicitly selected **Action row** after reviewing Action row and Split
 - `ViewThatFits` provides a compact version: the five transform/reset controls remain in the first row, Reset all moves beside the slider, and the angle moves beside the Straighten label. Both layouts retain 44 pt touch targets, the 44 + 6 + 58 pt control budget, existing subtool row and outer panel padding. Native Dynamic Type/layout verification remains necessary on a Mac.
 - Quarter turns still clear `cropRect`. Flips retain their orientation-aware callbacks. Reset Rotate preserves `cropRect`. The crop frame, canvas, gestures, rendering callbacks, other panels and video behavior were not changed.
 
-The user supplied a replacement preview photo. It is embedded only in the local, ignored `design/mockups/yumiro-rotate-local.html` and in this chat's local preview; do not add the photo or its embedded bytes to Git or publish them. Future previews should reuse that local image instead of the astronaut. The original public-image proposal remains available in the prior chat history. The supplied photo is not an app asset or an editor default.
+The user supplied a replacement preview photo. It is embedded only in local, ignored Rotate and light/color mockups and in this chat's local previews; do not add the photo or its embedded bytes to Git or publish them. Future previews should reuse that local image instead of the astronaut. The original public-image proposal remains available in the prior chat history. The supplied photo is not an app asset or an editor default.
 
 References: [Apple Photos](https://mobbin.com/screens/3a719f66-2139-427b-99c5-2ebc19fc044c), [Instagram](https://mobbin.com/screens/720bfb83-b9d4-4577-a1b9-814ca1646d24), [GoPro Quik](https://mobbin.com/screens/c628e27c-ed54-440e-9e80-4a64333d73b8).
 
@@ -167,7 +192,7 @@ The user reviewed two editor-context proposals, chose the focused slider with vi
 - Reset uses the existing selected-tool reset and undo callback and is unavailable at neutral. Reset all keeps its original scope over **all Adjust settings**, including geometry. The existing busy lock disables the controls without discarding the displayed values. Semantic colors provide light/dark appearances; disabled numeric tiles dim while retaining their icons or values.
 - The 44 + 6 + 58 + 6 + 46 pt content fits the existing 184 pt panel with the unchanged outer padding. Canvas, crop frame, gestures, image processing, other editor panels, and video are unchanged. Native layout and accessibility still need device verification.
 
-The approved private preview is `design/mockups/yumiro-focused-slider-hybrid-local.html`; the earlier two-option comparison is `design/mockups/yumiro-adjust-colors-local.html`. Both embed the supplied photo and remain ignored by Git. The photo is neither an app asset nor part of this commit.
+The approved private preview is `design/mockups/yumiro-focused-slider-hybrid-local.html`; the earlier two-option comparison is `design/mockups/yumiro-adjust-colors-local.html`. Both embed the supplied photo and remain ignored by Git. The photo is neither an app asset nor part of the pushed implementation.
 
 Mobbin references: [VSCO](https://mobbin.com/screens/adea8809-53d5-419b-9ceb-67d4f0def085) for light/color grouping, [Google Photos](https://mobbin.com/screens/9b042739-12d6-41ac-a180-2d438133cba1) for adjacent adjustments and changed indicators, and [Apple Photos](https://mobbin.com/screens/75d7aa74-5770-4c83-a4b5-8afd6555ae7f) for a focused adjustment strip.
 
@@ -202,26 +227,35 @@ Retouch behavior to preserve:
 
 Portable copies are saved in `design/mockups/`. These are interactive HTML fragments for Codex's visualization surface, not standalone apps or native screenshots. Older committed proposals use public NASA portrait imagery. New previews with the user-supplied photo are local-only and ignored by Git. Slider previews change controls/values, not the photo-processing pipeline.
 
-| File in `design/mockups/` | Direction to inspect | Status |
+| Mockup path on this PC | Direction to inspect | Status |
 |---|---|---|
-| `yumiro-toolbar-options.html` | Focus rail | Original approved rail; Grouped shelf is an unselected alternative |
-| `yumiro-picker-light-dark.html` | Focus rail | Light/dark rail follow-up; Labeled chips is unselected |
-| `yumiro-top-bar-options.html` | Balanced bar | Approved; Action cluster is unselected |
-| `yumiro-canvas-controls.html` | Soft controls | Approved; normal/comparing/zoomed, light/dark; Labeled controls is unselected |
-| `yumiro-smooth-panel-options.html` | Quiet row | Approved; default/adjusted/processing, light/dark; Soft card is unselected |
-| `yumiro-retouch-panel-options.html` | Compact rows | Latest preferred proposal and corrected spacing, not implemented; light/dark, adjusted/all-off/no-face |
-| `yumiro-crop-options.html` | Shape rail | Explicitly selected and implemented for photo Crop; Pinned modes is the unselected alternative |
-| `yumiro-rotate-local.html` | Action row | Selected and implemented; local-only preview contains the supplied photo and is intentionally ignored by Git |
-| `yumiro-adjust-colors-local.html` | Focused slider / Value tabs | Earlier comparison; local-only and ignored because it contains the supplied photo |
-| `yumiro-focused-slider-hybrid-local.html` | Focused slider with changed values | Approved and implemented; local-only and ignored because it contains the supplied photo |
+| [yumiro-toolbar-options.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-toolbar-options.html) | Focus rail | Original approved rail; Grouped shelf is an unselected alternative |
+| [yumiro-picker-light-dark.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-picker-light-dark.html) | Focus rail | Light/dark rail follow-up; Labeled chips is unselected |
+| [yumiro-top-bar-options.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-top-bar-options.html) | Balanced bar | Approved; Action cluster is unselected |
+| [yumiro-canvas-controls.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-canvas-controls.html) | Soft controls | Approved; normal/comparing/zoomed, light/dark; Labeled controls is unselected |
+| [yumiro-smooth-panel-options.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-smooth-panel-options.html) | Quiet row | Approved; default/adjusted/processing, light/dark; Soft card is unselected |
+| [yumiro-retouch-panel-options.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-retouch-panel-options.html) | Compact rows | Latest preferred proposal and corrected spacing, not implemented; light/dark, adjusted/all-off/no-face |
+| [yumiro-crop-options.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-crop-options.html) | Shape rail | Explicitly selected and implemented for photo Crop; Pinned modes is the unselected alternative |
+| [yumiro-rotate-local.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-rotate-local.html) | Action row | Selected and implemented; local-only preview contains the supplied photo and is intentionally ignored by Git |
+| [yumiro-adjust-colors-local.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-adjust-colors-local.html) | Focused slider / Value tabs | Earlier comparison; local-only and ignored because it contains the supplied photo |
+| [yumiro-focused-slider-hybrid-local.html](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/yumiro-focused-slider-hybrid-local.html) | Focused slider with changed values | Approved and implemented; local-only and ignored because it contains the supplied photo |
 
 Absolute portable-copy directory on this PC:
 
 `C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/design/mockups/`
 
-Original conversation artifact directory (same filenames; outside Git):
+Original toolbar, top-bar, canvas, Smooth, and Retouch conversation artifacts (outside Git):
 
 `C:/Users/Jason/.codex/visualizations/2026/10/24/01a16bec-b7ee-70d3-9fdf-41f62dc294d9/`
+
+Current Crop, Rotate, and light/color conversation artifacts (outside Git):
+
+- [Crop Shape rail / Pinned modes](C:/Users/Jason/.codex/visualizations/2026/10/24/01a16c81-7e78-7cc2-94fb-eb94cd773c4b/yumiro-crop-options.html).
+- [Rotate Action row / Split controls](C:/Users/Jason/.codex/visualizations/2026/10/24/01a16c81-7e78-7cc2-94fb-eb94cd773c4b/yumiro-rotate-options.html).
+- [Light/color original comparison](C:/Users/Jason/.codex/visualizations/2026/10/24/01a16c81-7e78-7cc2-94fb-eb94cd773c4b/yumiro-adjust-colors.html).
+- [Approved Focused slider hybrid](C:/Users/Jason/.codex/visualizations/2026/10/24/01a16c81-7e78-7cc2-94fb-eb94cd773c4b/yumiro-focused-slider-hybrid.html).
+
+The current Rotate and light/color artifacts contain the private supplied photo. Their repo copies use the ignored `*-local.html` suffix. Never force-add these files. The original photo stays at `C:/Users/Jason/OneDrive/Pictures/Pfp/e9f7a063d2e8c7e60bf6781376e2c5f1.jpg`.
 
 No native app screenshots were provided or saved in this chat. Browser screenshots were inspected during preview QA but were not persisted as files. The mockups approximate UIKit colors/icons; native code is authoritative for the implementation.
 
@@ -269,6 +303,20 @@ Use the canonical links below. Expiring image-download URLs are intentionally no
 - [Apple Photos](https://mobbin.com/screens/5bcf365a-c53b-471d-95e5-08dc4d9fa79d): compact aspect labels with a selected backing.
 - [Google Maps](https://mobbin.com/screens/4aaecdc2-8367-4027-8a2c-a76390f4e527): explicit checkmarked aspect selection in its iOS crop picker.
 
+### Rotate & Straighten
+
+- [Apple Photos](https://mobbin.com/screens/3a719f66-2139-427b-99c5-2ebc19fc044c): adjacent orientation actions and a focused straighten control.
+- [Instagram](https://mobbin.com/screens/720bfb83-b9d4-4577-a1b9-814ca1646d24): compact controls beneath the photo.
+- [GoPro Quik](https://mobbin.com/screens/c628e27c-ed54-440e-9e80-4a64333d73b8): keep rotation/flip actions distinct from continuous straightening.
+
+### Brightness, Contrast, Saturation, and Warmth grouping
+
+- [VSCO](https://mobbin.com/screens/adea8809-53d5-419b-9ceb-67d4f0def085): related light/color adjustments in one group.
+- [Google Photos](https://mobbin.com/screens/9b042739-12d6-41ac-a180-2d438133cba1): adjacent adjustment choices with changed-state visibility.
+- [Apple Photos](https://mobbin.com/screens/75d7aa74-5770-4c83-a4b5-8afd6555ae7f): one focused slider tied to the selected adjustment.
+
+The icon-to-signed-number swap is the user's approved synthesis of the Focused slider and visible changed-value directions. The alternative Value tabs layout is not the implementation.
+
 ### Retouch grouping
 
 - [Azar](https://mobbin.com/screens/8f295b8c-0d6e-4715-879d-af53d7f8352d): distinguish the selected adjustment from neighboring tools.
@@ -281,12 +329,17 @@ These references inform layout details; they do not authorize importing applicat
 
 Completed:
 
-- `git diff --check` passed for each UI commit. Pushes to `origin/ui-a` were confirmed against the remote branch, and the worktree was clean before this documentation work.
+- `git diff --check` and the staged whitespace check passed for the latest implementation. Local `ui-a` and `origin/ui-a` both resolve to `5efeebaa03558c9687f4e263502bf784233a3bfa`; the worktree was clean before this documentation update. Earlier UI pushes were also confirmed.
 - Source-scope comparisons confirmed that each UI commit only changed its approved area. The Smooth check also confirmed `EditorModel.swift` was unchanged.
 - Native behavior was inspected in source: selection, undo/reset grouping, smoothing default, per-face values, busy/crop guards, gesture calculations, and fit reset. These were source checks, not runtime tests.
 - Mockup JavaScript passed syntax checks. Browser previews were visually inspected for light/dark, selected/unselected or enabled/disabled states, and the requested panel states.
 - Browser interactions confirmed Smooth reset to zero, value updates, processing locks; Retouch independent values/tab switching, reset of only one adjustment, and no-face presentation; canvas fit returning to normal; and top-bar history availability changes.
 - Latest Retouch browser geometry was measured: **184 px panel height, 44 px reset targets, 4 px reset-button gaps, 8 px helper-text gap**. Browser pixels model native points at the intended preview scale; this is not native layout validation.
+- Rotate mockup checks covered default/adjusted light and dark, signed ±15° endpoints, flip orientation, Reset availability, narrow layout, 184 px panel sizing, and 44 px reset targets.
+- The light/color hybrid mockup showed all-neutral icons and mixed edited values in light/dark; resetting Brightness restored its icon while leaving Contrast's signed value visible. Selected highlight remained distinct from edit state. Disabled controls retained values. The comparison also covered narrow scrolling and −100/+100 endpoints.
+- The `5efeeba` source audit compared the adjustment model, original Crop/Rotate controls, shared `ValueSlider`, reset/undo callbacks, crop frame, `EditorModel.swift`, and `VideoEditView.swift` against its parent. They were unchanged. `ContentView.swift` changed only by enabling `photoColorStyle: true`; rendering callbacks, busy lock and canvas code were unchanged. The commit contains only `Adjustments.swift`, `ContentView.swift`, and this handoff.
+- All three private repo previews (Rotate, original light/color comparison, hybrid) were verified to embed the exact supplied JPEG bytes, remain ignored/untracked, and stay out of the implementation diff. No native app photo asset was added.
+- Crop's JavaScript syntax/source checks passed, but its initial browser visual-QA attempt could not reach the local renderer. Do not count later successful Rotate/light/color QA or preview selections as completed Crop visual/runtime validation.
 
 Still unfinished:
 
@@ -295,4 +348,7 @@ Still unfinished:
 3. Run the relevant existing regression tests on a Mac; see [TESTING.md](C:/Users/Jason/OneDrive/Desktop/Code/js/yumiro-ui-a/TESTING.md). Smooth's automatic default/undo/redo tests are especially relevant. Do not add tests that only mirror cosmetic view code.
 4. Inspect native light/dark appearance, smaller supported phone widths, Dynamic Type through the existing xLarge cap, VoiceOver order/announcements, and real material legibility. Check Compare hold/release, pinch/pan, zoomed fit reset, Save, Undo/Redo, Smooth reset, and per-face Retouch persistence.
 5. Verify Crop on iOS: all ten ratios, Original/Free, selected states, Reset availability, Cancel restoring an existing frame, Done returning to the previous tool, undo grouping, processing locks, light/dark, and Dynamic Type. Confirm the frame and pinch/pan behavior are unchanged.
-6. Keep home, camera, video editor, face/other tool panels, effects, and image geometry outside unsolicited redesign work. Continue one explicitly requested photo-editor area at a time.
+6. Verify Rotate on iOS: left/right quarter turns, orientation-aware flips, ±15° straighten, zero catch and haptics, geometry-only Reset, global Reset all, undo/redo, busy lock, narrow reflow, and selected flip states in light/dark.
+7. Verify all four light/color tools on iOS: default icons, icon-to-number replacement, signed display, selected-neutral versus edited-peer states, Reset restoring the icon and preserving peers, Reset all scope, unchanged range/neutral/zero snapping, per-drag undo/redo, disabled availability, scroll-to-selection, VoiceOver values, and light/dark at narrow widths and xLarge Dynamic Type.
+8. Complete native contrast/material legibility checks and save actual device screenshots if requested. No native build, XCTest result, native screenshot, or device layout measurement is available in this handoff.
+9. Keep home, camera, video editor, face/other tool panels, effects, and image geometry outside unsolicited redesign work. Continue one explicitly requested photo-editor area at a time. Unselected layouts (Grouped shelf, Labeled chips, Action cluster, Labeled controls, Soft card, Pinned modes, Split controls, Value tabs, and Retouch Adjustment tabs) remain alternatives, not implementation tasks.
