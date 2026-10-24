@@ -2,7 +2,8 @@ import SwiftUI
 import AVFoundation
 
 /// The live camera screen: the camera with the look drawn on it and hold-to-compare on the picture, then a panel below
-/// it with a slider for each part of the look and the record row (Compare, Record, Switch camera).
+/// it with a slider for each part of the look and the record row (Compare, Record, Switch camera). The looks tile at
+/// the top right hides the sliders, so more of the picture shows.
 struct CameraView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -10,6 +11,7 @@ struct CameraView: View {
     @State private var look = LiveLook()   // every effect starts at none ((a design call))
     @State private var control = LookControl.all[0]
     @State private var comparing = false   // holding the picture or the Compare tile
+    @AppStorage("cameraLooksHidden") private var looksHidden = false   // stays as left, the next time too
 
     var body: some View {
         ZStack {
@@ -49,17 +51,23 @@ struct CameraView: View {
         .onChange(of: comparing) { _, new in camera.comparing = new }
     }
 
-    /// Close on the left of the picture and what the camera is doing in the middle.
+    /// Close on the left of the picture, what the camera is doing in the middle, and the looks tile on the right. The
+    /// tiles either side are the same size, so the status stays in the middle.
     private var topBar: some View {
-        ZStack {
-            HStack {
-                Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }
-                    .buttonStyle(CameraButtonStyle(fill: .material, neutral: true))
-                    .disabled(camera.recording)
-                    .accessibilityLabel("Close camera")
-                Spacer()
-            }
+        HStack(spacing: 0) {
+            Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }
+                .buttonStyle(CameraButtonStyle(fill: .material, neutral: true))
+                .disabled(camera.recording)
+                .accessibilityLabel("Close camera")
+            Spacer(minLength: Space.s)
             status
+            Spacer(minLength: Space.s)
+            // Tinted while the sliders show; it works while recording too.
+            Button { withAnimation { looksHidden.toggle() } } label: {
+                Image(systemName: "slider.horizontal.3").frame(width: 44, height: 44)
+            }
+            .buttonStyle(CameraButtonStyle(fill: looksHidden ? .material : .picked))
+            .accessibilityLabel(looksHidden ? "Show looks" : "Hide looks")
         }
         .padding(.horizontal, Space.m)
         .frame(height: 52)
@@ -87,10 +95,11 @@ struct CameraView: View {
         .animation(.default, value: camera.recording)
     }
 
-    /// The effects on a panel below the picture, then the record row.
+    /// The effects on a panel below the picture, then the record row. With the looks hidden only the record row is
+    /// left, and the picture grows into the space.
     private var controls: some View {
         VStack(spacing: Space.m) {
-            LookControls(look: $look, control: $control)
+            if !looksHidden { LookControls(look: $look, control: $control) }
             recordRow
         }
         .padding(.top, Space.m)
@@ -215,15 +224,16 @@ struct CameraAccessView: View {
     }
 }
 
-/// The camera's buttons: 44-point tiles like the photo editor's top bar (Close, Switch camera) and the filled
-/// Open Settings. `fill` is the tile: a material over the picture, grey on the panel, or the background colour on
-/// the grey of the camera-off screen.
+/// The camera's buttons: 44-point tiles like the photo editor's top bar (Close, the looks tile, Switch camera) and
+/// the filled Open Settings. `fill` is the tile: a material over the picture (tinted when `picked`), grey on the
+/// panel, or the background colour on the grey of the camera-off screen.
 private struct CameraButtonStyle: ButtonStyle {
-    enum Fill { case accent, grey, background, material }
+    enum Fill { case accent, grey, background, material, picked }
 
     var fill: Fill = .grey
     var neutral = false
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorScheme) private var scheme
 
     private var foreground: Color {
         if !isEnabled { return Color(.tertiaryLabel) }
@@ -242,6 +252,7 @@ private struct CameraButtonStyle: ButtonStyle {
                 case .grey: shape.fill(Color(.secondarySystemBackground))
                 case .background: shape.fill(Color(.systemBackground))
                 case .material: shape.fill(.regularMaterial)
+                case .picked: shape.fill(.regularMaterial).overlay(shape.fill(Color.toolTile(scheme)))
                 }
             }
             .contentShape(shape)
