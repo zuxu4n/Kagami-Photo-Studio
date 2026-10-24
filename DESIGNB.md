@@ -1,8 +1,23 @@
 # Yumiro B: design handoff
 
-This is the design record for **Yumiro B**, the `ui-b` branch. It lists what the user approved, what's built, what was only proposed, and what's left. Last updated 2026-10-24, with `ui-b` at `f52f7c1`.
+This is the design record for **Yumiro B**, the `ui-b` branch. It lists what the user approved, what's built, what was only proposed, and what's left. Last updated 2026-10-24; the code it describes is `ui-b` at `f52f7c1`.
 
 The code is the source of truth for exact values. This file says why each value is what it is, and where it lives.
+
+## At a glance
+
+- **Built in ui-b and pushed:**
+  - the Balanced top bar;
+  - the labelled-strip tool bar;
+  - fill-field slider rows;
+  - Track mode tabs and chips, in every use, including the camera and the video editor;
+  - the Tool cards home screen.
+
+  None of it has been compiled or tried on the phone yet. See [Approved decisions](#approved-decisions) and [Components](#components).
+- **Only proposed:** the options the user didn't pick for each part, under [Proposed but not picked](#proposed-but-not-picked). Don't build them unless the user picks one.
+- **Not started:** the camera and video editor screens.
+- **Old-style leftovers:** the Adjust panel, the look sliders, the panel buttons, and the three sizes of changed dot. See [Not built yet](#not-built-yet).
+- **Validation so far:** reading each diff, contrast worked out from the colour values, and layout arithmetic. There are no builds, test runs or device screenshots. What to check on the phone is under [Validation](#validation).
 
 ## How to work on ui-b
 
@@ -47,7 +62,15 @@ Local copies of the canvas sources are in earlier sessions' scratchpads. They ar
 - `C:\Users\Jason\AppData\Local\Temp\claude\C--Users-Jason-OneDrive-Desktop-Code-js-photoStudioClaude\d9da43b8-b25d-4a98-a1fd-c3e284618932\scratchpad\tabs\project\`
 - `C:\Users\Jason\AppData\Local\Temp\claude\C--Users-Jason-OneDrive-Desktop-Code-js-photoStudioClaude\ef35a15a-37f1-436c-8e6f-1376f317c51e\scratchpad\home\project\`
 
-The `tabs` folder has reusable mockup parts for the next canvas: `Main.dc.html` (the editor with ui-b's bars), `Panel.dc.html`, `Tabs.dc.html`, `Chips.dc.html`, `Camera.dc.html`, `Video.dc.html` and `Icon.dc.html`.
+Reusable mockup parts for the next canvas:
+
+- **The `tabs` folder:**
+  - `Main.dc.html`: the editor with ui-b's bars;
+  - `Panel.dc.html`, `Tabs.dc.html`, `Chips.dc.html`, `Camera.dc.html` and `Video.dc.html`;
+  - `Icon.dc.html`: the tool, top bar and mode glyphs.
+- **The `home` folder:**
+  - `Main.dc.html`: the home screen, with a `look` prop (`current`, `cards`, `tiles`, `canvas`) and a `busy` prop;
+  - `Icon.dc.html`: the tool glyphs plus photo, camera, video, info, lock, chevron and a photo stack.
 
 **There are no device screenshots.** Nothing has been captured from a phone or simulator.
 
@@ -72,8 +95,8 @@ The app uses system colours, so light mode, dark mode and Increase Contrast come
 
 Hex values used in the mockups:
 
-- **Light:** background #FFFFFF, grey #F2F2F7, secondary #8A8A8E, muted #6C6C70, accent #007AFF, track #E5E5EA, tick #AEAEB2, tint #D9EBFF.
-- **Dark:** background #000000, grey #1C1C1E, secondary #8D8D93, muted #98989F, accent #0A84FF, track #39393D, tick #636366.
+- **Light:** background #FFFFFF, grey #F2F2F7, secondary #8A8A8E, muted #6C6C70, accent #007AFF, track #E5E5EA, tick #AEAEB2, tint #D9EBFF (#DBEBFF in some of the tabs canvas's parts; the home canvas has no picked tint), disabled #C4C4C6, separator #C6C6C8.
+- **Dark:** background #000000, grey #1C1C1E, secondary #8D8D93, muted #98989F, accent #0A84FF, track #39393D, tick #636366, tint #02203D, disabled #4F4F54, separator #38383A.
 
 ## Typography
 
@@ -316,6 +339,7 @@ These are on the canvases, but they're not approved. Don't build them unless the
 - **Nothing in ui-b has been compiled.** This PC can't build, and the user hasn't reported a build result for `62567b2`, `b3f53c5`, `575d86a`, `6da010a`, `33ded13`, `0c2c9bc` or `f52f7c1` yet.
 - **Each change was reviewed by reading the diff** for Swift and SwiftUI correctness. Every API used is available on iOS 18, the deployment target.
 - **The tests in `PhotoStudioTests`** (`EditorRegressionTests`, `VideoLookTests`) cover editing, undo and video looks, not these views. `TESTING.md` explains how to run them on a Mac.
+- **Mockups:** the home canvas was published without a render check by the session that made it. The user has looked at it and picked from it. The home screen in ui-b follows `Home1.dc.html` value for value, apart from one fix: the card rows were 4 pt apart in the first build and are 8 pt now (`f52f7c1`).
 
 **Contrast**, calculated with the WCAG formula from the colour values above. The `toolMuted` and `sliderMuted` rows are text and need 4.5:1. The picked tool's accent icon is a graphic and needs 3:1.
 
