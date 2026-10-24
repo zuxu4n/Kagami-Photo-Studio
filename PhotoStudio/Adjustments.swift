@@ -238,6 +238,7 @@ struct AdjustPanel<Accessory: View>: View {
     var freeCrop = true   // whether Free is offered (it needs the frame's handles, which only the photo editor has)
     var photoCropStyle = false   // approved Shape rail, local to the photo editor
     var photoRotateStyle = false // approved Action row, local to the photo editor
+    var photoColorStyle = false  // approved Focused slider hybrid, local to the photo editor
     @ViewBuilder var accessory: () -> Accessory
     @State private var cropEntry: (crop: CropRatio, rect: CGRect?)?   // the crop when Crop was opened, for Cancel
     @State private var lastTool: AdjustTool = .brightness              // where Done and Cancel go back to
@@ -250,6 +251,12 @@ struct AdjustPanel<Accessory: View>: View {
                     photoRotateRows(compact: false)
                     photoRotateRows(compact: true)
                 }
+            } else if photoColorStyle, let path = tool.value {
+                ViewThatFits(in: .horizontal) {
+                    photoColorHeader(path, compact: false)
+                    photoColorHeader(path, compact: true)
+                }
+                photoColorSlider(path)
             } else {
                 if photoCropStyle && tool == .crop { photoCropHeader } else { header }
                 Group {
@@ -264,7 +271,11 @@ struct AdjustPanel<Accessory: View>: View {
                 }
                 .frame(height: 58)
             }
-            toolRow
+            if photoColorStyle && tool.value != nil {
+                photoColorToolRow
+            } else {
+                toolRow
+            }
         }
         .onAppear { if tool == .crop { cropEntry = (adjust.crop, adjust.cropRect) } }
         .onChange(of: tool) { old, new in
@@ -383,6 +394,142 @@ struct AdjustPanel<Accessory: View>: View {
             }
         }
         .sensoryFeedback(.selection, trigger: tool)
+    }
+
+    /// The selected color adjustment keeps one focused slider; edited peers show their signed values.
+    private func photoColorHeader(_ path: WritableKeyPath<Adjustments, Float>, compact: Bool) -> some View {
+        HStack(spacing: 8) {
+            Text(tool.rawValue).font(.subheadline.weight(.medium)).fixedSize()
+            Text(ValueSlider.label(adjust[keyPath: path]))
+                .font(.subheadline.weight(.medium).monospacedDigit())
+                .foregroundStyle(tool.isChanged(adjust) ? Color.accentColor : Color.secondary)
+                .frame(width: 44, height: 32)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(tool.isChanged(adjust) ? Color.accentColor.opacity(0.12) : Color(.secondarySystemBackground))
+                }
+                .accessibilityHidden(true)
+            Button {
+                change { $0 = tool.reset($0) }
+            } label: {
+                Image(systemName: "arrow.counterclockwise").font(.system(size: 20))
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(PhotoRotateButtonStyle(accent: true))
+            .disabled(!tool.isChanged(adjust))
+            .accessibilityLabel("Reset \(tool.rawValue)")
+            .accessibilityHint("Returns this adjustment to zero")
+            Spacer(minLength: 0)
+            photoResetAll(compact: compact)
+            accessory()
+        }
+        .frame(height: 44)
+    }
+
+    private func photoColorSlider(_ path: WritableKeyPath<Adjustments, Float>) -> some View {
+        VStack(spacing: 0) {
+            ValueSlider(value: valueBinding(path), editing: editing, showsValue: false)
+                .accessibilityLabel(tool.rawValue)
+                .accessibilityValue(ValueSlider.label(adjust[keyPath: path]))
+            HStack {
+                Text("−100")
+                Spacer()
+                Text("0")
+                Spacer()
+                Text("+100")
+            }
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary)
+            .frame(height: 14)
+            .accessibilityHidden(true)
+        }
+        .frame(height: 58)
+    }
+
+    private var photoColorToolRow: some View {
+        GeometryReader { geo in
+            let geometryWidth = max(44, geo.size.width / 6)
+            let colorWidth = max(52, (geo.size.width - 2 * geometryWidth - 6) / 4)
+            HStack(spacing: 0) {
+                ForEach([AdjustTool.crop, .rotate]) { t in
+                    Button {
+                        withAnimation { tool = t }
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: t.icon)
+                                .frame(width: 40, height: 28)
+                                .overlay(alignment: .topTrailing) {
+                                    if t.isChanged(adjust) {
+                                        Circle().fill(.secondary).frame(width: 6, height: 6)
+                                    }
+                                }
+                            Text(t.rawValue).font(.caption2).lineLimit(1).minimumScaleFactor(0.8)
+                        }
+                        .foregroundStyle(.secondary)
+                        .frame(width: geometryWidth, height: 46)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(t.rawValue + (t.isChanged(adjust) ? ", changed" : ""))
+                }
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 2) {
+                            ForEach(AdjustTool.allCases.filter { $0.value != nil }) { t in
+                                photoColorTool(t, width: colorWidth).id(t)
+                            }
+                        }
+                    }
+                    .onAppear { proxy.scrollTo(tool, anchor: .center) }
+                    .onChange(of: tool) { _, selected in
+                        withAnimation { proxy.scrollTo(selected, anchor: .center) }
+                    }
+                }
+            }
+        }
+        .frame(height: 46)
+        .sensoryFeedback(.selection, trigger: tool)
+    }
+
+    private func photoColorTool(_ t: AdjustTool, width: CGFloat) -> some View {
+        let on = t == tool
+        let changed = t.isChanged(adjust)
+        return Button {
+            withAnimation { tool = t }
+        } label: {
+            VStack(spacing: 2) {
+                Group {
+                    if changed, let path = t.value {
+                        Text(ValueSlider.label(adjust[keyPath: path]))
+                            .font(.subheadline.weight(.medium).monospacedDigit())
+                            .foregroundStyle(Color.accentColor)
+                    } else {
+                        Image(systemName: t.icon).font(.system(size: 20))
+                    }
+                }
+                .frame(width: 44, height: 24)
+                Text(t.rawValue)
+                    .font(.caption2.weight(on ? .semibold : .regular))
+                    .lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(on ? Color.accentColor : Color.secondary)
+            .frame(width: width, height: 46)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.accentColor.opacity(on ? 0.12 : 0))
+            }
+            .overlay(alignment: .bottom) {
+                if on {
+                    Capsule().fill(Color.accentColor)
+                        .frame(width: 14, height: 2).padding(.bottom, 2)
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(PhotoCropRatioStyle())
+        .accessibilityLabel(t.rawValue + (changed ? ", changed" : ""))
+        .accessibilityValue(t.value.map { ValueSlider.label(adjust[keyPath: $0]) } ?? "")
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     private var cropControls: some View {
@@ -639,8 +786,8 @@ struct AdjustPanel<Accessory: View>: View {
 }
 
 extension AdjustPanel where Accessory == EmptyView {
-    init(adjust: Binding<Adjustments>, tool: Binding<AdjustTool>, editing: @escaping (Bool) -> Void = { _ in }, freeCrop: Bool = true, photoCropStyle: Bool = false, photoRotateStyle: Bool = false) {
-        self.init(adjust: adjust, tool: tool, editing: editing, freeCrop: freeCrop, photoCropStyle: photoCropStyle, photoRotateStyle: photoRotateStyle, accessory: { EmptyView() })
+    init(adjust: Binding<Adjustments>, tool: Binding<AdjustTool>, editing: @escaping (Bool) -> Void = { _ in }, freeCrop: Bool = true, photoCropStyle: Bool = false, photoRotateStyle: Bool = false, photoColorStyle: Bool = false) {
+        self.init(adjust: adjust, tool: tool, editing: editing, freeCrop: freeCrop, photoCropStyle: photoCropStyle, photoRotateStyle: photoRotateStyle, photoColorStyle: photoColorStyle, accessory: { EmptyView() })
     }
 }
 
