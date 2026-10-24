@@ -1,6 +1,6 @@
 # Yumiro B: design handoff
 
-This is the design record for **Yumiro B**, the `ui-b` branch. It lists what the user approved, what's built, what was only proposed, and what's left. Last updated 2026-10-24, with `ui-b` at `33ded13`.
+This is the design record for **Yumiro B**, the `ui-b` branch. It lists what the user approved, what's built, what was only proposed, and what's left. Last updated 2026-10-24, with `ui-b` at `f52f7c1`.
 
 The code is the source of truth for exact values. This file says why each value is what it is, and where it lives.
 
@@ -13,7 +13,7 @@ These rules come from the user. A fresh session doesn't get the previous session
 - **Nothing builds on this PC.** It has no Xcode, models or `Local.xcconfig`. The user builds on their Mac with `tools/install_variant.sh b`, which installs the branch as its own app, "Yumiro B", and prints `ui-b at <sha>`. After each push, tell the user the commit is ready to install.
 - **One part at a time.** Each round redesigns one part of the UI and leaves the rest alone:
   1. Research the part on Mobbin. Use the Mobbin connector's `search_screens` with platform `ios`, and cite each result by its `mobbin_url`.
-  2. Propose **3 options** as mockups on a Design canvas Artifact. Each option sits in the editor screen, matches what's already in ui-b, and comes in light and dark.
+  2. Propose **3 options** as mockups on a Design canvas Artifact. Each option sits in its own screen (the editor, for editor parts), matches what's already in ui-b, and comes in light and dark.
   3. The user picks **one** option. Never offer to build two, and never create a new branch or worktree.
   4. Build the pick in ui-b. Keep everything the code does now: haptics, undo steps, accessibility labels and traits, disabled states, scrolling to the picked item.
   5. Commit with a subject line, a blank line, then the body. Push, then tell the user it's ready for `tools/install_variant.sh b`.
@@ -27,6 +27,7 @@ These rules come from the user. A fresh session doesn't get the previous session
 | Bottom tool bar | Option 1, "Labelled strip" | `575d86a` (first built as `62567b2`) | [Yumiro Editor Toolbar](https://claude.ai/artifact/WNMhe9Lez6KHvwpZ5nRroz) |
 | Slider row | Option 3, "Fill field" | `b3f53c5` | [Yumiro Slider Row](https://claude.ai/artifact/HhNV7Z7EAWJt8dTne6YnuR) |
 | Mode tabs and chips | Option 1, "Track", in every use | `6da010a` and `33ded13` | [Yumiro Tabs and Chips](https://claude.ai/artifact/R5cCo1VDvFfZjpcSPMzX3U) |
+| Home screen | Option 1, "Tool cards" | `0c2c9bc` and `f52f7c1` | [Yumiro Home Screen](https://claude.ai/artifact/FBTjR8Swy3BWNDJ6ytUXqF) |
 
 ui-b's tool bar is **not** design A's "Focus rail" from main. The user asked for the labelled strip in ui-b on purpose.
 
@@ -37,12 +38,14 @@ The canvases are private claude.ai Artifacts owned by the user. Open them with t
 - **Tool bar:** `DirectionA.dc.html` and `DirectionADark.dc.html` on the Options page. The canvas calls them "Direction A"; they became Option 1. That canvas predates design A, so only its tool bar is approved, not its top bar or panels.
 - **Slider row:** `Option3.dc.html` and `Option3Dark.dc.html` on the Options page, and `Panels3.dc.html` on the Panels page. That canvas draws design A's Focus rail tool bar. ui-b has the labelled strip instead.
 - **Tabs and chips:** `Editor1.dc.html` on the "Face in the editor" page, and `Uses1.dc.html` on the "Every use" page (Heal, both Background modes, the disabled Refine switch, the camera, the video editor). This canvas already shows ui-b's top bar, tool bar and slider fields.
+- **Home screen:** `Home1.dc.html` on the "Home screen" page, and the first phone of `Busy.dc.html` on the "While a photo opens" page. Both draw the shared `Main.dc.html` with `look="cards"`.
 
-Local copies of the canvas sources are in the previous session's scratchpad. They are temporary and may be deleted:
+Local copies of the canvas sources are in earlier sessions' scratchpads. They are temporary and may be deleted:
 
 - `C:\Users\Jason\AppData\Local\Temp\claude\C--Users-Jason-OneDrive-Desktop-Code-js-photoStudioClaude\d9da43b8-b25d-4a98-a1fd-c3e284618932\scratchpad\toolbar\project\`
 - `C:\Users\Jason\AppData\Local\Temp\claude\C--Users-Jason-OneDrive-Desktop-Code-js-photoStudioClaude\d9da43b8-b25d-4a98-a1fd-c3e284618932\scratchpad\slider\project\`
 - `C:\Users\Jason\AppData\Local\Temp\claude\C--Users-Jason-OneDrive-Desktop-Code-js-photoStudioClaude\d9da43b8-b25d-4a98-a1fd-c3e284618932\scratchpad\tabs\project\`
+- `C:\Users\Jason\AppData\Local\Temp\claude\C--Users-Jason-OneDrive-Desktop-Code-js-photoStudioClaude\ef35a15a-37f1-436c-8e6f-1376f317c51e\scratchpad\home\project\`
 
 The `tabs` folder has reusable mockup parts for the next canvas: `Main.dc.html` (the editor with ui-b's bars), `Panel.dc.html`, `Tabs.dc.html`, `Chips.dc.html`, `Camera.dc.html`, `Video.dc.html` and `Icon.dc.html`.
 
@@ -54,16 +57,16 @@ The app uses system colours, so light mode, dark mode and Increase Contrast come
 
 | Role | Value | Used by |
 |---|---|---|
-| Accent | `Color.accentColor` | Save fill, Undo/Redo icons, picked tool icon, reset arrow, slider fill and handle, changed dots |
-| Control grey | `Color(.secondarySystemBackground)`: #F2F2F7 light, #1C1C1E dark | top bar buttons, slider fields, reset tiles, mode tracks, chips, Face area track |
+| Accent | `Color.accentColor` | Save fill, Undo/Redo icons, picked tool icon, reset arrow, slider fill and handle, changed dots; on the home screen, the "Edit a photo" fill and the Camera, Video and tool icons |
+| Control grey | `Color(.secondarySystemBackground)`: #F2F2F7 light, #1C1C1E dark | top bar buttons, slider fields, reset tiles, mode tracks, chips, Face area track; the home screen's About, Camera and Video tiles and tool cards |
 | Grey on a material | `Color(.secondarySystemFill)`, via `Color.trackFill(material)` | chips and tracks on `.regularMaterial` (the camera's look panel) |
 | Picked tint | `Color.toolTile(scheme)`: accent at 0.14 light, 0.24 dark | picked tool tile, picked mode tile, picked chip, picked Face area |
 | Slider fill | accent at 0.14 light, 0.28 dark | slider field fill (`SliderField.marks`) |
-| Muted text | `Color.toolMuted`: rgb(0.42, 0.42, 0.44) light, (0.60, 0.60, 0.62) dark; Increase Contrast (0.33, 0.33, 0.35) and (0.72, 0.72, 0.75) | unpicked tool names, icons and group titles; unpicked mode names on a track |
+| Muted text | `Color.toolMuted`: rgb(0.42, 0.42, 0.44) light, (0.60, 0.60, 0.62) dark; Increase Contrast (0.33, 0.33, 0.35) and (0.72, 0.72, 0.75) | unpicked tool names, icons and group titles; unpicked mode names on a track; the home screen's group titles, tool card lines and privacy line |
 | Muted value | `Color.sliderMuted`: white 0.42 light, 0.60 dark; Increase Contrast 0.30 and 0.75 | a slider's value while it's at its default |
 | Slider marks | `Color(.systemGray2)` | a two-way slider's middle line; the default mark |
-| Disabled | text `Color(.tertiaryLabel)`; picked tile `Color(.systemGray5)`; slider tint `Color(.systemGray3)`; Save fill at 0.35 opacity | every control with `.disabled` |
-| Close icon | `.secondary` | the top bar's neutral button |
+| Disabled | text `Color(.tertiaryLabel)`; picked tile `Color(.systemGray5)`; slider tint `Color(.systemGray3)`; Save fill at 0.35 opacity | every control with `.disabled`; the whole home screen while a photo opens ("Edit a photo" fill at 0.35, like Save) |
+| Close icon | `.secondary` | the top bar's neutral button; the home screen's About |
 
 `toolMuted` and `sliderMuted` exist because `.secondary` (#8A8A8E) is only about 3.4:1 on white, below the 4.5:1 needed for small text. The contrast results are under [Validation](#validation).
 
@@ -88,6 +91,15 @@ The font is the system font (SF Pro), always set with Dynamic Type text styles. 
 | Reset tile arrow | `.system(size: 18)` |
 | Hints under a panel | `.footnote`, `.secondary`, at most 2 lines |
 | Panel headings ("Enhanced") | `.headline` |
+| Home: "Yumiro" | `.largeTitle.bold()`, a header for VoiceOver |
+| Home: "Edit a photo" | `.body.weight(.semibold)`, white |
+| Home: Camera and Video | `.subheadline.weight(.semibold)`, `.primary`; icons `.title3`, accent |
+| Home: "Start with a tool" | `.title3.weight(.semibold)`, a header |
+| Home: group titles | as the tool bar's: `.caption2.weight(.semibold)`, `toolMuted`, headers |
+| Home: tool cards | name `.subheadline.weight(.semibold)`, `.primary`; line `.footnote`, `toolMuted`; icon `.title3`, accent, in a 28 pt wide frame |
+| Home: privacy line | `.footnote`, `toolMuted`, after a `lock` |
+
+The home screen isn't capped: it scrolls, so it follows Dynamic Type all the way.
 
 Slider values show two-way ranges as −100 to +100 with a sign, using a real minus sign (−). One-way ranges show 0 to 100.
 
@@ -99,7 +111,7 @@ Slider values show two-way ranges as −100 to +100 with a sign, using a real mi
 
   | Radius | Used for |
   |---|---|
-  | 14 | 44 pt controls: top bar buttons, slider fields, reset tiles, mode tracks, the Face area track |
+  | 14 | 44 pt controls: top bar buttons, slider fields, reset tiles, mode tracks, the Face area track; every home screen tile and card |
   | 12 | tool bar tiles, chips, the camera's material panel |
   | 10 | the tile inside a track; toasts |
 
@@ -109,6 +121,14 @@ Slider values show two-way ranges as −100 to +100 with a sign, using a real mi
   - tool panel: 16 pt sides, 12 pt top and bottom, at least 184 pt tall, rows 8 pt apart;
   - a divider;
   - tool bar: 84 pt tall.
+- **Home layout, top to bottom:**
+  - header: at least 52 pt tall, 16 pt side padding;
+  - then a scroll view with 16 pt sides, 8 pt on top, 16 pt below, and 8 pt between its parts;
+  - "Edit a photo": 52 pt;
+  - Camera and Video: 52 pt, side by side;
+  - "Start with a tool", 20 pt further down;
+  - each group 4 pt further down: its title, 4 pt, then cards two to a row, 8 pt apart both ways, at least 60 pt tall;
+  - the privacy line, 12 pt further down.
 - **Press and motion:**
   - every custom button fades to 0.7 opacity while pressed;
   - a track's tile slides with `.snappy(duration: 0.25)`;
@@ -190,6 +210,19 @@ Slider values show two-way ranges as −100 to +100 with a sign, using a real mi
 - **VoiceOver:** the selected trait when picked.
 - **Panel order:** areas, then subtab chips, then the slider field. That's the tabs → chips → slider order the Mobbin references use.
 
+### Home screen: "Tool cards" (`HomeView` and the private `HomeTileStyle` in `HomeView.swift`)
+
+- **Header:** "Yumiro" on the left. About is on the right, an `info.circle` in a grey 44 pt tile with a `.secondary` icon, like the editor's Close. It opens the About sheet, which still offers "Show the welcome again".
+- **Edit a photo:** a full-width 52 pt button, white semibold on an accent fill, like Save. It opens the photo picker with no tool picked.
+- **Camera and Video:** two equal 52 pt grey tiles side by side, each an accent icon beside its name. Video's visible name is "Video", but VoiceOver reads "Edit a video" as before, and Voice Control answers to both.
+- **Start with a tool:** the eight tools under the tool bar's own groups (`Tool.groups`, `Tool.groupTitles`: Fix, Beauty, Remove). Each tool is a grey card (radius 14) with its accent icon, its name and its one line (`Tool.blurb`). Both cards in a row are as tall as the taller one, so a line that wraps doesn't leave them uneven.
+- **Picking a tool:** opens the photo picker, and the photo opens in that tool. Each card keeps the hint "Choose a photo to open in <tool>".
+- **Privacy:** "Everything happens on this iPhone. Your photos are never uploaded." under the tools, after a lock. The text is unchanged.
+- **While a photo opens:** everything is disabled, as before. Text and icons turn `tertiaryLabel`, the "Edit a photo" fill drops to 0.35 and the busy badge shows on top.
+- **Press:** every tile fades to 0.7 while pressed.
+- **VoiceOver order:** Yumiro (a header), About, Edit a photo, Camera, Edit a video, Start with a tool (a header), then each group title (a header) and its tools, then the privacy line. Icons inside the cards are hidden, so a card reads as its name and line.
+- **Not a `NavigationStack` any more:** the header is drawn by the view, so the title doesn't shrink as the page scrolls. The Welcome and About sheets keep their own navigation bars.
+
 ### Unchanged parts (not redesigned yet)
 
 These still have their original look:
@@ -197,6 +230,7 @@ These still have their original look:
 - `PanelTextButton` (system bordered, small);
 - `StudioIconButton`, `HintText`, `Toast`, `BusyBadge`;
 - the Face Position row's plain `ResetButton`;
+- the Welcome and About sheets (system lists; the user asked to leave them as they are);
 - everything under "Not built yet" below.
 
 ## Mobbin references
@@ -233,6 +267,18 @@ All references are iOS screens and patterns only.
 - [CapCut](https://mobbin.com/screens/b7019626-a811-45c9-8a49-9024827b99c3): swatches on visual choices, with ⊘ for "none".
 - [Azar](https://mobbin.com/screens/8f295b8c-0d6e-4715-879d-af53d7f8352d): a small coloured dot at the top-right of changed features.
 
+**Home screen** (Photoroom's screens came up too, but it's on the clean-room list, so they were left out)
+
+- [CapCut](https://mobbin.com/screens/58984ebf-3e01-469c-ae98-a8e1caec2fdd): a grid of grey tool tiles and one wide "New project" card; a gear for settings at the top right.
+- [Riveo](https://mobbin.com/screens/30efe1fe-9e74-4d1e-a28c-746a1c6e8d2b): Camera in the tool grid beside New Project, as an equal.
+- [VSCO's Studio](https://mobbin.com/screens/231f539d-9f24-4171-89ba-7312b1ddf76a): photo, video and camera as three icons at the top. This informed Option 2, which wasn't picked.
+- [ElevenLabs](https://mobbin.com/screens/d4c0f005-93d8-47de-9950-5e01a459547e): a large title, then one full-width "Create new" button, then media types as chips.
+- [GoPro Quik](https://mobbin.com/screens/a7b97370-8ff9-49c3-8a5f-dad957779bfa) and [Unfold](https://mobbin.com/screens/39d92183-a69b-4051-957f-bf50871e95f3): an empty screen with one call to action, and an empty canvas to add media to. These informed Option 3, which wasn't picked.
+- [Halide](https://mobbin.com/screens/5ea10830-e17f-4a58-aa6e-2b57c9d2ed2d): rows with an icon, a name and one line under it; About in an Info group.
+- [Kino](https://mobbin.com/screens/833b6ee7-ed75-41ce-8c0b-864f74d35170): About as its own page with the version and credits, like Yumiro's About sheet.
+- [Tinder](https://mobbin.com/screens/becb7eec-eeb1-4c0f-b919-693966caadfc) and [Any Distance](https://mobbin.com/screens/889d3bc2-59f3-46c0-b955-9737cbadb2b7): "everything stays on your device" said where photos are picked, or a privacy promise in settings. No home screen found leads with privacy.
+- [Mammoth](https://mobbin.com/screens/67aadc4a-6db0-4eae-8d11-4e288bb46069): the system photo picker's own "Private Access to Photos" card, which Yumiro's picker shows too.
+
 ## Proposed but not picked
 
 These are on the canvases, but they're not approved. Don't build them unless the user picks one.
@@ -242,10 +288,12 @@ These are on the canvases, but they're not approved. Don't build them unless the
 - **Slider row, Option 2 "Label on top":** the name and value on a line above a full-width track. About 14 pt taller per slider.
 - **Tabs, Option 2 "Tabs and pills":** text tabs with an accent underline; outlined pills.
 - **Tabs, Option 3 "Tool tiles":** icon-over-name mode tiles like the tool bar; swatches on the Background fills.
+- **Home, Option 2 "Tiles and rows":** Photo (accent fill), Camera and Video as three equal 92 pt tiles; the tools as grouped 48 pt rows with the line on the right and a chevron.
+- **Home, Option 3 "Editor start":** the editor with no photo yet. A grey area holds "Edit a photo", Camera, Video and the privacy line, and the labelled-strip tool bar sits along the bottom. The tools' lines aren't shown.
 
 ## Not built yet
 
-**Remaining parts, in the user's planned order:** home screen → camera → video editor. None has been researched or mocked up.
+**Remaining parts, in the user's planned order:** camera → video editor. Neither has been researched or mocked up.
 
 **Leftovers in the old style, to settle when their part comes up:**
 
@@ -265,7 +313,7 @@ These are on the canvases, but they're not approved. Don't build them unless the
 
 **Builds and tests:**
 
-- **Nothing in ui-b has been compiled.** This PC can't build, and the user hasn't reported a build result for `62567b2`, `b3f53c5`, `575d86a`, `6da010a` or `33ded13` yet.
+- **Nothing in ui-b has been compiled.** This PC can't build, and the user hasn't reported a build result for `62567b2`, `b3f53c5`, `575d86a`, `6da010a`, `33ded13`, `0c2c9bc` or `f52f7c1` yet.
 - **Each change was reviewed by reading the diff** for Swift and SwiftUI correctness. Every API used is available on iOS 18, the deployment target.
 - **The tests in `PhotoStudioTests`** (`EditorRegressionTests`, `VideoLookTests`) cover editing, undo and video looks, not these views. `TESTING.md` explains how to run them on a Mac.
 
@@ -283,12 +331,20 @@ These are on the canvases, but they're not approved. Don't build them unless the
 | Accent icon on the picked tile, light | 3.35 |
 | Accent icon on the picked tile, dark | 4.52 |
 | `.primary` text on the picked tile | 12.5 or more |
+| Accent icon on #F2F2F7 (home tiles and cards, light) | 3.60 |
+| Accent icon on #1C1C1E (home tiles and cards, dark) | 4.67 |
+| White text on the accent (Save, "Edit a photo"), light | 4.02 |
+| White text on the accent (Save, "Edit a photo"), dark | 3.65 |
+
+The tool cards' lines use `toolMuted` on the grey, so they get the track rows' 4.74 and 6.00. White on the accent is below 4.5:1 for 17 pt text. Save already had that, and it's how the system's own filled buttons look, so it's recorded here rather than changed.
 
 **Layout arithmetic** (from the code, not measured on a device):
 
 - **Video editor controls:** they need about 227 of their 236 pt with the 44 pt mode track and the Adjust panel. Very large text could make that tight.
 - **Taller panels:** the Face panel grows about 20 pt (areas 44 pt instead of 32, chips 36 instead of 28). Heal and Background grow about 12 pt for each mode track.
 - **Background fills:** the four fills fit across a 375 pt phone (343 pt inside the panel).
+- **Home screen:** the header and content are about 630 pt tall at the default text size. That fits a 390 × 844 phone with room to spare. On a 375 × 667 phone it's about the height of the screen, so it may scroll a little, and larger text scrolls.
+- **Tool card text:** on a 390 pt phone the name and line get about 113 pt across, and about 105 pt on a 375 pt phone. So "Reshape features" and "Teeth, eyes, tone" may wrap to two lines on the smaller phone or with larger text.
 
 **Still to check on the phone:**
 
@@ -297,6 +353,11 @@ These are on the canvases, but they're not approved. Don't build them unless the
 - **Tracks:** the tile slide; the Face area track scrolling under its corners; the Refine track while disabled.
 - **Camera chips:** the see-through grey on the material panel.
 - **Video editor:** the Adjust panel's fit.
+- **Home screen:**
+  - both cards in a row staying the same height when a line wraps;
+  - the greyed-out look while a photo opens;
+  - VoiceOver reading each card as its name and line, then the hint;
+  - the About sheet and "Show the welcome again".
 
 ## Where things live
 
@@ -307,4 +368,5 @@ These are on the canvases, but they're not approved. Don't build them unless the
 | Slider field, Adjust panel | `PhotoStudio/Adjustments.swift`: `ValueSlider`, `SliderField`, `AdjustPanel` |
 | Camera look chips (shared with video) | `PhotoStudio/CameraView.swift`: `LookControls` |
 | Video editor controls | `PhotoStudio/VideoEditView.swift`: `controls` |
+| Home screen (the Welcome and About sheets are in the same file, unchanged) | `PhotoStudio/HomeView.swift`: `HomeView`, `HomeTileStyle` |
 | Install a branch on the phone | `tools/install_variant.sh b` (run on the Mac) |
